@@ -1,0 +1,72 @@
+--- a/platform/web/detect.py
++++ b/platform/web/detect.py
+@@ -54,0 +55 @@
++        BoolVariable("gdweb_text_dom", "Render supported Label text in the DOM", False),
+@@ -256,0 +258,3 @@
++
++    if env["gdweb_text_dom"]:
++        env.Append(CPPDEFINES=["GDWEB_TEXT_DOM_ENABLED"])
+--- a/platform/web/SCsub
++++ b/platform/web/SCsub
+@@ -32,0 +33,3 @@
++if env["gdweb_text_dom"]:
++    web_files.append("gdweb_text_sync.cpp")
++
+@@ -47,0 +51,3 @@
++
++if env["gdweb_text_dom"]:
++    sys_env.AddJSLibraries(["js/libs/library_gdweb_text.js"])
+--- a/platform/web/display_server_web.cpp
++++ b/platform/web/display_server_web.cpp
+@@ -32,0 +33,4 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++#include "gdweb_text_sync.h"
++#endif
++
+@@ -1469,0 +1474,3 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++	gdweb_text_sync_process();
++#endif
+--- a/scene/gui/control.cpp
++++ b/scene/gui/control.cpp
+@@ -53,0 +54,4 @@
++
++#ifdef GDWEB_TEXT_DOM_ENABLED
++#include "gdweb_text_sync.h"
++#endif
+@@ -4406,0 +4411,2 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++	// 文字の見た目へ影響する通知だけを次の同期単位へ積む。
+@@ -4407,0 +4414,17 @@
++		case NOTIFICATION_POSTINITIALIZE:
++		case NOTIFICATION_PARENTED:
++		case NOTIFICATION_UNPARENTED:
++		case NOTIFICATION_ENTER_TREE:
++		case NOTIFICATION_EXIT_TREE:
++		case NOTIFICATION_TRANSFORM_CHANGED:
++		case NOTIFICATION_RESIZED:
++		case NOTIFICATION_DRAW:
++		case NOTIFICATION_THEME_CHANGED:
++		case NOTIFICATION_VISIBILITY_CHANGED:
++		case NOTIFICATION_TRANSLATION_CHANGED:
++		case NOTIFICATION_LAYOUT_DIRECTION_CHANGED:
++			gdweb_text_sync_queue(get_instance_id());
++			break;
++	}
++#endif
++	switch (p_notification) {
+--- a/scene/gui/label.cpp
++++ b/scene/gui/label.cpp
+@@ -32,0 +33,4 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++#include "gdweb_text_sync.h"
++#endif
++
+@@ -794,0 +799,7 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++			// DOM所有Labelは背景をCanvasへ残し、glyphだけを重複描画しない。
++			if (gdweb_text_dom_owns(this)) {
++				break;
++			}
++#endif
++

@@ -1,8 +1,0 @@
-; 固定fallback警告を確認する試験作品。
-
-config_version=5
-
-[application]
-
-config/name="gdweb warning"
-run/main_scene="res://main.tscn"
