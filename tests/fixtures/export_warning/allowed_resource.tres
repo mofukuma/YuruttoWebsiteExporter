@@ -1,0 +1,5 @@
+; 静的preloadの許可確認に使う空Resource。
+
+[gd_resource format=3]
+
+[resource]

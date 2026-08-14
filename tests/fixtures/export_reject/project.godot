@@ -1,0 +1,8 @@
+; 構造非採用型を一回の書き出しで全件検出する試験作品。
+
+config_version=5
+
+[application]
+
+config/name="gdweb reject"
+run/main_scene="res://main.tscn"

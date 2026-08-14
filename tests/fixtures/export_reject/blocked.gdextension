@@ -1,0 +1,5 @@
+; native拡張構造の拒否対象。
+
+[configuration]
+
+entry_symbol = "blocked"

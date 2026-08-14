@@ -1,0 +1,6 @@
+# 秘密情報と再生成可能な中間物をGit管理から除外する。
+.env
+.DS_Store
+tmp/
+**/.godot/
+**/*.import

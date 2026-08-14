@@ -1,0 +1,10 @@
+; DOMで同値化できないcursorとtooltipを持つ正常場面。
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://allowed.gd" type="Script" id="1"]
+
+[node name="WarningControl" type="Control"]
+script = ExtResource("1")
+mouse_default_cursor_shape = 2
+tooltip_text = "warning tooltip"

@@ -1,0 +1,8 @@
+#!/usr/bin/env python
+"""gdweb専用ExporterのEditor sourceを追加する。"""
+
+Import("env")
+Import("env_modules")
+
+env_gdweb = env_modules.Clone()  # Editor専用moduleのbuild環境。
+env_gdweb.add_source_files(env.modules_sources, "*.cpp")

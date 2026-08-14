@@ -1,0 +1,19 @@
+; GPU、3D、backbuffer、骨格を含む拒否対象場面。
+
+[gd_scene format=3]
+
+[node name="Root" type="Node2D"]
+
+[node name="ThreeD" type="Node3D" parent="."]
+
+[node name="Group" type="CanvasGroup" parent="."]
+
+[node name="Particles" type="GPUParticles2D" parent="."]
+
+[node name="Mesh" type="MeshInstance2D" parent="."]
+
+[node name="Skeleton" type="Skeleton2D" parent="."]
+
+[node name="Light" type="PointLight2D" parent="."]
+
+[node name="BackBuffer" type="BackBufferCopy" parent="."]
