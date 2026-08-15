@@ -73,6 +73,8 @@ docker run --rm -p 8080:8080 \
 
 `examples/aa_invaders`は390×844向けのAA固定画面シューティング。顔文字自機、5行8列の独自AA編隊、画面Button、反転下降、敵弾、損耗防壁、3 life、wave更新を含む実装例。
 
+`examples/progsha_site`はprogsha.comの情報設計を参考にした白Themeの公開サイト例。固定ナビ、青いヒーロー、製品・記事カードをCanvas面とDOM文字に分け、PC三列とスマートフォン一列へ切り替え。
+
 ## ライセンス
 
 project codeは権利留保。[LICENSE](LICENSE)を参照。LINE Seed JPはSIL Open Font License 1.1。[Third-party notices](THIRD_PARTY_NOTICES.md)を参照。
