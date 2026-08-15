@@ -1,7 +1,7 @@
 --- a/platform/web/detect.py
 +++ b/platform/web/detect.py
 @@ -54,0 +55 @@
-+        BoolVariable("gdweb_text_dom", "Render supported Label text in the DOM", False),
++        BoolVariable("gdweb_text_dom", "Render supported Control glyphs in the DOM", False),
 @@ -256,0 +258,3 @@
 +
 +    if env["gdweb_text_dom"]:
@@ -70,3 +70,38 @@
 +			}
 +#endif
 +
+--- a/scene/gui/button.cpp
++++ b/scene/gui/button.cpp
+@@ -31,0 +32,4 @@
++
++#ifdef GDWEB_TEXT_DOM_ENABLED
++#include "gdweb_text_sync.h"
++#endif
+@@ -467,0 +472,8 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++				// DOM所有Buttonは背景とiconをCanvasへ残し、確定した文字矩形だけを同期する。
++				if (gdweb_text_dom_owns(this)) {
++					const int flags = is_clipped ? 4 : 0;
++					gdweb_text_sync_control(this, xl_text, Rect2(text_ofs, Size2(text_buf_width, text_buf->get_size().height)), 1, flags, align_rtl_checked, VERTICAL_ALIGNMENT_TOP, font_color, theme_cache.font_size, theme_cache.line_spacing, font_outline_color, outline_size);
++					break;
++				}
++#endif
+--- a/scene/gui/link_button.cpp
++++ b/scene/gui/link_button.cpp
+@@ -32,0 +33,4 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++#include "gdweb_text_sync.h"
++#endif
++
+@@ -303,0 +308,11 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++			// DOM所有LinkButtonはfocus枠をCanvasへ残し、文字とunderlineだけを同期する。
++			if (gdweb_text_dom_owns(this)) {
++				const Vector2 text_offset = is_layout_rtl() ? Vector2(size.width - width, 0) : Vector2();
++				const int flags = do_underline ? 16 : 0;
++				const float underline_offset = theme_cache.underline_spacing + text_buf->get_line_underline_position();
++				const float underline_thickness = MAX(1, text_buf->get_line_underline_thickness());
++				gdweb_text_sync_control(this, xl_text, Rect2(text_offset, Size2(width, text_buf->get_size().height)), 2, flags, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_TOP, color, theme_cache.font_size, 0, font_outline_color, outline_size, Color(), Vector2(), underline_offset, underline_thickness);
++				break;
++			}
++#endif

@@ -15,7 +15,9 @@ files='platform/web/detect.py
 platform/web/SCsub
 platform/web/display_server_web.cpp
 scene/gui/control.cpp
-scene/gui/label.cpp'
+scene/gui/label.cpp
+scene/gui/button.cpp
+scene/gui/link_button.cpp'
 
 # 本家fileだけを一回のarchive走査で展開する。
 set --

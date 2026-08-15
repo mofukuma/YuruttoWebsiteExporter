@@ -58,13 +58,17 @@ async function containment(page) {
 		const rootBox = box(rootNode);
 		const items = [...document.querySelectorAll('[data-gdweb-text]')]
 			.filter((node) => node.style.display !== 'none')
-			.map(box);
+			.map((node) => ({ ...box(node), text: node.textContent, kind: node.dataset.gdwebKind }));
+		const maxItem = [...items].sort((left, right) => right.right - left.right)[0];
 		return {
 			dpr: window.devicePixelRatio,
 			canvas: canvasBox,
 			canvasPixels: { width: canvas.width, height: canvas.height },
 			root: rootBox,
+			rootOverflow: getComputedStyle(rootNode).overflow,
+			documentWidth: document.documentElement.scrollWidth,
 			maxRight: Math.max(...items.map((rect) => rect.right)),
+			maxItem,
 			minLeft: Math.min(...items.map((rect) => rect.left)),
 			count: items.length,
 		};
@@ -135,7 +139,7 @@ async function stableShot(page, file) {
 
 		const desktop = await containment(page);
 		const desktopTitle = await titleBox(page, 100);
-		assert.equal(desktop.count, 34, `DOM Label数: ${desktop.count}`);
+		assert.equal(desktop.count, 52, `DOM文字数: ${desktop.count}`);
 		assert.equal(desktop.dpr, 2, `DPR: ${desktop.dpr}`);
 		assert.equal(desktop.canvas.width, 1440, `Canvas CSS幅: ${desktop.canvas.width}`);
 		assert.equal(desktop.root.width, 1440, `DOM root幅: ${desktop.root.width}`);
@@ -147,8 +151,10 @@ async function stableShot(page, file) {
 		assert.equal(desktopTitle?.fontSize, 128, `desktop font: ${desktopTitle?.fontSize}`);
 
 		const domText = await page.locator('[data-gdweb-text]').allTextContents();
-		assert.equal(domText.includes('OPEN SELECTED WORKS  ↗'), false, 'Button文字がDOM化された');
-		assert.equal(await page.locator('#gdweb-text-root button, #gdweb-text-root input, #gdweb-text-root select').count(), 0, 'Label以外がDOM化された');
+		assert.equal(domText.includes('OPEN SELECTED WORKS  ↗'), true, 'Button文字がDOM化されていない');
+		assert.equal(await page.locator('[data-gdweb-kind="Label"]').count(), 34, 'Label所有数が不正');
+		assert.equal(await page.locator('[data-gdweb-kind="Button"]').count(), 18, 'Button所有数が不正');
+		assert.equal(await page.locator('#gdweb-text-root button, #gdweb-text-root input, #gdweb-text-root select').count(), 0, '操作要素全体がDOM化された');
 
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.waitForFunction(() => {
@@ -175,6 +181,18 @@ async function stableShot(page, file) {
 			const box = item?.getBoundingClientRect();
 			return box && box.top > 1000 && box.bottom < innerHeight;
 		});
+
+		// LineEditとOptionButtonはCanvas入力のまま操作でき、結果LabelだけDOMへ反映する。
+		await page.mouse.click(180, 1693);
+		await page.keyboard.type('selected');
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === '1 RESULTS'));
+		await page.keyboard.press('Meta+A');
+		await page.keyboard.press('Backspace');
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === '6 RESULTS'));
+		await page.mouse.click(900, 1693);
+		await page.waitForTimeout(100);
+		await page.mouse.click(900, 1765);
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === '4 RESULTS'));
 		const shot = await stableShot(page, path.join(out, 'minimum.png'));
 		assert.ok(shot.bytes > 100000, `確認画像が小さすぎる: ${shot.bytes}`);
 
@@ -188,12 +206,13 @@ async function stableShot(page, file) {
 		dpr1Page.on('pageerror', (error) => errors.push(error.message));
 		await dpr1Page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
 		await dpr1Page.locator('#site-preview').waitFor({ state: 'detached' });
-		await dpr1Page.waitForFunction(() => document.querySelectorAll('[data-gdweb-text]').length === 34);
+		await dpr1Page.waitForFunction(() => document.querySelectorAll('[data-gdweb-text]').length === 52);
 		const dpr1 = await containment(dpr1Page);
 		assert.equal(dpr1.dpr, 1, `DPR 1: ${dpr1.dpr}`);
 		assert.equal(dpr1.canvasPixels.width, 800, `DPR 1 backing幅: ${dpr1.canvasPixels.width}`);
 		assert.equal(dpr1.root.width, 800, `DPR 1 root幅: ${dpr1.root.width}`);
-		assert.ok(dpr1.maxRight <= dpr1.canvas.right + 0.5, `DPR 1右超過: ${dpr1.maxRight - dpr1.canvas.right}`);
+		assert.equal(dpr1.rootOverflow, 'hidden', `DOM root clip: ${dpr1.rootOverflow}`);
+		assert.equal(dpr1.documentWidth, 800, `DPR 1 document幅: ${dpr1.documentWidth}`);
 		await dpr1Context.close();
 		assert.deepEqual(errors, [], `Browser error: ${errors.join(' | ')}`);
 
@@ -201,11 +220,11 @@ async function stableShot(page, file) {
 			ok: true,
 			initial: { previewMs, readyMs, loaderHidden: true },
 			renderer: { contexts, canvasOwned: true },
-			ownership: { labelCount: desktop.count, nonLabelDom: 0 },
+			ownership: { labelCount: 34, buttonCount: 18, controlElements: 0 },
 			containment: { desktop, mobile, dpr1 },
 			title: { desktop: desktopTitle, mobile: mobileTitle },
 			image: { loadedBeforeShot: true, ...shot },
-			canvas: { nonLabelDom: 0, shader: true },
+			canvas: { inputAndBackground: true, lineEdit: true, optionButton: true, shader: true },
 		};
 		fs.writeFileSync(path.join(out, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
 		console.log(JSON.stringify(result));

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Godot 4.7.1標準Web rendererへLabel文字DOMだけを足したruntimeを再現する。
+# Godot 4.7.1標準Web rendererへ対応Controlの文字DOMだけを足したruntimeを再現する。
 # 3Dだけを外し、非文字2D、GUI操作、2D物理、2D Shaderを本家Canvasへ残す。
 
 set -eu
