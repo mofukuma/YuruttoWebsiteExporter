@@ -21,6 +21,7 @@
 #include "scene/resources/font.h"
 #include "scene/resources/label_settings.h"
 #include "scene/resources/style_box.h"
+#include "scene/resources/texture.h"
 
 typedef void (*GDWebTextEvent)(const char *, int, const char *, int, int);
 typedef void (*GDWebSiteEvent)(const char *);
@@ -28,6 +29,7 @@ typedef void (*GDWebSiteEvent)(const char *);
 extern "C" {
 void gdweb_text_set_event_cb(GDWebTextEvent p_callback);
 void gdweb_site_set_event_cb(GDWebSiteEvent p_callback);
+int gdweb_text_prefer_dom();
 void gdweb_site_scene(const char *p_path);
 void gdweb_text_begin();
 void gdweb_text_sync(const char *p_uid, const char *p_text, const char *p_aux, const char *p_font, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_flags, int p_z, int p_horizontal, int p_vertical, int p_kind, int p_max_length, int p_selection_start, int p_selection_end, float p_red, float p_green, float p_blue, float p_alpha, float p_font_size, float p_line_spacing, float p_outline_red, float p_outline_green, float p_outline_blue, float p_outline_alpha, float p_outline_size, float p_shadow_red, float p_shadow_green, float p_shadow_blue, float p_shadow_alpha, float p_shadow_x, float p_shadow_y, float p_underline_offset, float p_underline_thickness, float p_placeholder_red, float p_placeholder_green, float p_placeholder_blue, float p_placeholder_alpha, float p_scroll_x, float p_scroll_y);
@@ -41,6 +43,7 @@ enum TextKind {
 	TEXT_LINK,
 	TEXT_LINE_INPUT,
 	TEXT_AREA,
+	TEXT_CONTROL,
 };
 
 enum TextFlag {
@@ -78,11 +81,21 @@ struct TextState {
 	float underline_thickness = 0.0f; // underlineの太さ。
 	Color placeholder; // 未入力時の案内文字色。
 	Vector2 scroll; // textareaが所有する横縦scroll位置。
+	String font; // 複数文字項目が実際に使うfont resource path。
+};
+
+struct OutlineState {
+	Color color; // 次の通常文字描画へ付ける縁色。
+	int size = 0; // 次の通常文字描画へ付ける縁幅。
 };
 
 static HashSet<ObjectID> dirty; // 登録状態を見直すControl識別子。
 static HashSet<ObjectID> tracked; // 毎frame追従するDOM指定Control。
 static HashMap<ObjectID, TextState> states; // draw時に確定したButton系文字状態。
+static HashMap<ObjectID, Vector<TextState>> parts; // 一Control内の複数文字項目。
+static HashMap<RID, ObjectID> canvas_owners; // 文字描画canvasとControlの対応。
+static HashMap<ObjectID, Vector<RID>> owner_canvases; // Control解放時に回収するCanvas RID一覧。
+static HashMap<ObjectID, OutlineState> outlines; // outline直後の通常文字へ渡す状態。
 static bool event_ready = false; // Browser入力callbackの登録状態。
 static ObjectID site_scene; // Browserへ通知済みのcurrent scene識別子。
 
@@ -92,21 +105,43 @@ static CharString text_uid(ObjectID p_object) {
 }
 
 // 指定ControlがDOM前面文字として登録されているかを返す。
+static bool capture_control(const Control *p_control) {
+	if (!p_control) return false;
+	return p_control->is_class(SNAME("MenuBar")) || p_control->is_class(SNAME("TabBar")) ||
+			p_control->is_class(SNAME("ItemList")) || p_control->is_class(SNAME("Tree")) ||
+			p_control->is_class(SNAME("FoldableContainer")) || p_control->is_class(SNAME("ProgressBar"));
+}
+
+// 標準文字Controlを既定DOM対象にし、明示falseだけを除外する。
 static bool text_requested(const Control *p_control) {
-	return p_control && (bool)p_control->get_meta(SNAME("gdweb_dom_text"), false);
+	if (!p_control) return false;
+	if (p_control->has_meta(SNAME("gdweb_dom_text"))) return (bool)p_control->get_meta(SNAME("gdweb_dom_text"));
+	if (Object::cast_to<Label>(p_control) || Object::cast_to<Button>(p_control) || Object::cast_to<LinkButton>(p_control) || Object::cast_to<LineEdit>(p_control)) return true;
+	if (Object::cast_to<TextEdit>(p_control)) return p_control->get_class() == SNAME("TextEdit");
+	return capture_control(p_control);
+}
+
+// 後続対応の文字Controlを黙示処理せず、現在のCanvas標準表示を知らせる。
+static void warn_pending(const Control *p_control) {
+	if (!p_control || gdweb_text_prefer_dom() == 0) return;
+	if (p_control->is_class(SNAME("CodeEdit"))) {
+		WARN_PRINT_ONCE("CodeEditは後続対応です。暫定でGodot標準fontのCanvas表示を使います。");
+	} else if (p_control->is_class(SNAME("RichTextLabel"))) {
+		WARN_PRINT_ONCE("RichTextLabelとBBCodeは後続対応です。暫定でGodot標準fontのCanvas表示を使います。");
+	}
 }
 
 // 親clipとCanvas MaterialをDOMで誤再現しないため共通判定する。
 static bool common_supported(const Control *p_control) {
 	if (p_control->get_material().is_valid() || p_control->get_use_parent_material()) {
-		WARN_PRINT_ONCE("DOM指定文字にMaterialがあります。Canvas表示へ戻します。");
+		WARN_PRINT_ONCE("DOM文字にMaterialがあります。DOM代替表示またはCanvas表示へ退避します。");
 		return false;
 	}
 	for (Node *node = p_control->get_parent(); node; node = node->get_parent()) {
 		CanvasItem *item = Object::cast_to<CanvasItem>(node);
 		Control *control = Object::cast_to<Control>(node);
 		if ((item && item->get_clip_children_mode() != CanvasItem::CLIP_CHILDREN_DISABLED) || (control && control->is_clipping_contents())) {
-			WARN_PRINT_ONCE("DOM指定文字の親にclipがあります。Canvas表示へ戻します。");
+			WARN_PRINT_ONCE("DOM文字の親にclipがあります。DOM代替表示またはCanvas表示へ退避します。");
 			return false;
 		}
 	}
@@ -137,9 +172,9 @@ static String font_path(const Control *p_control) {
 
 // DOMで正確に再現できるControl文字だけを所有する。
 bool gdweb_text_dom_owns(const Control *p_control) {
-	if (!text_requested(p_control) || !common_supported(p_control)) {
-		return false;
-	}
+	if (!text_requested(p_control)) return false;
+	const bool prefer_dom = gdweb_text_prefer_dom() != 0;
+	if (!common_supported(p_control) && !prefer_dom) return false;
 	if (const Label *label = Object::cast_to<Label>(p_control)) {
 		bool supported = label->get_visible_characters() < 0 && label->get_visible_ratio() >= 1.0f;
 		supported = supported && !label->is_uppercase() && label->get_tab_stops().is_empty() && label->get_text_overrun_behavior() == TextServer::OVERRUN_NO_TRIMMING && label->get_lines_skipped() == 0 && label->get_max_lines_visible() < 0;
@@ -148,46 +183,39 @@ bool gdweb_text_dom_owns(const Control *p_control) {
 			supported = supported && settings->get_shadow_size() == 0 && settings->get_paragraph_spacing() == 0 && settings->get_stacked_outline_data().is_empty() && settings->get_stacked_shadow_data().is_empty();
 		}
 		if (!supported) {
-			WARN_PRINT_ONCE("DOM指定Labelに非対応の文字整形または複合装飾があります。Canvas表示へ戻します。");
+			WARN_PRINT_ONCE("Labelの複合文字装飾を簡易DOM表示へ置き換えます。");
 		}
-		return supported;
+		return supported || prefer_dom;
 	}
 	if (const Button *button = Object::cast_to<Button>(p_control)) {
 		const bool supported = button->get_autowrap_mode() == TextServer::AUTOWRAP_OFF && button->get_text_overrun_behavior() == TextServer::OVERRUN_NO_TRIMMING;
 		if (!supported) {
-			WARN_PRINT_ONCE("DOM指定Buttonに非対応のwrapまたは文字省略があります。Canvas表示へ戻します。");
+			WARN_PRINT_ONCE("Buttonのwrapまたは文字省略をBrowser標準表示へ置き換えます。");
 		}
-		return supported;
+		return supported || prefer_dom;
 	}
 	if (const LinkButton *link = Object::cast_to<LinkButton>(p_control)) {
 		const bool supported = link->get_text_overrun_behavior() == TextServer::OVERRUN_NO_TRIMMING;
 		if (!supported) {
-			WARN_PRINT_ONCE("DOM指定LinkButtonに非対応の文字省略があります。Canvas表示へ戻します。");
+			WARN_PRINT_ONCE("LinkButtonの文字省略をBrowser標準表示へ置き換えます。");
 		}
-		return supported;
+		return supported || prefer_dom;
 	}
-	if (const LineEdit *line = Object::cast_to<LineEdit>(p_control)) {
-		const bool supported = !line->is_clear_button_enabled() && const_cast<LineEdit *>(line)->get_right_icon().is_null();
-		if (!supported) {
-			WARN_PRINT_ONCE("DOM指定LineEditに非対応のiconがあります。Canvas表示へ戻します。");
-		}
-		return supported;
-	}
+	if (Object::cast_to<LineEdit>(p_control)) return true;
 	if (const TextEdit *edit = Object::cast_to<TextEdit>(p_control)) {
-		const bool supported = p_control->get_class() == SNAME("TextEdit") && edit->get_caret_count() == 1 && edit->get_gutter_count() == 0 && !edit->is_drawing_minimap() && edit->get_line_wrapping_mode() == TextEdit::LINE_WRAPPING_NONE && edit->get_syntax_highlighter().is_null();
-		if (!supported) {
-			WARN_PRINT_ONCE("DOM指定TextEditに非対応の複数caret、gutter、wrap、装飾があります。Canvas表示へ戻します。");
+		if (p_control->get_class() != SNAME("TextEdit")) return false;
+		if (edit->get_caret_count() != 1 || edit->get_gutter_count() != 0 || edit->is_drawing_minimap() || edit->get_syntax_highlighter().is_valid()) {
+			WARN_PRINT_ONCE("TextEditの補助表示をtextarea標準表示へ置き換えます。primary caretだけを同期します。");
 		}
-		return supported;
+		return true;
 	}
-	WARN_PRINT_ONCE("DOM文字指定はLabel、Button、LinkButton、LineEdit、TextEditだけを対象にします。Canvas表示へ戻します。");
-	return false;
+	return capture_control(p_control);
 }
 
 // 一つの文字状態を現在の画面transformと合成してDOMへ送る。
-static void sync_text(Control *p_control, const TextState &p_state) {
+static void sync_text(Control *p_control, const TextState &p_state, const CharString &p_uid = CharString()) {
 	const ObjectID object = p_control->get_instance_id();
-	const CharString uid = text_uid(object);
+	const CharString uid = p_uid.is_empty() ? text_uid(object) : p_uid;
 	if (!p_control->is_inside_tree() || !gdweb_text_dom_owns(p_control)) {
 		gdweb_text_remove(uid.get_data());
 		return;
@@ -204,7 +232,7 @@ static void sync_text(Control *p_control, const TextState &p_state) {
 	flags = p_control->is_layout_rtl() ? flags | TEXT_RTL : flags & ~TEXT_RTL;
 	const CharString text = p_state.text.utf8();
 	const CharString aux = p_state.aux.utf8();
-	const CharString font = font_path(p_control).utf8();
+	const CharString font = (p_state.font.is_empty() ? font_path(p_control) : p_state.font).utf8();
 	gdweb_text_sync(
 			uid.get_data(), text.get_data(), aux.get_data(), font.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
 			p_state.rect.size.x, p_state.rect.size.y, flags, p_control->get_z_index(), p_state.horizontal, p_state.vertical, p_state.kind, p_state.max_length, p_state.selection_start, p_state.selection_end,
@@ -265,6 +293,13 @@ static void sync_line_input(LineEdit *p_line) {
 	state.outline = p_line->get_theme_color(SNAME("font_outline_color"));
 	state.outline_size = p_line->get_theme_constant(SNAME("outline_size"));
 	state.rect = input_rect(p_line, p_line->get_theme_stylebox(p_line->is_editable() ? SNAME("normal") : SNAME("read_only")));
+	Ref<Texture2D> icon = const_cast<LineEdit *>(p_line)->get_right_icon();
+	if (p_line->is_editable() && p_line->is_clear_button_enabled() && !p_line->get_text().is_empty()) icon = p_line->get_theme_icon(SNAME("clear"));
+	if (icon.is_valid()) {
+		const float width = MIN(state.rect.size.x, (float)icon->get_width());
+		state.rect.size.x -= width;
+		if (p_line->is_layout_rtl()) state.rect.position.x += width;
+	}
 	sync_text(p_line, state);
 }
 
@@ -282,6 +317,7 @@ static void sync_text_area(TextEdit *p_edit) {
 	state.aux = p_edit->get_placeholder();
 	state.kind = TEXT_AREA;
 	state.flags = TEXT_CLIP;
+	if (p_edit->get_line_wrapping_mode() != TextEdit::LINE_WRAPPING_NONE) state.flags |= TEXT_WRAP;
 	if (p_edit->is_editable()) state.flags |= TEXT_EDITABLE;
 	if (p_edit->has_focus()) state.flags |= TEXT_FOCUSED;
 	state.vertical = VERTICAL_ALIGNMENT_TOP;
@@ -301,6 +337,73 @@ static void sync_text_area(TextEdit *p_edit) {
 	state.outline_size = p_edit->get_theme_constant(SNAME("outline_size"));
 	state.rect = input_rect(p_edit, p_edit->get_theme_stylebox(p_edit->is_editable() ? SNAME("normal") : SNAME("read_only")));
 	sync_text(p_edit, state);
+}
+
+// Canvas RIDを所有Controlへ一意に登録し、解放用の逆索引も保つ。
+static void register_canvas(ObjectID p_owner, RID p_canvas) {
+	if (!p_canvas.is_valid()) return;
+	canvas_owners.insert(p_canvas, p_owner);
+	Vector<RID> &canvases = owner_canvases[p_owner];
+	if (canvases.find(p_canvas) < 0) canvases.push_back(p_canvas);
+}
+
+// 解放Controlがまだ所有するCanvas RIDだけを対応表から回収する。
+static void remove_canvases(ObjectID p_owner) {
+	const Vector<RID> *canvases = owner_canvases.getptr(p_owner);
+	if (!canvases) return;
+	for (const RID &canvas : *canvases) {
+		const ObjectID *owner = canvas_owners.getptr(canvas);
+		if (owner && *owner == p_owner) canvas_owners.erase(canvas);
+	}
+	owner_canvases.erase(p_owner);
+}
+
+// 複数文字項目を持つ標準Controlの一回の再描画を開始する。
+void gdweb_text_parts_begin(Control *p_control) {
+	if (!capture_control(p_control) || !text_requested(p_control)) return;
+	const ObjectID object = p_control->get_instance_id();
+	parts[object].clear();
+	register_canvas(object, p_control->get_canvas_item());
+	tracked.insert(object);
+}
+
+// 標準Controlが補助CanvasItemへ描く文字も同じ所有者へ結ぶ。
+void gdweb_text_capture_canvas(Control *p_control, RID p_canvas) {
+	if (!capture_control(p_control) || !text_requested(p_control) || !p_canvas.is_valid()) return;
+	register_canvas(p_control->get_instance_id(), p_canvas);
+}
+
+// 通常文字の直前に描かれるoutlineを同じ文字項目へ保持する。
+bool gdweb_text_capture_outline(RID p_canvas, ObjectID p_source, int p_size, const Color &p_color) {
+	const ObjectID *owner = canvas_owners.getptr(p_canvas);
+	Control *control = owner ? Object::cast_to<Control>(ObjectDB::get_instance(*owner)) : nullptr;
+	if (!control || !gdweb_text_dom_owns(control)) return false;
+	outlines.insert(p_source, OutlineState{ p_color, p_size });
+	return true;
+}
+
+// TextLineとTextParagraphの確定文字矩形をControl内のDOM項目へ追加する。
+bool gdweb_text_capture_line(RID p_canvas, ObjectID p_source, const String &p_text, const String &p_font, const Rect2 &p_rect, int p_font_size, int p_horizontal, const Color &p_color, bool p_wrap) {
+	const ObjectID *owner = canvas_owners.getptr(p_canvas);
+	Control *control = owner ? Object::cast_to<Control>(ObjectDB::get_instance(*owner)) : nullptr;
+	if (!control || !gdweb_text_dom_owns(control)) return false;
+	TextState state;
+	state.text = p_text;
+	state.font = p_font;
+	state.rect = p_rect;
+	state.kind = TEXT_CONTROL;
+	state.flags = p_wrap ? TEXT_WRAP : 0;
+	state.horizontal = p_horizontal;
+	state.color = p_color;
+	state.font_size = p_font_size;
+	if (const OutlineState *outline = outlines.getptr(p_source)) {
+		state.outline = outline->color;
+		state.outline_size = outline->size;
+		outlines.erase(p_source);
+	}
+	parts[*owner].push_back(state);
+	tracked.insert(*owner);
+	return true;
 }
 
 // DOMの一続きの文字位置をTextEditの行と列へ変換する。
@@ -411,6 +514,7 @@ void gdweb_text_sync_process() {
 	Vector<ObjectID> removed;
 	for (ObjectID object : dirty) {
 		Control *control = Object::cast_to<Control>(ObjectDB::get_instance(object));
+		warn_pending(control);
 		if (text_requested(control)) tracked.insert(object); else removed.push_back(object);
 	}
 	dirty.clear();
@@ -426,12 +530,21 @@ void gdweb_text_sync_process() {
 		else if (LineEdit *line = Object::cast_to<LineEdit>(control)) sync_line_input(line);
 		else if (TextEdit *edit = Object::cast_to<TextEdit>(control)) sync_text_area(edit);
 		else if (const TextState *state = states.getptr(object)) sync_text(control, *state);
+		if (const Vector<TextState> *items = parts.getptr(object)) {
+			for (int index = 0; index < items->size(); index++) {
+				const CharString uid = (String::num_uint64((uint64_t)object) + "-" + itos(index)).utf8();
+				sync_text(control, (*items)[index], uid);
+			}
+		}
 	}
 	for (ObjectID object : removed) {
 		const CharString uid = text_uid(object);
 		gdweb_text_remove(uid.get_data());
 		tracked.erase(object);
 		states.erase(object);
+		parts.erase(object);
+		remove_canvases(object);
 	}
+	outlines.clear();
 	gdweb_text_end();
 }

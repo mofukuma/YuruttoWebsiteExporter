@@ -1,0 +1,27 @@
+; 標準Controlの文字DOMとBrowser入力を検証する小型project。
+
+config_version=5
+
+[application]
+
+config/name="Form Control Lab"
+run/main_scene="res://main.tscn"
+
+[display]
+
+window/size/viewport_width=390
+window/size/viewport_height=844
+window/size/window_width_override=390
+window/size/window_height_override=844
+window/dpi/allow_hidpi=true
+window/stretch/mode="canvas_items"
+window/stretch/aspect="ignore"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gdweb_site/plugin.cfg")

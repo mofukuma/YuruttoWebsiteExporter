@@ -19,15 +19,28 @@ Godot 4.7.1 Web exportでCanvasへの文字glyph描画を0件にし、文字表�
 
 ## 現在の所有範囲
 
-`gdweb_text_sync.cpp`とBrowser bridgeが扱う種類は次の5種。
+`gdweb_text_sync.cpp`とBrowser bridgeが扱う種類。
 
 - Label
 - Button派生
 - LinkButton
 - LineEdit
-- 装飾なしTextEdit
+- TextEdit
+- MenuBar、TabBar、ItemList、Tree、FoldableContainer、ProgressBarの文字項目
 
-条件外のwrap、文字省略、複数caret、gutter、構文色、Material、visible character制御はCanvasへ戻る。`gdweb_dom_text` metadataのない標準ControlもCanvas所有。
+## 標準フォーム先行実装の判断
+
+- [Godot LineEdit](https://docs.godotengine.org/en/stable/classes/class_lineedit.html): `text_changed`は入力変更時の通知。`text` propertyの直接変更では通知しない。
+- [Playwright input](https://playwright.dev/docs/input): `fill()`はfocus後に値を設定し、`input` eventを発生。
+- Browserの`input`と`textarea`を入力面として維持し、確定値、選択、focus、scrollをGodotへ戻す構成。
+- LineEditの空文字反映でも`text_changed`を一回発生させる必要。変更前の値を消去前に保持する境界。
+- TabBar、ItemList、Tree、FoldableContainer、ProgressBar、MenuBarは`TextLine`と`TextParagraph`の確定描画位置を共通収集。
+- Control背景、icon、focus枠、pointer処理はCanvas継続。文字のCanvas描画だけを収集成功時に省略。
+- PopupMenuはWindow派生。Control共通収集の対象外とし、次の意味要素化段階までGodot標準Canvas表示。
+- CodeEdit、RichTextLabel、BBCodeも後続段階。現在のフォーム実装を塞がない境界。
+- Web font対応がないTheme fontはBrowser標準`sans-serif`へ代替。書き出し停止なし。
+
+複合装飾はwarning後にBrowser標準表示へ代替。`gdweb/font/avoid_canvas_theme_font=false`なら再現不能な項目をCanvasへ退避。`gdweb_dom_text=false`は個別の明示Canvas指定。
 
 ## 残存描画
 
@@ -36,9 +49,9 @@ RichTextLabelとBBCodeだけではない。Godot 4.7.1 sourceの`TextParagraph`�
 | 種類 | 残る文字 |
 |---|---|
 | RichTextLabel | plain text、BBCode、`push_*()`、画像、表、list、文字効果 |
-| TextEdit派生 | CodeEdit、wrap、複数caret、gutter、minimap、構文色 |
-| 選択Control | PopupMenu、MenuBar、TabBar、ItemList、Tree |
-| 表示Control | FoldableContainer title、ProgressBar percentage、tooltip |
+| TextEdit派生 | CodeEdit、複数caret、gutter、minimap、構文色 |
+| 選択Control | PopupMenuの項目意味要素 |
+| 表示Control | tooltip |
 | Window | embedded Window title |
 | 複合Control | OptionButtonのpopup、SpinBox、ColorPicker内の子Control |
 | CodeEdit補助表示 | code hint、completion popup、行番号、構文色 |
@@ -62,7 +75,7 @@ textareaのnative selectionは一組だけ。primary caretをtextareaへ割り�
 ## 完全排除の定義
 
 - Canvasへの`font_draw_glyph`と`font_draw_glyph_outline`呼出し0件。
-- 対応ControlでCanvas fallbackを禁止。
+- 対応Controlの黙示Canvas fallbackを禁止し、warningと代替方式を明示。
 - 直接文字描画APIをexport時に拒否。
 - glyph atlas取得とtexture直接描画による迂回を拒否。
 - 動的呼出しとGDExtension経路をruntime guardで停止し、違反数を記録。

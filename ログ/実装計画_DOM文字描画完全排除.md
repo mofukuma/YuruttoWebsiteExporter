@@ -10,7 +10,7 @@ Godot 4.7.1 minimum Web exportの文字をすべてDOMへ移し、Canvas font re
 - RichTextLabelのplain text、BBCode、`push_*()`を同じDOM経路で表示。
 - TextEditとCodeEditでBrowser IME、選択、caret、scroll、undoを利用可能。
 - Godot標準の文字を持つControlを意味に合うHTML要素へ変換。
-- 直接文字描画APIを含むprojectは理由とscene、script、行を示してexport拒否。
+- 直接文字描画APIを検出し、理由とscene、script、行をwarning表示。
 - 条件外を黙ってCanvasへ戻す処理0件。
 - Canvas所有領域の画素は標準版と完全一致。
 
@@ -23,7 +23,7 @@ Godot 4.7.1 minimum Web exportの文字をすべてDOMへ移し、Canvas font re
 - 内容、Theme、配置を別のdirty世代として管理する。
 - 毎frame処理は可視要素のtransform一括送信だけにする。
 - Browser入力をGodot signalとpropertyへ戻し、Godot APIの見え方を維持する。
-- DOMだけで再現できない機能はexport error。Canvas fallbackは禁止。
+- DOMだけで再現できない機能はwarning後にBrowser標準表示へ代替。設定によりGodot標準fontのCanvas表示も選択可能。
 
 ## HTML対応
 
@@ -158,7 +158,7 @@ scene、resource、scriptを標準Godot headlessで走査。次を検出した�
 - `font_get_glyph_texture_rid`、index、size、UVとCanvas texture描画の組合せ
 - 未監査GDExtensionからのCanvas文字描画
 
-GDScriptの直接呼出し、`call()`、Callable、preload済みscriptも検査。静的に判断できないGDExtensionはstrict modeで拒否。runtime guardを最終境界として残す。
+GDScriptの直接呼出し、`call()`、Callable、preload済みscriptも検査。静的に判断できないGDExtensionはwarning後にGodot標準fontのCanvas表示へ退避。
 
 DOM-only buildではglyph atlas取得methodのscript bindingを同名stubへ差し替える。TextServer内部の整形用呼出しと外部描画用呼出しを分離し、外部取得は非0違反として停止。画像としてあらかじめ焼き込まれた文字textureはfont rendererではなく画像assetとして扱う。
 
@@ -183,7 +183,7 @@ DOM-only buildではglyph atlas取得methodのscript bindingを同名stubへ差�
 - 直接描画API fixture
 - glyph atlas RID迂回fixture
 - Canvas glyph呼出しcounter
-- strict export error形式
+- warningと代替方式の表示形式
 
 ### M2 共通DOM protocol
 
@@ -220,7 +220,7 @@ DOM-only buildではglyph atlas取得methodのscript bindingを同名stubへ差�
 - foldable、progress、tooltip
 - embedded Window title
 - 複合Control
-- LabelとButtonのfallback撤去
+- LabelとButtonのBrowser標準代替
 
 ### M6 Canvas font停止
 
@@ -296,8 +296,8 @@ Godot 4.7公式BBCode表の全tagを一sceneへ配置。同じ内容をBBCodeと
 
 - offset、color、transform、visible、font、font size、glyph indexを効果batchへ含める。
 - `font_get_char_from_glyph_index(font, size, glyph)`で一文字へ戻せるglyph置換はDOM textを更新。
-- 0文字、複数glyph、font依存で一意に戻せない置換はexport検査可能ならexport error、動的結果はruntime error。
-- glyph置換を行うcustom effect一件を2 font sizeで動かし、可逆置換の表示と不可逆置換の拒否を検査。
+- 0文字、複数glyph、font依存で一意に戻せない置換はwarning後に元文字または代替文字を表示。
+- glyph置換を行うcustom effect一件を2 font sizeで動かし、可逆置換と代替文字の表示を検査。
 
 ## 成果物
 

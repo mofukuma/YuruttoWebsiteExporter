@@ -27,6 +27,19 @@ function json(value) {
 	return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
+// site機能と独立した文字所有設定を一つのscriptへまとめる。
+function textConfig(avoidCanvasThemeFont) {
+	return `<script id="gdweb-text-config">window.GDWEB_TEXT_CONFIG=${json({ avoidCanvasThemeFont })}</script>`;
+}
+
+// site無効時も文字所有設定だけをexport HTMLへ反映する。
+function writeTextConfig(avoidCanvasThemeFont) {
+	let html = fs.readFileSync(output, 'utf8');
+	html = html.replace(/<script id="gdweb-text-config">[\s\S]*?<\/script>\n?/g, '');
+	html = html.replace('</head>', `${textConfig(avoidCanvasThemeFont)}\n</head>`);
+	fs.writeFileSync(output, html);
+}
+
 // 内容から短い公開file名用hashを返す。
 function hash(data) {
 	return crypto.createHash('sha256').update(data).digest('hex').slice(0, 12);
@@ -277,6 +290,7 @@ function head(data, scene, image, url, fontMap) {
 	tags.push(assets(scene.styles, scene.scripts, true));
 	tags.push(`<script id="gdweb-json-ld" type="application/ld+json">${json(scene.json_ld)}</script>`);
 	tags.push(`<script>window.GDWEB_FONT_MAP=${json(fontMap)}</script>`);
+	tags.push(textConfig(data.avoid_canvas_theme_font));
 	tags.push(`<script id="gdweb-site-config" type="application/json">${json({ mode: data.mode, root: url.root, site: data.site, scenes: data.scenes })}</script>`);
 	tags.push(`<script src="${esc(url.publicPath('gdweb-site.js'))}" defer></script>`);
 	return `${BEGIN}\n${tags.filter(Boolean).join('\n')}\n${END}`;
@@ -342,8 +356,13 @@ function compress() {
 function build() {
 	assert.ok(fs.existsSync(output), `export HTMLなし: ${output}`);
 	const options = preset(path.join(project, 'export_presets.cfg'), presetName);
-	if (options['gdweb/site/enabled'] === false) return { enabled: false };
+	const avoidCanvasThemeFont = options['gdweb/font/avoid_canvas_theme_font'] !== false;
+	if (options['gdweb/site/enabled'] === false) {
+		writeTextConfig(avoidCanvasThemeFont);
+		return { enabled: false, avoidCanvasThemeFont };
+	}
 	const data = configuration(options);
+	data.avoid_canvas_theme_font = avoidCanvasThemeFont;
 	const url = urls(data.site.base_url);
 	data.mode = Number(options['gdweb/routing/mode'] || 0) === 1 ? 'History' : 'Hash';
 	for (const scene of Object.values(data.scenes)) scene.canonical = url.absolute(scene.uri.slice(1));

@@ -200,7 +200,7 @@ func _build_controls() -> void:
 	inherited_button.add_theme_stylebox_override("normal", _box(Color("111827"), LINE))
 	ui.add_child(inherited_button)
 
-# DOM非対応設定がCanvasへ戻る境界例を作る。
+# 複合設定の簡易DOM代替と明示Canvas指定の境界例を作る。
 func _build_fallbacks() -> void:
 	var clipped_parent := Control.new()
 	clipped_parent.name = "ClippedParent"
@@ -220,7 +220,7 @@ func _build_fallbacks() -> void:
 	var ellipsis := _label(ui, "EllipsisFallback", "ELLIPSIS FALLBACK LONG", Vector2(1010, 177), Vector2(150, 30), 14, WHITE)
 	ellipsis.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	var canvas_only := _label(ui, "CanvasOnly", "CANVAS ONLY", Vector2(1010, 219), Vector2(180, 30), 14, MUTED)
-	canvas_only.remove_meta("gdweb_dom_text")
+	canvas_only.set_meta("gdweb_dom_text", false)
 	var font_parent := Control.new()
 	font_parent.name = "CustomFontParent"
 	font_parent.position = Vector2(1010, 261)

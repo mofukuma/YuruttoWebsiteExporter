@@ -155,9 +155,10 @@ async function cyanPixels(page, image, rect) {
 			assert.match(entry.id, /^gdweb-text-\d+$/, `ObjectID形式: ${entry.id}`);
 			assert.equal(entry.id, `gdweb-text-${entry.uid}`, `IDとObjectID不一致: ${entry.id}`);
 		}
-		for (const fallback of ['CLIPPED FALLBACK LONG', 'MATERIAL FALLBACK', 'ELLIPSIS FALLBACK LONG', 'CANVAS ONLY', 'THEME FONT FALLBACK']) {
-			assert.equal(inventory.texts.includes(fallback), false, `${fallback}がDOM化された`);
+		for (const fallback of ['CLIPPED FALLBACK LONG', 'MATERIAL FALLBACK', 'ELLIPSIS FALLBACK LONG', 'THEME FONT FALLBACK']) {
+			assert.equal(inventory.texts.includes(fallback), true, `${fallback}の簡易DOM代替なし`);
 		}
+		assert.equal(inventory.texts.includes('CANVAS ONLY'), false, '明示Canvas指定がDOM化された');
 		assert.ok(inventory.bounds.left >= inventory.canvas.left - 1, `左超過: ${inventory.canvas.left - inventory.bounds.left}`);
 		assert.ok(inventory.bounds.right <= inventory.canvas.right + 1, `右超過: ${inventory.bounds.right - inventory.canvas.right}`);
 		assert.ok(inventory.bounds.top >= inventory.canvas.top - 1, `上超過: ${inventory.canvas.top - inventory.bounds.top}`);
@@ -375,16 +376,16 @@ async function cyanPixels(page, image, rect) {
 		const image = await page.screenshot({ path: path.join(out, 'text-lab.png') });
 		assert.ok(image.length > 50000, `確認画像が小さすぎる: ${image.length}`);
 		const shaderPixels = await cyanPixels(page, image, { x: 1000, y: 125, width: 250, height: 45 });
-		assert.ok(shaderPixels > 20, `2D Shader画素: ${shaderPixels}`);
+		assert.equal(shaderPixels, 0, `文字MaterialがCanvasに残存: ${shaderPixels}`);
 		assert.deepEqual(browserErrors, [], `Browser error: ${browserErrors.join(' | ')}`);
 		const result = {
 			ok: true,
-			inventory: { count: inventory.count, kinds: inventory.kinds, objectIds: true, fallbacksOnCanvas: 5 },
+			inventory: { count: inventory.count, kinds: inventory.kinds, objectIds: true, domAlternatives: 4, explicitCanvas: 1 },
 			controls: { tags: expectedTags, buttonTextRect: buttonBefore.box, theme: true, inheritedTheme: true, states: true, actionModes: true, focus: true, link: true, underline: true, shadow: true, placeholder: true, lineIme: true, textAreaIme: true, unicodeLimit: true, selection: true, scroll: true, programmaticInput: true },
 			motion: { rotation: true, scaling: true, physics: true, shooter: true, swarm: 80 },
 			lifecycle: { hidden: true, removed: true },
 			performance: { domCount: inventory.count, medianFrameMs },
-			canvas: { shaderPixels },
+			canvas: { textMaterialPixels: shaderPixels },
 		};
 		fs.writeFileSync(path.join(out, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
 		console.log(JSON.stringify(result));

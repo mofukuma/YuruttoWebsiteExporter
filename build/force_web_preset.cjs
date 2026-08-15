@@ -39,6 +39,7 @@ const defaults = {
 	'gdweb/site/favicon': '""',
 	'gdweb/routing/mode': '0',
 	'gdweb/font/matching_webfont': 'true',
+	'gdweb/font/avoid_canvas_theme_font': 'true',
 	'gdweb/ogp/image': '"res://web/ogp.png"',
 	'gdweb/ogp/alt': '"サイトのプレビュー画像"',
 	'gdweb/ogp/frame': '2',

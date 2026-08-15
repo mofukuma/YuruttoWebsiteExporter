@@ -35,6 +35,7 @@ func _get_export_options(_platform: EditorExportPlatform) -> Array[Dictionary]:
 		_option("gdweb/site/favicon", TYPE_STRING, "", PROPERTY_HINT_FILE, "*.png,*.svg,*.ico"),
 		_option("gdweb/routing/mode", TYPE_INT, 0, PROPERTY_HINT_ENUM, "Hash,History"),
 		_option("gdweb/font/matching_webfont", TYPE_BOOL, true),
+		_option("gdweb/font/avoid_canvas_theme_font", TYPE_BOOL, true),
 		_option("gdweb/ogp/image", TYPE_STRING, OGP_PATH, PROPERTY_HINT_FILE, "*.png,*.jpg,*.jpeg,*.webp"),
 		_option("gdweb/ogp/alt", TYPE_STRING, "サイトのプレビュー画像"),
 		_option("gdweb/ogp/frame", TYPE_INT, 2, PROPERTY_HINT_RANGE, "1,3600,1"),

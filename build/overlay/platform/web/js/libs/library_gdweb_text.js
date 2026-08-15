@@ -9,14 +9,15 @@ const GDWebText = {
 	$GDWebText__deps: ['$GodotConfig', '$GodotRuntime'],
 	$GDWebText: {
 		elements: new Map(),
+		seen: new Set(), // 現frameで同期されたDOM ID。
 		event: null,
 		siteEvent: null,
 		siteCallback: null,
 		root: null,
 		rootSize: '',
 		mouseDown: false,
-		kinds: ['Label', 'Button', 'LinkButton', 'LineEdit', 'TextEdit'],
-		tags: ['span', 'button', 'a', 'input', 'textarea'],
+		kinds: ['Label', 'Button', 'LinkButton', 'LineEdit', 'TextEdit', 'ControlText'],
+		tags: ['span', 'button', 'a', 'input', 'textarea', 'span'],
 		// Canvasと同じ親へ文字と入力専用rootを一度だけ作る。
 		getRoot: function () {
 			if (GDWebText.root?.isConnected) return GDWebText.root;
@@ -47,6 +48,30 @@ const GDWebText = {
 			root.style.top = `${box.top - parentBox.top}px`;
 			root.style.width = `${box.width}px`;
 			root.style.height = `${box.height}px`;
+		},
+		// Godot位置行列とBrowser fontの横幅補正を一つのtransformへ反映する。
+		place: function (element) {
+			const matrix = element.dataset.gdwebMatrix;
+			const scale = element.dataset.gdwebTextScale || '1';
+			element.style.transform = `matrix(${matrix}) scaleX(${scale})`;
+		},
+		// Browser fontの実幅をGodotが確定した項目幅へ折返さず収める。
+		fit: function (element) {
+			const width = Number.parseFloat(element.style.width);
+			const natural = element.scrollWidth;
+			const scale = natural > width && natural > 0 ? width / natural : 1;
+			element.dataset.gdwebTextScale = String(scale);
+			GDWebText.place(element);
+		},
+		// 実際に指定したWeb fontの読込後へ幅補正を更新する。
+		loadFont: function (element) {
+			const font = getComputedStyle(element).font;
+			const key = `${font}\n${element.textContent}`;
+			element.dataset.gdwebFontRequest = key;
+			const done = () => {
+				if (element.isConnected && element.dataset.gdwebFontRequest === key) GDWebText.fit(element);
+			};
+			document.fonts.load(font, element.textContent).then(done, done);
 		},
 		// Godotの線形色をCSSの8bit色へ変換する。
 		color: function (red, green, blue, alpha) {
@@ -180,6 +205,11 @@ const GDWebText = {
 	gdweb_text_set_event_cb: function (callback) {
 		GDWebText.event = GodotRuntime.get_func(callback);
 	},
+	gdweb_text_prefer_dom__sig: 'i',
+	// Canvas Theme fontを避ける既定方針をC++所有判定へ返す。
+	gdweb_text_prefer_dom: function () {
+		return globalThis.GDWEB_TEXT_CONFIG?.avoidCanvasThemeFont === false ? 0 : 1;
+	},
 	gdweb_site_set_event_cb__sig: 'vp',
 	// Browser route通知をGodot scene切替callbackへ結ぶ。
 	gdweb_site_set_event_cb: function (callback) {
@@ -200,11 +230,13 @@ const GDWebText = {
 	// 一frameの文字同期前にroot寸法を更新する。
 	gdweb_text_begin: function () {
 		GDWebText.resizeRoot();
+		GDWebText.seen.clear();
 	},
 	gdweb_text_sync__sig: 'viiii' + 'f'.repeat(8) + 'i'.repeat(8) + 'f'.repeat(25),
 	// 一つのControl状態をObjectID対応の意味要素へ反映する。
 	gdweb_text_sync: function (pUid, pText, pAux, pFont, xx, xy, yx, yy, x, y, width, height, flags, z, horizontal, vertical, kind, maxLength, selectionStart, selectionEnd, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha, scrollX, scrollY) {
 		const uid = GodotRuntime.parseString(pUid);
+		GDWebText.seen.add(uid);
 		const text = GodotRuntime.parseString(pText);
 		const aux = GodotRuntime.parseString(pAux);
 		const font = GodotRuntime.parseString(pFont);
@@ -219,8 +251,10 @@ const GDWebText = {
 		const transform = [xx, xy, yx, yy, x, y].join(',');
 		if (element.dataset.gdwebTransform !== transform) {
 			element.dataset.gdwebTransform = transform;
-			element.style.transform = `matrix(${xx},${xy},${yx},${yy},${x},${y})`;
+			element.dataset.gdwebMatrix = transform;
+			GDWebText.place(element);
 		}
+		let textChanged = false;
 		if (tag === 'input' || tag === 'textarea') {
 			if (!element.dataset.gdwebComposing && element.value !== text) {
 				element.value = text;
@@ -245,7 +279,10 @@ const GDWebText = {
 				if (document.activeElement === element && !element.dataset.gdwebFocusPending) element.blur();
 			}
 		} else {
-			if (element.textContent !== text) element.textContent = text;
+			if (element.textContent !== text) {
+				element.textContent = text;
+				textChanged = true;
+			}
 			if (tag === 'button') element.disabled = !!(flags & 256);
 			if (tag === 'a') {
 				if (aux && !(flags & 256)) element.href = aux; else element.removeAttribute('href');
@@ -265,9 +302,9 @@ const GDWebText = {
 			if (Math.abs(element.scrollTop - scrollY) > 0.5) element.scrollTop = scrollY;
 		}
 		const appearance = [width, height, flags, z, horizontal, vertical, font, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha].join(',');
-		if (element.dataset.gdwebAppearance === appearance) return;
+		if (element.dataset.gdwebAppearance === appearance && !(kind === 5 && textChanged)) return;
 		element.dataset.gdwebAppearance = appearance;
-		element.style.display = flags & 1 ? (tag === 'input' || tag === 'textarea' ? 'block' : 'flex') : 'none';
+		element.style.display = flags & 1 ? (tag === 'input' || tag === 'textarea' || kind === 5 ? 'block' : 'flex') : 'none';
 		element.style.width = `${width}px`;
 		element.style.height = `${height}px`;
 		element.style.zIndex = String(z);
@@ -288,6 +325,10 @@ const GDWebText = {
 		element.style.textDecorationLine = flags & 16 ? 'underline' : 'none';
 		element.style.textUnderlineOffset = flags & 16 ? `${underlineOffset}px` : 'auto';
 		element.style.textDecorationThickness = flags & 16 ? `${underlineThickness}px` : 'auto';
+		if (kind === 5) {
+			GDWebText.fit(element);
+			GDWebText.loadFont(element);
+		}
 	},
 	gdweb_text_remove__sig: 'vi',
 	// 解放済みControlの意味要素とObjectID対応を回収する。
@@ -297,8 +338,14 @@ const GDWebText = {
 		GDWebText.elements.delete(uid);
 	},
 	gdweb_text_end__sig: 'v',
-	// Emscripten側の同期境界を明示する。
-	gdweb_text_end: function () {},
+	// 今frameで使われなかった複数項目と解放済み要素を回収する。
+	gdweb_text_end: function () {
+		for (const [uid, element] of GDWebText.elements) {
+			if (GDWebText.seen.has(uid)) continue;
+			element.remove();
+			GDWebText.elements.delete(uid);
+		}
+	},
 };
 
 autoAddDeps(GDWebText, '$GDWebText');

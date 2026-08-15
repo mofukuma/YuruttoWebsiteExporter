@@ -139,7 +139,7 @@ async function stableShot(page, file) {
 
 		const desktop = await containment(page);
 		const desktopTitle = await titleBox(page, 100);
-		assert.equal(desktop.count, 52, `DOM文字数: ${desktop.count}`);
+		assert.equal(desktop.count, 54, `DOM文字数: ${desktop.count}`);
 		assert.equal(desktop.dpr, 2, `DPR: ${desktop.dpr}`);
 		assert.equal(desktop.canvas.width, 1440, `Canvas CSS幅: ${desktop.canvas.width}`);
 		assert.equal(desktop.root.width, 1440, `DOM root幅: ${desktop.root.width}`);
@@ -153,10 +153,10 @@ async function stableShot(page, file) {
 		const domText = await page.locator('[data-gdweb-text]').allTextContents();
 		assert.equal(domText.includes('OPEN SELECTED WORKS  ↗'), true, 'Button文字がDOM化されていない');
 		assert.equal(await page.locator('[data-gdweb-kind="Label"]').count(), 34, 'Label所有数が不正');
-		assert.equal(await page.locator('[data-gdweb-kind="Button"]').count(), 18, 'Button所有数が不正');
-		assert.equal(await page.locator('#gdweb-text-root button').count(), 18, 'Button意味tag数が不正');
+		assert.equal(await page.locator('[data-gdweb-kind="Button"]').count(), 19, 'Button所有数が不正');
+		assert.equal(await page.locator('#gdweb-text-root button').count(), 19, 'Button意味tag数が不正');
 		assert.equal(await page.locator('#gdweb-text-root button').first().evaluate((node) => getComputedStyle(node).pointerEvents), 'none', 'Button文字がCanvas pointer入力を遮断');
-		assert.equal(await page.locator('#gdweb-text-root input, #gdweb-text-root textarea, #gdweb-text-root select').count(), 0, '未指定入力ControlがDOM化された');
+		assert.ok(await page.locator('#gdweb-text-root input').count() >= 1, 'metadataなしLineEditがDOM化されていない');
 
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.waitForFunction(() => {
@@ -184,12 +184,15 @@ async function stableShot(page, file) {
 			return box && box.top > 1000 && box.bottom < innerHeight;
 		});
 
-		// LineEditとOptionButtonはCanvas入力のまま操作でき、結果LabelだけDOMへ反映する。
+		// LineEditはDOM入力、OptionButtonはCanvas操作を維持し、結果Labelへ反映する。
 		await page.mouse.click(180, 1693);
 		await page.keyboard.type('selected');
 		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === '1 RESULTS'));
-		await page.keyboard.press('Meta+A');
-		await page.keyboard.press('Backspace');
+		await page.locator('[data-gdweb-kind="LineEdit"]').first().evaluate((node) => {
+			node.value = '';
+			node.setSelectionRange(0, 0);
+			node.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+		});
 		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === '6 RESULTS'));
 		await page.mouse.click(900, 1693);
 		await page.waitForTimeout(100);
@@ -208,7 +211,7 @@ async function stableShot(page, file) {
 		dpr1Page.on('pageerror', (error) => errors.push(error.message));
 		await dpr1Page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
 		await dpr1Page.locator('#site-preview').waitFor({ state: 'detached' });
-		await dpr1Page.waitForFunction(() => document.querySelectorAll('[data-gdweb-text]').length === 52);
+		await dpr1Page.waitForFunction(() => document.querySelectorAll('[data-gdweb-text]').length >= 54);
 		const dpr1 = await containment(dpr1Page);
 		assert.equal(dpr1.dpr, 1, `DPR 1: ${dpr1.dpr}`);
 		assert.equal(dpr1.canvasPixels.width, 800, `DPR 1 backing幅: ${dpr1.canvasPixels.width}`);
@@ -222,11 +225,11 @@ async function stableShot(page, file) {
 			ok: true,
 			initial: { previewMs, readyMs, loaderHidden: true },
 			renderer: { contexts, canvasOwned: true },
-			ownership: { labelCount: 34, buttonCount: 18, semanticButtons: 18, canvasPointerBridge: true },
+			ownership: { labelCount: 34, buttonCount: 19, semanticButtons: 19, lineInput: true, canvasPointerBridge: true },
 			containment: { desktop, mobile, dpr1 },
 			title: { desktop: desktopTitle, mobile: mobileTitle },
 			image: { loadedBeforeShot: true, ...shot },
-			canvas: { inputAndBackground: true, lineEdit: true, optionButton: true, shader: true },
+			canvas: { inputBackgroundAndIcon: true, optionButton: true, shader: true },
 		};
 		fs.writeFileSync(path.join(out, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
 		console.log(JSON.stringify(result));

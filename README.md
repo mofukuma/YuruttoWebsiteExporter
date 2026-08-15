@@ -5,7 +5,8 @@ Godot 4.7.1の標準Web描画を保ちながら、文字と入力だけを意味
 ## 特徴
 
 - `Label`、`Button`、`LinkButton`の文字をDOMへ同期
-- `LineEdit`と`TextEdit`をBrowser標準入力へ接続
+- metadataなしの`LineEdit`と`TextEdit`をBrowser標準入力へ接続
+- TabBar、ItemList、Tree、FoldableContainer、ProgressBar、MenuBarの文字をDOMへ同期
 - IME、focus、選択範囲、Theme変更、回転、物理移動へ追従
 - 2D描画、物理、Shader、Button背景をGodot Canvasへ維持
 - `LinkButton`を`a`、`Button`を`button`として出力
@@ -50,6 +51,8 @@ Site情報は`res://gdweb-site.json`へ記述。Sceneを表すkeyへscene resour
 OGP画像は一枚の指定からOpen GraphとTwitter Cardへ展開。`OGP Frame`で撮影frameを指定し、`OGP Auto`でEditor上の保存済みSceneを実行。元画面の縦横比を保って中央切り抜きし、`res://web/ogp.png`へ1200×630 PNGとして保存。
 
 Themeで`res://fonts/Title.otf`を使う場合、`res://fonts/Title.woff2`があれば同じfontとしてDOMへ適用。`GDWeb > Font > Matching Webfont`は既定ON。対応するWeb fontがない場合もDOM表示を維持し、Browser標準`sans-serif`を使用。
+
+`GDWeb > Font > Avoid Canvas Theme Font`は既定ON。再現できない文字装飾をwarning後にBrowser標準表示へ置換。OFFでは該当文字だけをGodot標準Canvas表示へ退避。背景、icon、focus枠、pointer処理は設定に関係なくCanvasへ維持。
 
 Routing既定はserver設定不要のHash。SEOと`/about/`直リンクにはHistoryを選び、成果物の`nginx-gdweb.conf.example`を使用。
 
