@@ -73,7 +73,7 @@ docker run --rm -p 8080:8080 \
 
 `examples/aa_invaders`は390×844向けのAA固定画面シューティング。顔文字自機、5行8列の独自AA編隊、画面Button、反転下降、敵弾、損耗防壁、3 life、wave更新を含む実装例。
 
-`examples/progsha_site`はprogsha.comの情報設計を参考にした白Themeの公開サイト例。固定ナビ、青いヒーロー、製品・記事カードをCanvas面とDOM文字に分け、PC三列とスマートフォン一列へ切り替え。
+`examples/progsha_site`はprogsha.comのHTML、CSS、画像、動画を資料化した白Themeの再現例。書籍、REBADGE、最新記事、アダムノート、コミュニティ、運営情報をTextureRect、Canvas面、DOM文字へ分け、PC三列とスマートフォン一列へ切り替え。取得資料は`source/`へ元pathで保存し、背景動画は2秒時点のframeをGodotで表示。Scene 2 frame目を1200×630で撮影したOGPも同梱。
 
 ## ライセンス
 

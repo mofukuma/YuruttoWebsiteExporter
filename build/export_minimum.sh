@@ -21,3 +21,7 @@ node "$repo/addons/gdweb_site/site_export.cjs" "$project" "$output" Web
 cp "$repo/LICENSES/GODOT-MIT.txt" "$(dirname "$output")/GODOT_LICENSE.txt"
 cp "$repo/LICENSES/GODOT-COPYRIGHT.txt" "$(dirname "$output")/GODOT_COPYRIGHT.txt"
 rm -f "$(dirname "$output")/FONT_LICENSE.txt"
+# Projectが配布するfontなどの固有licenseを成果物へ伝える。
+if test -d "$project/web/licenses"; then
+	cp "$project"/web/licenses/* "$(dirname "$output")/"
+fi
