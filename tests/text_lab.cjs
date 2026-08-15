@@ -1,6 +1,6 @@
-// 文字DOMの対応範囲、入力、Theme、transform、物理、動的寿命を一括検査する。
+// 意味DOMの対応範囲、IME入力、Theme、transform、物理、動的寿命を一括検査する。
 // 多数Labelのゲーム更新を含め、Godotの毎frame状態とObjectID対応をBrowserで観測する。
-// 設計思想：文字glyphだけをDOMが所有し、背景、icon、入力、物理、ShaderはCanvasへ残す。
+// 設計思想：文字と入力だけをDOMが所有し、背景、icon、物理、ShaderはCanvasへ残す。
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -50,6 +50,32 @@ async function item(page, text) {
 	}, text);
 }
 
+// Control種別から入力要素の値、tag、位置、Theme状態を返す。
+async function control(page, kind) {
+	return page.evaluate((type) => {
+		const node = document.querySelector(`[data-gdweb-kind="${type}"]`);
+		if (!node) return null;
+		const box = node.getBoundingClientRect();
+		const style = getComputedStyle(node);
+		return {
+			id: node.id,
+			tag: node.tagName,
+			value: node.value,
+			placeholder: node.placeholder,
+			maxLength: node.maxLength,
+			logicalMaxLength: Number(node.dataset.gdwebMaxLength || 0),
+			selectionStart: node.selectionStart,
+			selectionEnd: node.selectionEnd,
+			fontSize: Number.parseFloat(style.fontSize),
+			color: style.color,
+			placeholderColor: getComputedStyle(node, '::placeholder').color,
+			scroll: { left: node.scrollLeft, top: node.scrollTop, height: node.scrollHeight, clientHeight: node.clientHeight },
+			focused: document.activeElement === node,
+			box: { x: box.x, y: box.y, width: box.width, height: box.height },
+		};
+	}, kind);
+}
+
 // 動く文字の位置とIDを連続採取する。
 async function samples(page, text, count, gap) {
 	const values = [];
@@ -90,7 +116,7 @@ async function cyanPixels(page, image, rect) {
 		page.setDefaultTimeout(12000);
 		page.on('pageerror', (error) => browserErrors.push(error.message));
 		await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
-		await page.waitForFunction(() => document.querySelectorAll('[data-gdweb-text]').length >= 110);
+		await page.waitForFunction(() => document.querySelectorAll('[data-gdweb-text]').length >= 114);
 		await page.evaluate(() => document.fonts.ready);
 
 		// ObjectID、Control種別、DOM所有範囲を棚卸しする。
@@ -106,7 +132,7 @@ async function cyanPixels(page, image, rect) {
 			return {
 				count: nodes.length,
 				kinds: Object.fromEntries(Object.entries(kinds).map(([key, values]) => [key, values.length])),
-				ids: nodes.map((node) => ({ id: node.id, uid: node.dataset.gdwebText, tag: node.tagName })),
+				ids: nodes.map((node) => ({ id: node.id, uid: node.dataset.gdwebText, kind: node.dataset.gdwebKind, tag: node.tagName })),
 				texts: nodes.map((node) => node.textContent),
 				canvas: { left: canvas.left, top: canvas.top, right: canvas.right, bottom: canvas.bottom },
 				bounds: {
@@ -117,12 +143,15 @@ async function cyanPixels(page, image, rect) {
 				},
 			};
 		});
-		assert.ok(inventory.kinds.Label >= 109, `Label数: ${inventory.kinds.Label}`);
-		assert.equal(inventory.kinds.Button, 5, `Button数: ${inventory.kinds.Button}`);
+		assert.ok(inventory.kinds.Label >= 114, `Label数: ${inventory.kinds.Label}`);
+		assert.equal(inventory.kinds.Button, 6, `Button数: ${inventory.kinds.Button}`);
 		assert.equal(inventory.kinds.LinkButton, 1, `LinkButton数: ${inventory.kinds.LinkButton}`);
+		assert.equal(inventory.kinds.LineEdit, 1, `LineEdit数: ${inventory.kinds.LineEdit}`);
+		assert.equal(inventory.kinds.TextEdit, 1, `TextEdit数: ${inventory.kinds.TextEdit}`);
 		assert.equal(new Set(inventory.ids.map((entry) => entry.id)).size, inventory.count, 'DOM IDが重複');
+		const expectedTags = { Label: 'SPAN', Button: 'BUTTON', LinkButton: 'A', LineEdit: 'INPUT', TextEdit: 'TEXTAREA' };
 		for (const entry of inventory.ids) {
-			assert.equal(entry.tag, 'SPAN', `文字以外のDOM要素: ${entry.tag}`);
+			assert.equal(entry.tag, expectedTags[entry.kind], `${entry.kind}のtag: ${entry.tag}`);
 			assert.match(entry.id, /^gdweb-text-\d+$/, `ObjectID形式: ${entry.id}`);
 			assert.equal(entry.id, `gdweb-text-${entry.uid}`, `IDとObjectID不一致: ${entry.id}`);
 		}
@@ -139,7 +168,17 @@ async function cyanPixels(page, image, rect) {
 		const inheritedLabelBefore = await item(page, 'INHERITED THEME');
 		const inheritedButtonBefore = await item(page, 'INHERITED BUTTON');
 		const linkInitial = await item(page, 'LINK BUTTON');
+		const lineBefore = await control(page, 'LineEdit');
+		const areaBefore = await control(page, 'TextEdit');
 		assert.equal(buttonBefore?.kind, 'Button');
+		assert.equal(lineBefore?.tag, 'INPUT');
+		assert.equal(areaBefore?.tag, 'TEXTAREA');
+		assert.equal(lineBefore.placeholder, '日本語 IME');
+		assert.equal(areaBefore.placeholder, '複数行 IME');
+		assert.equal(lineBefore.maxLength, 48, 'UTF-16側の安全な上限');
+		assert.equal(lineBefore.logicalMaxLength, 24, 'GodotのUnicode文字上限');
+		assert.equal(lineBefore.placeholderColor, 'rgba(135, 146, 168, 0.6)', `LineEdit placeholder色: ${lineBefore.placeholderColor}`);
+		assert.equal(areaBefore.placeholderColor, 'rgba(0, 229, 255, 0.6)', `TextEdit placeholder色: ${areaBefore.placeholderColor}`);
 		assert.ok(buttonBefore.box.width < 230 && buttonBefore.box.height < 54, `Button全体をDOM化: ${JSON.stringify(buttonBefore.box)}`);
 		assert.ok(buttonBefore.box.x >= 32 && buttonBefore.box.x + buttonBefore.box.width <= 262, 'Button文字が背景外');
 
@@ -152,15 +191,17 @@ async function cyanPixels(page, image, rect) {
 		const hovered = await item(page, 'THEME OVERRIDE');
 		assert.notEqual(hovered.color, buttonBefore.color, 'Button hover色が未反映');
 		await page.mouse.down();
-		await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-		const pressed = await item(page, 'THEME OVERRIDE');
-		assert.notEqual(pressed.color, hovered.color, 'Button pressed色が未反映');
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'BUTTON MODEL:DOWN:1:0'));
+		assert.equal((await item(page, 'THEME OVERRIDE')).color, 'rgb(255, 79, 154)', 'Button pressed色が未反映');
 		await page.mouse.up();
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent.startsWith('BUTTON MODEL:UP:')));
 		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'THEME ACTIVE'));
 		const buttonAfter = await item(page, 'THEME ACTIVE');
 		const themeAfter = await item(page, 'THEME TARGET 40');
 		const inheritedLabelAfter = await item(page, 'INHERITED THEME');
 		const inheritedButtonAfter = await item(page, 'INHERITED BUTTON');
+		const lineAfterTheme = await control(page, 'LineEdit');
+		const areaAfterTheme = await control(page, 'TextEdit');
 		assert.equal(buttonAfter.id, buttonBefore.id, 'ButtonのObjectIDがTheme変更で変化');
 		assert.equal(themeAfter.id, themeBefore.id, 'LabelのObjectIDがTheme変更で変化');
 		assert.equal(buttonAfter.fontSize, 23, `Button Theme size: ${buttonAfter.fontSize}`);
@@ -175,17 +216,124 @@ async function cyanPixels(page, image, rect) {
 		assert.equal(inheritedButtonAfter.fontSize, 21, `継承Button変更size: ${inheritedButtonAfter.fontSize}`);
 		assert.notEqual(inheritedLabelAfter.color, inheritedLabelBefore.color, '継承Label色が未反映');
 		assert.notEqual(inheritedButtonAfter.color, inheritedButtonBefore.color, '継承Button色が未反映');
+		assert.equal(lineAfterTheme.value, 'PROGRAMMATIC', 'Godotからinputへの値更新なし');
+		assert.equal(areaAfterTheme.value, 'PROGRAM\nMODEL', 'Godotからtextareaへの値更新なし');
+		assert.equal(lineAfterTheme.fontSize, 20, `LineEdit Theme size: ${lineAfterTheme.fontSize}`);
+		assert.equal(areaAfterTheme.fontSize, 18, `TextEdit Theme size: ${areaAfterTheme.fontSize}`);
+		assert.notEqual(lineAfterTheme.color, lineBefore.color, 'LineEdit Theme色が未反映');
+		assert.notEqual(areaAfterTheme.color, areaBefore.color, 'TextEdit Theme色が未反映');
+		assert.equal(lineAfterTheme.placeholderColor, 'rgba(0, 229, 255, 0.8)', `LineEdit placeholder Theme色: ${lineAfterTheme.placeholderColor}`);
+		assert.equal(areaAfterTheme.placeholderColor, 'rgba(255, 79, 154, 0.8)', `TextEdit placeholder Theme色: ${areaAfterTheme.placeholderColor}`);
 		assert.equal((await item(page, 'DISABLED BUTTON')).color, 'rgb(135, 146, 168)', 'Button disabled色が未反映');
+
+		// 押下時action modeはmouseup前に発火し、Godotのfocus解放をDOMへ戻す。
+		const pressMode = await item(page, 'PRESS MODE');
+		await page.mouse.move(pressMode.box.x + pressMode.box.width / 2, pressMode.box.y + pressMode.box.height / 2);
+		await page.mouse.down();
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'PRESS FIRED'));
+		await page.waitForFunction(() => document.activeElement?.textContent !== 'PRESS FIRED');
+		await page.mouse.up();
 
 		// LinkButtonもglyphだけをDOM化し、入力結果とunderlineを追従する。
 		const linkBefore = await item(page, 'LINK BUTTON');
 		assert.equal(linkBefore?.kind, 'LinkButton');
+		assert.equal(await page.locator('[data-gdweb-kind="LinkButton"]').getAttribute('href'), 'https://docs.godotengine.org/', 'LinkButton URI未反映');
 		assert.equal(linkBefore.decoration, 'underline');
 		assert.notEqual(linkBefore.underlineOffset, linkInitial.underlineOffset, 'underline間隔がTheme変更へ未追従');
 		assert.match(linkBefore.underlineThickness, /^\d+(?:\.\d+)?px$/, `underline太さ: ${linkBefore.underlineThickness}`);
 		await page.mouse.click(linkBefore.box.x + linkBefore.box.width / 2, linkBefore.box.y + linkBefore.box.height / 2);
 		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'LINK PRESSED'));
 		assert.equal((await item(page, 'LINK PRESSED')).id, linkBefore.id, 'LinkButtonのObjectIDが入力で変化');
+		await page.locator('[data-gdweb-kind="LinkButton"]').focus();
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'BUTTON MODEL:UP:0:1'));
+		await page.locator('[data-gdweb-kind="LinkButton"]').press('Enter');
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'LINK BUTTON'));
+		assert.equal((await item(page, 'LINK BUTTON')).id, linkBefore.id, 'LinkButtonのkeyboard入力でObjectIDが変化');
+		await page.locator('[data-gdweb-kind="LinkButton"]').blur();
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'BUTTON MODEL:UP:0:0'));
+
+		// composition中はDOMに保持し、確定時だけLineEditへ日本語と絵文字を戻す。
+		const composingLineState = await page.evaluate(() => {
+			const input = document.querySelector('[data-gdweb-kind="LineEdit"]');
+			input.focus();
+			input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+			input.value = '日本語😀';
+			input.setSelectionRange(input.value.length, input.value.length);
+			input.dispatchEvent(new InputEvent('input', { bubbles: true, data: '日本語😀', inputType: 'insertCompositionText', isComposing: true }));
+			return [...document.querySelectorAll('[data-gdweb-text]')].find((node) => node.textContent.startsWith('LINE MODEL:'))?.textContent;
+		});
+		assert.ok(!composingLineState.includes('日本語'), `IME未確定値がGodotへ流入: ${composingLineState}`);
+		await page.evaluate(() => document.querySelector('[data-gdweb-kind="LineEdit"]').dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '日本語😀' })));
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'LINE MODEL:日本語😀:4:4'));
+
+		// Godotから値を上書き後、直前と同じ入力へ戻しても通知を省略しない。
+		const activeButton = await item(page, 'THEME ACTIVE');
+		await page.mouse.click(activeButton.box.x + activeButton.box.width / 2, activeButton.box.y + activeButton.box.height / 2);
+		await page.waitForFunction(() => document.querySelector('[data-gdweb-kind="LineEdit"]')?.value === 'PROGRAMMATIC');
+		await page.evaluate(() => {
+			const input = document.querySelector('[data-gdweb-kind="LineEdit"]');
+			input.value = '日本語😀';
+			input.setSelectionRange(input.value.length, input.value.length);
+			input.dispatchEvent(new InputEvent('input', { bubbles: true, data: '日本語😀', inputType: 'insertText' }));
+		});
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'LINE MODEL:日本語😀:4:4'));
+		await page.evaluate(() => {
+			const input = document.querySelector('[data-gdweb-kind="LineEdit"]');
+			input.setSelectionRange(1, 3);
+			input.dispatchEvent(new Event('select', { bubbles: true }));
+		});
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'LINE MODEL:日本語😀:1:3'));
+
+		// Unicode文字数上限は絵文字を一文字として扱い、Enter後のGodot focus解放をDOMへ戻す。
+		const limited = `${'a'.repeat(23)}😀`;
+		await page.evaluate((value) => {
+			const input = document.querySelector('[data-gdweb-kind="LineEdit"]');
+			input.focus();
+			input.value = `${value}Z`;
+			input.setSelectionRange(input.value.length, input.value.length);
+			input.dispatchEvent(new InputEvent('input', { bubbles: true, data: 'Z', inputType: 'insertText' }));
+		}, limited);
+		await page.waitForFunction((value) => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === `LINE MODEL:${value}:24:24`), limited);
+		assert.equal(Array.from((await control(page, 'LineEdit')).value).length, 24, 'Unicode文字上限を超過');
+		await page.locator('[data-gdweb-kind="LineEdit"]').press('Enter');
+		await page.waitForFunction(() => document.activeElement?.dataset.gdwebKind !== 'LineEdit');
+
+		// textareaも改行を保ったIME確定値とcaretをGodotへ戻す。
+		await page.evaluate(() => {
+			const area = document.querySelector('[data-gdweb-kind="TextEdit"]');
+			area.focus();
+			area.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+			area.value = '一行\n二行😀';
+			area.setSelectionRange(area.value.length, area.value.length);
+			area.dispatchEvent(new InputEvent('input', { bubbles: true, data: '一行\n二行😀', inputType: 'insertCompositionText', isComposing: true }));
+			area.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '一行\n二行😀' }));
+		});
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent.startsWith('AREA MODEL:一行|二行😀:1:3:1:3:')));
+
+		// textareaのnative scrollを唯一の表示scrollbarとし、Godotのscroll値へ戻す。
+		await page.evaluate(() => {
+			const area = document.querySelector('[data-gdweb-kind="TextEdit"]');
+			area.value = Array.from({ length: 10 }, (_, index) => `ROW${index} ${'X'.repeat(40)}`).join('\n');
+			area.setSelectionRange(0, 0);
+			area.dispatchEvent(new InputEvent('input', { bubbles: true, data: '', inputType: 'insertText' }));
+		});
+		await page.waitForFunction(() => {
+			const area = document.querySelector('[data-gdweb-kind="TextEdit"]');
+			return area.scrollHeight > area.clientHeight && area.scrollWidth > area.clientWidth;
+		});
+		await page.evaluate(() => {
+			const area = document.querySelector('[data-gdweb-kind="TextEdit"]');
+			area.scrollTop = 48;
+			area.scrollLeft = 32;
+			area.dispatchEvent(new Event('scroll'));
+		});
+		await page.waitForFunction(() => {
+			const state = [...document.querySelectorAll('[data-gdweb-text]')].find((node) => node.textContent.startsWith('AREA MODEL:ROW0'))?.textContent || '';
+			const values = state.match(/:(\d+):(\d+)$/);
+			return values && Number(values[1]) > 0 && Number(values[2]) > 0;
+		});
+		const scrolledArea = await control(page, 'TextEdit');
+		assert.ok(scrolledArea.scroll.top > 0 && scrolledArea.scroll.left > 0, `textarea scroll未追従: ${JSON.stringify(scrolledArea.scroll)}`);
 
 		// 親transform、物理、ゲーム更新を毎frameの同じDOM要素で追従する。
 		const rotating = await samples(page, 'ROTATING LABEL', 4, 100);
@@ -232,7 +380,7 @@ async function cyanPixels(page, image, rect) {
 		const result = {
 			ok: true,
 			inventory: { count: inventory.count, kinds: inventory.kinds, objectIds: true, fallbacksOnCanvas: 5 },
-			controls: { buttonTextRect: buttonBefore.box, theme: true, inheritedTheme: true, states: true, link: true, underline: true, shadow: true },
+			controls: { tags: expectedTags, buttonTextRect: buttonBefore.box, theme: true, inheritedTheme: true, states: true, actionModes: true, focus: true, link: true, underline: true, shadow: true, placeholder: true, lineIme: true, textAreaIme: true, unicodeLimit: true, selection: true, scroll: true, programmaticInput: true },
 			motion: { rotation: true, scaling: true, physics: true, shooter: true, swarm: 80 },
 			lifecycle: { hidden: true, removed: true },
 			performance: { domCount: inventory.count, medianFrameMs },

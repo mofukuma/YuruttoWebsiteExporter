@@ -2,35 +2,67 @@
 /*  gdweb_text_sync.cpp                                                   */
 /**************************************************************************/
 
-// Label、Button、LinkButtonの文字glyphだけをDOMへ同期する。
-// ObjectIDで対象を保持し、親transformとTheme状態を毎frame反映する。
-// 背景、icon、入力、物理、2D描画はGodot標準Canvasへ残す。
+// 対応Controlの文字と入力状態だけを意味に合うDOMへ同期する。
+// ObjectIDで対象を保持し、配置と確定値はGodotを唯一の正本にする。
+// 背景、icon、物理、2D描画はGodot標準Canvasへ残す。
 
 #include "gdweb_text_sync.h"
 
 #include "core/object/object.h"
 #include "core/templates/hash_map.h"
 #include "core/templates/hash_set.h"
+#include "scene/gui/base_button.h"
 #include "scene/gui/button.h"
 #include "scene/gui/label.h"
+#include "scene/gui/line_edit.h"
 #include "scene/gui/link_button.h"
+#include "scene/gui/text_edit.h"
 #include "scene/resources/label_settings.h"
+#include "scene/resources/style_box.h"
 #include "scene/theme/theme_db.h"
 
+typedef void (*GDWebTextEvent)(const char *, int, const char *, int, int);
+
 extern "C" {
-void godot_js_gdweb_text_begin();
-void godot_js_gdweb_text_sync(const char *p_uid, const char *p_text, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_flags, int p_z, int p_horizontal, int p_vertical, int p_kind, float p_red, float p_green, float p_blue, float p_alpha, float p_font_size, float p_line_spacing, float p_outline_red, float p_outline_green, float p_outline_blue, float p_outline_alpha, float p_outline_size, float p_shadow_red, float p_shadow_green, float p_shadow_blue, float p_shadow_alpha, float p_shadow_x, float p_shadow_y, float p_underline_offset, float p_underline_thickness);
-void godot_js_gdweb_text_remove(const char *p_uid);
-void godot_js_gdweb_text_end();
+void gdweb_text_set_event_cb(GDWebTextEvent p_callback);
+void gdweb_text_begin();
+void gdweb_text_sync(const char *p_uid, const char *p_text, const char *p_aux, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_flags, int p_z, int p_horizontal, int p_vertical, int p_kind, int p_max_length, int p_selection_start, int p_selection_end, float p_red, float p_green, float p_blue, float p_alpha, float p_font_size, float p_line_spacing, float p_outline_red, float p_outline_green, float p_outline_blue, float p_outline_alpha, float p_outline_size, float p_shadow_red, float p_shadow_green, float p_shadow_blue, float p_shadow_alpha, float p_shadow_x, float p_shadow_y, float p_underline_offset, float p_underline_thickness, float p_placeholder_red, float p_placeholder_green, float p_placeholder_blue, float p_placeholder_alpha, float p_scroll_x, float p_scroll_y);
+void gdweb_text_remove(const char *p_uid);
+void gdweb_text_end();
 }
 
+enum TextKind {
+	TEXT_LABEL,
+	TEXT_BUTTON,
+	TEXT_LINK,
+	TEXT_LINE_INPUT,
+	TEXT_AREA,
+};
+
+enum TextFlag {
+	TEXT_VISIBLE = 1,
+	TEXT_RTL = 2,
+	TEXT_CLIP = 4,
+	TEXT_WRAP = 8,
+	TEXT_UNDERLINE = 16,
+	TEXT_EDITABLE = 32,
+	TEXT_FOCUSED = 64,
+	TEXT_SECRET = 128,
+	TEXT_DISABLED = 256,
+	TEXT_KEYBOARD_FOCUS = 1024,
+};
+
 struct TextState {
-	String text; // 表示する翻訳済み文字列。
-	Rect2 rect; // Control内の文字描画矩形。
-	int kind = 0; // DOM検査へ公開するControl種別。
-	int flags = 0; // clip、wrap、underlineなどの表示状態。
+	String text; // 表示する翻訳済み文字列または入力値。
+	String aux; // LinkのURIまたは入力のplaceholder。
+	Rect2 rect; // Control内のDOM所有矩形。
+	int kind = TEXT_LABEL; // DOM要素を決めるControl種別。
+	int flags = 0; // clip、wrap、underline、入力状態。
 	int horizontal = HORIZONTAL_ALIGNMENT_LEFT; // 文字の横整列。
 	int vertical = VERTICAL_ALIGNMENT_TOP; // 文字の縦整列。
+	int max_length = 0; // LineEditの最大文字数。0は無制限。
+	int selection_start = 0; // Unicode文字単位の選択開始。
+	int selection_end = 0; // Unicode文字単位の選択終了。
 	Color color; // 状態とThemeを反映した文字色。
 	float font_size = 16.0f; // Theme由来の文字寸法。
 	float line_spacing = 0.0f; // 複数行の追加間隔。
@@ -40,11 +72,14 @@ struct TextState {
 	Vector2 shadow_offset; // 文字影の位置。
 	float underline_offset = 0.0f; // underlineと文字の間隔。
 	float underline_thickness = 0.0f; // underlineの太さ。
+	Color placeholder; // 未入力時の案内文字色。
+	Vector2 scroll; // textareaが所有する横縦scroll位置。
 };
 
 static HashSet<ObjectID> dirty; // 登録状態を見直すControl識別子。
 static HashSet<ObjectID> tracked; // 毎frame追従するDOM指定Control。
 static HashMap<ObjectID, TextState> states; // draw時に確定したButton系文字状態。
+static bool event_ready = false; // Browser入力callbackの登録状態。
 
 // ObjectIDをDOM IDへ直接使える十進文字列へ変換する。
 static CharString text_uid(ObjectID p_object) {
@@ -109,7 +144,21 @@ bool gdweb_text_dom_owns(const Control *p_control) {
 		}
 		return supported;
 	}
-	WARN_PRINT_ONCE("DOM文字指定はLabel、Button、LinkButtonだけを対象にします。Canvas表示へ戻します。");
+	if (const LineEdit *line = Object::cast_to<LineEdit>(p_control)) {
+		const bool supported = font_supported(line) && !line->is_clear_button_enabled() && const_cast<LineEdit *>(line)->get_right_icon().is_null();
+		if (!supported) {
+			WARN_PRINT_ONCE("DOM指定LineEditに非対応のfontまたはiconがあります。Canvas表示へ戻します。");
+		}
+		return supported;
+	}
+	if (const TextEdit *edit = Object::cast_to<TextEdit>(p_control)) {
+		const bool supported = p_control->get_class() == SNAME("TextEdit") && font_supported(edit) && edit->get_caret_count() == 1 && edit->get_gutter_count() == 0 && !edit->is_drawing_minimap() && edit->get_line_wrapping_mode() == TextEdit::LINE_WRAPPING_NONE && edit->get_syntax_highlighter().is_null();
+		if (!supported) {
+			WARN_PRINT_ONCE("DOM指定TextEditに非対応のfont、複数caret、gutter、wrap、装飾があります。Canvas表示へ戻します。");
+		}
+		return supported;
+	}
+	WARN_PRINT_ONCE("DOM文字指定はLabel、Button、LinkButton、LineEdit、TextEditだけを対象にします。Canvas表示へ戻します。");
 	return false;
 }
 
@@ -118,7 +167,7 @@ static void sync_text(Control *p_control, const TextState &p_state) {
 	const ObjectID object = p_control->get_instance_id();
 	const CharString uid = text_uid(object);
 	if (!p_control->is_inside_tree() || !gdweb_text_dom_owns(p_control)) {
-		godot_js_gdweb_text_remove(uid.get_data());
+		gdweb_text_remove(uid.get_data());
 		return;
 	}
 
@@ -129,24 +178,19 @@ static void sync_text(Control *p_control, const TextState &p_state) {
 	const Color outline = p_state.outline * modulate;
 	const Color shadow = p_state.shadow * modulate;
 	int flags = p_state.flags;
-	if (p_control->is_visible_in_tree()) {
-		flags |= 1;
-	} else {
-		flags &= ~1;
-	}
-	if (p_control->is_layout_rtl()) {
-		flags |= 2;
-	} else {
-		flags &= ~2;
-	}
+	flags = p_control->is_visible_in_tree() ? flags | TEXT_VISIBLE : flags & ~TEXT_VISIBLE;
+	flags = p_control->is_layout_rtl() ? flags | TEXT_RTL : flags & ~TEXT_RTL;
 	const CharString text = p_state.text.utf8();
-	godot_js_gdweb_text_sync(
-			uid.get_data(), text.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
-			p_state.rect.size.x, p_state.rect.size.y, flags, p_control->get_z_index(), p_state.horizontal, p_state.vertical, p_state.kind,
+	const CharString aux = p_state.aux.utf8();
+	gdweb_text_sync(
+			uid.get_data(), text.get_data(), aux.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
+			p_state.rect.size.x, p_state.rect.size.y, flags, p_control->get_z_index(), p_state.horizontal, p_state.vertical, p_state.kind, p_state.max_length, p_state.selection_start, p_state.selection_end,
 			color.r, color.g, color.b, color.a, p_state.font_size, p_state.line_spacing,
 			outline.r, outline.g, outline.b, outline.a, p_state.outline_size,
 			shadow.r, shadow.g, shadow.b, shadow.a, p_state.shadow_offset.x, p_state.shadow_offset.y,
-			p_state.underline_offset, p_state.underline_thickness);
+			p_state.underline_offset, p_state.underline_thickness,
+			p_state.placeholder.r, p_state.placeholder.g, p_state.placeholder.b, p_state.placeholder.a,
+			p_state.scroll.x, p_state.scroll.y);
 }
 
 // Labelの現在値から毎frame使う文字状態を組み立てる。
@@ -155,13 +199,9 @@ static void sync_label(Label *p_label) {
 	TextState state;
 	state.text = p_label->get_text();
 	state.rect = Rect2(Vector2(), p_label->get_size());
-	state.kind = 0;
-	if (p_label->is_clipping_text()) {
-		state.flags |= 4;
-	}
-	if (p_label->get_autowrap_mode() != TextServer::AUTOWRAP_OFF) {
-		state.flags |= 8;
-	}
+	state.kind = TEXT_LABEL;
+	if (p_label->is_clipping_text()) state.flags |= TEXT_CLIP;
+	if (p_label->get_autowrap_mode() != TextServer::AUTOWRAP_OFF) state.flags |= TEXT_WRAP;
 	state.horizontal = p_label->get_horizontal_alignment();
 	state.vertical = p_label->get_vertical_alignment();
 	state.color = settings.is_valid() ? settings->get_font_color() : p_label->get_theme_color(SNAME("font_color"));
@@ -174,13 +214,129 @@ static void sync_label(Label *p_label) {
 	sync_text(p_label, state);
 }
 
-// Button系のdrawで確定した文字矩形とTheme状態を追従表へ保存する。
-void gdweb_text_sync_control(Control *p_control, const String &p_text, const Rect2 &p_rect, int p_kind, int p_flags, int p_horizontal, int p_vertical, const Color &p_color, float p_font_size, float p_line_spacing, const Color &p_outline, float p_outline_size, const Color &p_shadow, const Vector2 &p_shadow_offset, float p_underline_offset, float p_underline_thickness) {
-	if (!p_control) {
-		return;
+// StyleBox内側をBrowser入力が所有する矩形へ変換する。
+static Rect2 input_rect(Control *p_control, const Ref<StyleBox> &p_style) {
+	if (p_style.is_null()) return Rect2(Vector2(), p_control->get_size());
+	const Size2 size = p_control->get_size() - p_style->get_minimum_size();
+	return Rect2(p_style->get_offset(), Size2(MAX(0.0f, size.x), MAX(0.0f, size.y)));
+}
+
+// LineEditの値、Theme、caret、selectionをinput状態へまとめる。
+static void sync_line_input(LineEdit *p_line) {
+	TextState state;
+	state.text = p_line->get_text();
+	state.aux = p_line->get_placeholder();
+	state.kind = TEXT_LINE_INPUT;
+	state.flags = TEXT_CLIP;
+	if (p_line->is_editable()) state.flags |= TEXT_EDITABLE;
+	if (p_line->has_focus()) state.flags |= TEXT_FOCUSED;
+	if (p_line->is_secret()) state.flags |= TEXT_SECRET;
+	state.horizontal = p_line->get_horizontal_alignment();
+	state.vertical = VERTICAL_ALIGNMENT_CENTER;
+	state.max_length = p_line->get_max_length();
+	state.selection_start = p_line->has_selection() ? p_line->get_selection_from_column() : p_line->get_caret_column();
+	state.selection_end = p_line->has_selection() ? p_line->get_selection_to_column() : p_line->get_caret_column();
+	state.color = p_line->get_theme_color(p_line->is_editable() ? SNAME("font_color") : SNAME("font_uneditable_color"));
+	state.placeholder = p_line->get_theme_color(SNAME("font_placeholder_color"));
+	state.font_size = p_line->get_theme_font_size(SNAME("font_size"));
+	state.outline = p_line->get_theme_color(SNAME("font_outline_color"));
+	state.outline_size = p_line->get_theme_constant(SNAME("outline_size"));
+	state.rect = input_rect(p_line, p_line->get_theme_stylebox(p_line->is_editable() ? SNAME("normal") : SNAME("read_only")));
+	sync_text(p_line, state);
+}
+
+// TextEditの行列位置をDOMが使う一続きのUnicode文字位置へ変換する。
+static int text_index(TextEdit *p_edit, int p_line, int p_column) {
+	int index = 0;
+	for (int line = 0; line < p_line; line++) index += p_edit->get_line(line).length() + 1;
+	return index + p_column;
+}
+
+// TextEditの値、Theme、caret、selectionをtextarea状態へまとめる。
+static void sync_text_area(TextEdit *p_edit) {
+	TextState state;
+	state.text = p_edit->get_text();
+	state.aux = p_edit->get_placeholder();
+	state.kind = TEXT_AREA;
+	state.flags = TEXT_CLIP;
+	if (p_edit->is_editable()) state.flags |= TEXT_EDITABLE;
+	if (p_edit->has_focus()) state.flags |= TEXT_FOCUSED;
+	state.vertical = VERTICAL_ALIGNMENT_TOP;
+	if (p_edit->has_selection()) {
+		state.selection_start = text_index(p_edit, p_edit->get_selection_from_line(), p_edit->get_selection_from_column());
+		state.selection_end = text_index(p_edit, p_edit->get_selection_to_line(), p_edit->get_selection_to_column());
+	} else {
+		state.selection_start = text_index(p_edit, p_edit->get_caret_line(), p_edit->get_caret_column());
+		state.selection_end = state.selection_start;
 	}
+	state.color = p_edit->get_theme_color(p_edit->is_editable() ? SNAME("font_color") : SNAME("font_readonly_color"));
+	state.placeholder = p_edit->get_theme_color(SNAME("font_placeholder_color"));
+	state.font_size = p_edit->get_theme_font_size(SNAME("font_size"));
+	state.line_spacing = p_edit->get_theme_constant(SNAME("line_spacing"));
+	state.scroll = Vector2(p_edit->get_h_scroll(), p_edit->get_v_scroll() * MAX(1.0f, state.font_size + state.line_spacing));
+	state.outline = p_edit->get_theme_color(SNAME("font_outline_color"));
+	state.outline_size = p_edit->get_theme_constant(SNAME("outline_size"));
+	state.rect = input_rect(p_edit, p_edit->get_theme_stylebox(p_edit->is_editable() ? SNAME("normal") : SNAME("read_only")));
+	sync_text(p_edit, state);
+}
+
+// DOMの一続きの文字位置をTextEditの行と列へ変換する。
+static Vector2i line_column(const String &p_text, int p_index) {
+	int line = 0;
+	int column = 0;
+	for (int index = 0; index < MIN(p_index, p_text.length()); index++) {
+		if (p_text[index] == '\n') {
+			line++;
+			column = 0;
+		} else {
+			column++;
+		}
+	}
+	return Vector2i(column, line);
+}
+
+// Browser入力をGodotの公開値、caret、selection、focusへ戻す。
+static void text_event(const char *p_uid, int p_kind, const char *p_text, int p_start, int p_end) {
+	const ObjectID object = ObjectID((uint64_t)String::to_int(p_uid));
+	Control *control = Object::cast_to<Control>(ObjectDB::get_instance(object));
+	if (!control || !control->is_inside_tree() || !gdweb_text_dom_owns(control)) return;
+	const String incoming = String::utf8(p_text);
+	if (p_kind == 3) {
+		control->grab_focus();
+	} else if (p_kind == 4) {
+		if (control->has_focus()) control->release_focus();
+	} else if (p_kind == 6) {
+		if (BaseButton *button = Object::cast_to<BaseButton>(control)) button->gdweb_click();
+	} else if (LineEdit *line = Object::cast_to<LineEdit>(control)) {
+		if ((p_kind == 1 || p_kind == 5) && line->get_text() != incoming) line->_set_text(incoming, true);
+		const int start = CLAMP(p_start, 0, line->get_text().length());
+		const int end = CLAMP(p_end, 0, line->get_text().length());
+		line->set_caret_column(end);
+		if (start == end) line->deselect(); else line->select(start, end);
+		if (p_kind == 5) line->emit_signal(SNAME("text_submitted"), line->get_text());
+	} else if (TextEdit *edit = Object::cast_to<TextEdit>(control)) {
+		if (p_kind == 7) {
+			const float line_height = MAX(1.0f, (float)edit->get_theme_font_size(SNAME("font_size")) + edit->get_theme_constant(SNAME("line_spacing")));
+			edit->gdweb_set_scroll((double)p_start / line_height, p_end);
+			dirty.insert(object);
+			return;
+		}
+		if (p_kind == 1 && edit->get_text() != incoming) edit->gdweb_set_text(incoming);
+		const Vector2i start = line_column(edit->get_text(), p_start);
+		const Vector2i end = line_column(edit->get_text(), p_end);
+		edit->set_caret_line(end.y);
+		edit->set_caret_column(end.x);
+		if (start == end) edit->deselect(); else edit->select(start.y, start.x, end.y, end.x);
+	}
+	dirty.insert(object);
+}
+
+// Button系のdrawで確定した文字矩形とTheme状態を追従表へ保存する。
+void gdweb_text_sync_control(Control *p_control, const String &p_text, const Rect2 &p_rect, int p_kind, int p_flags, int p_horizontal, int p_vertical, const Color &p_color, float p_font_size, float p_line_spacing, const Color &p_outline, float p_outline_size, const Color &p_shadow, const Vector2 &p_shadow_offset, float p_underline_offset, float p_underline_thickness, const String &p_aux) {
+	if (!p_control) return;
 	TextState state;
 	state.text = p_text;
+	state.aux = p_aux;
 	state.rect = p_rect;
 	state.kind = p_kind;
 	state.flags = p_flags;
@@ -205,39 +361,36 @@ void gdweb_text_sync_queue(ObjectID p_object) {
 	dirty.insert(p_object);
 }
 
-// 登録済み文字を毎frame同期し、物理親や回転へ通知なしで追従する。
+// 登録済み文字を毎frame同期し、物理親、回転、入力へ追従する。
 void gdweb_text_sync_process() {
+	if (!event_ready) {
+		gdweb_text_set_event_cb(&text_event);
+		event_ready = true;
+	}
 	Vector<ObjectID> removed;
 	for (ObjectID object : dirty) {
-		Object *instance = ObjectDB::get_instance(object);
-		Control *control = Object::cast_to<Control>(instance);
-		if (text_requested(control)) {
-			tracked.insert(object);
-		} else {
-			removed.push_back(object);
-		}
+		Control *control = Object::cast_to<Control>(ObjectDB::get_instance(object));
+		if (text_requested(control)) tracked.insert(object); else removed.push_back(object);
 	}
 	dirty.clear();
 
-	godot_js_gdweb_text_begin();
+	gdweb_text_begin();
 	for (ObjectID object : tracked) {
-		Object *instance = ObjectDB::get_instance(object);
-		Control *control = Object::cast_to<Control>(instance);
+		Control *control = Object::cast_to<Control>(ObjectDB::get_instance(object));
 		if (!control || !text_requested(control)) {
 			removed.push_back(object);
 			continue;
 		}
-		if (Label *label = Object::cast_to<Label>(control)) {
-			sync_label(label);
-		} else if (const TextState *state = states.getptr(object)) {
-			sync_text(control, *state);
-		}
+		if (Label *label = Object::cast_to<Label>(control)) sync_label(label);
+		else if (LineEdit *line = Object::cast_to<LineEdit>(control)) sync_line_input(line);
+		else if (TextEdit *edit = Object::cast_to<TextEdit>(control)) sync_text_area(edit);
+		else if (const TextState *state = states.getptr(object)) sync_text(control, *state);
 	}
 	for (ObjectID object : removed) {
 		const CharString uid = text_uid(object);
-		godot_js_gdweb_text_remove(uid.get_data());
+		gdweb_text_remove(uid.get_data());
 		tracked.erase(object);
 		states.erase(object);
 	}
-	godot_js_gdweb_text_end();
+	gdweb_text_end();
 }

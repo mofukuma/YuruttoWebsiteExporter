@@ -16,8 +16,14 @@ platform/web/SCsub
 platform/web/display_server_web.cpp
 scene/gui/control.cpp
 scene/gui/label.cpp
+scene/gui/base_button.cpp
+scene/gui/base_button.h
 scene/gui/button.cpp
-scene/gui/link_button.cpp'
+scene/gui/link_button.cpp
+scene/gui/line_edit.cpp
+scene/gui/line_edit.h
+scene/gui/text_edit.cpp
+scene/gui/text_edit.h'
 
 # 本家fileだけを一回のarchive走査で展開する。
 set --

@@ -1,6 +1,16 @@
 # 秘密情報と再生成可能な中間物をGit管理から除外する。
 .env
+.env.*
+!.env.example
 .DS_Store
 tmp/
 **/.godot/
 **/*.import
+node_modules/
+.npm/
+.scons_cache/
+coverage/
+*.log
+.idea/
+.vscode/
+*.swp

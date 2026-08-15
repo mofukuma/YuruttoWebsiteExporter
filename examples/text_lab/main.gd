@@ -1,6 +1,6 @@
-# 文字DOM対象とCanvas所有機能を一画面で検証する実験場。
-# Theme、回転、物理、動的生成、ゲーム状態を毎frame変化させる。
-# 設計思想：文字だけDOMへ渡し、入力と2D世界はGodotを唯一の正本に保つ。
+# 意味DOM対象とCanvas所有機能を一画面で検証する実験場。
+# Theme、IME入力、回転、物理、動的生成、ゲーム状態を毎frame変化させる。
+# 設計思想：意味要素をDOMへ渡し、確定入力と2D世界はGodotを唯一の正本に保つ。
 
 extends Node2D
 
@@ -22,6 +22,12 @@ var theme_label: Label # Theme結果をDOMで観測するLabel。
 var inherited_label: Label # 継承Themeだけを観測するLabel。
 var inherited_button: Button # 継承Themeだけを観測するButton。
 var link: LinkButton # underlineと状態色を観測するLinkButton。
+var line_input: LineEdit # 一行IMEと選択を観測するLineEdit。
+var text_area: TextEdit # 複数行IMEと選択を観測するTextEdit。
+var line_state: Label # LineEditのGodot確定状態をBrowser試験へ公開する非表示Label。
+var area_state: Label # TextEditのGodot確定状態をBrowser試験へ公開する非表示Label。
+var button_state: Label # Buttonの押下端とfocus状態をBrowser試験へ公開する非表示Label。
+var press_button: Button # 押下時発火とprogrammatic focus解放を観測するButton。
 var fall_body: RigidBody2D # 物理transformを与えるButton親。
 var score: Label # ゲーム進行値。
 var shots: Array[Label] = [] # 上へ移動する弾文字。
@@ -30,6 +36,7 @@ var swarm: Array[Label] = [] # 多数追従の小文字。
 var elapsed := 0.0 # animation位相。
 var themed := false # Theme切替状態。
 var points := 0 # 自動シューティング得点。
+var button_edge := "IDLE" # 標準Buttonの直近pointer端。
 
 # 実験場一式を構築し、動的削除試験を予約する。
 func _ready() -> void:
@@ -74,6 +81,9 @@ func _process(delta: float) -> void:
 		var item := swarm[i]
 		item.position += Vector2(sin(elapsed * 2.0 + i) * 0.08, cos(elapsed * 1.8 + i) * 0.06)
 	score.text = "SCORE %05d" % points
+	line_state.text = "LINE MODEL:%s:%d:%d" % [line_input.text, line_input.get_selection_from_column() if line_input.has_selection() else line_input.caret_column, line_input.get_selection_to_column() if line_input.has_selection() else line_input.caret_column]
+	area_state.text = "AREA MODEL:%s:%d:%d:%d:%d:%d:%d" % [text_area.text.replace("\n", "|"), text_area.get_selection_from_line() if text_area.has_selection() else text_area.get_caret_line(), text_area.get_selection_from_column() if text_area.has_selection() else text_area.get_caret_column(), text_area.get_selection_to_line() if text_area.has_selection() else text_area.get_caret_line(), text_area.get_selection_to_column() if text_area.has_selection() else text_area.get_caret_column(), roundi(text_area.get_v_scroll()), text_area.get_h_scroll()]
+	button_state.text = "BUTTON MODEL:%s:%d:%d" % [button_edge, int(theme_button.has_focus()), int(link.has_focus())]
 
 # 継承Themeの初期値を作る。
 func _build_theme() -> void:
@@ -88,15 +98,23 @@ func _build_theme() -> void:
 	lab_theme.set_color("font_hover_color", "LinkButton", PINK)
 	lab_theme.set_font_size("font_size", "LinkButton", 18)
 	lab_theme.set_constant("underline_spacing", "LinkButton", 2)
+	lab_theme.set_color("font_color", "LineEdit", WHITE)
+	lab_theme.set_color("font_placeholder_color", "LineEdit", Color(MUTED, 0.6))
+	lab_theme.set_font_size("font_size", "LineEdit", 18)
+	lab_theme.set_color("font_color", "TextEdit", WHITE)
+	lab_theme.set_color("font_placeholder_color", "TextEdit", Color(CYAN, 0.6))
+	lab_theme.set_font_size("font_size", "TextEdit", 16)
 	ui.theme = lab_theme
 
 # Theme、Button、Link、回転、表示状態の代表Controlを作る。
 func _build_controls() -> void:
 	_label(ui, "Title", "TEXT DOM FULL INVENTORY", Vector2(32, 22), Vector2(500, 42), 30, WHITE)
-	_label(ui, "Guide", "GLYPHS = DOM   BACKGROUNDS / INPUT / PHYSICS = CANVAS", Vector2(34, 58), Vector2(720, 24), 12, MUTED)
+	_label(ui, "Guide", "TEXT / IME = DOM   BACKGROUNDS / PHYSICS = CANVAS", Vector2(34, 58), Vector2(720, 24), 12, MUTED)
 
 	theme_button = _button(ui, "ThemeToggle", "THEME OVERRIDE", Vector2(32, 96), Vector2(230, 54))
 	theme_button.pressed.connect(_toggle_theme)
+	theme_button.button_down.connect(_button_down)
+	theme_button.button_up.connect(_button_up)
 	theme_button.add_theme_color_override("font_hover_color", CYAN)
 	theme_button.add_theme_color_override("font_pressed_color", PINK)
 
@@ -105,10 +123,41 @@ func _build_controls() -> void:
 	link.text = "LINK BUTTON"
 	link.position = Vector2(300, 108)
 	link.size = Vector2(170, 34)
+	link.uri = "https://docs.godotengine.org/"
 	link.underline = LinkButton.UNDERLINE_MODE_ALWAYS
+	link.focus_mode = Control.FOCUS_ALL
 	link.set_meta("gdweb_dom_text", true)
 	link.pressed.connect(_link_pressed)
 	ui.add_child(link)
+
+	line_input = LineEdit.new()
+	line_input.name = "ImeLineInput"
+	line_input.position = Vector2(760, 96)
+	line_input.size = Vector2(220, 48)
+	line_input.placeholder_text = "日本語 IME"
+	line_input.max_length = 24
+	line_input.text_submitted.connect(_line_submitted)
+	line_input.set_meta("gdweb_dom_text", true)
+	ui.add_child(line_input)
+
+	text_area = TextEdit.new()
+	text_area.name = "ImeTextArea"
+	text_area.position = Vector2(760, 300)
+	text_area.size = Vector2(220, 56)
+	text_area.placeholder_text = "複数行 IME"
+	text_area.set_meta("gdweb_dom_text", true)
+	ui.add_child(text_area)
+
+	line_state = _label(ui, "LineModelState", "LINE MODEL::0:0", Vector2.ZERO, Vector2(1, 1), 1, WHITE)
+	line_state.visible = false
+	area_state = _label(ui, "AreaModelState", "AREA MODEL::0:0:0:0:0:0", Vector2.ZERO, Vector2(1, 1), 1, WHITE)
+	area_state.visible = false
+	button_state = _label(ui, "ButtonModelState", "BUTTON MODEL:IDLE:0:0", Vector2.ZERO, Vector2(1, 1), 1, WHITE)
+	button_state.visible = false
+
+	press_button = _button(ui, "PressModeButton", "PRESS MODE", Vector2(1010, 302), Vector2(220, 46))
+	press_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	press_button.pressed.connect(_press_fired)
 
 	var icon_button := _button(ui, "IconButton", "ICON + GLYPH", Vector2(500, 96), Vector2(210, 54))
 	icon_button.icon = _icon_texture()
@@ -235,6 +284,12 @@ func _toggle_theme() -> void:
 	lab_theme.set_color("font_color", "Button", CYAN if themed else WHITE)
 	lab_theme.set_font_size("font_size", "Button", 21 if themed else 17)
 	lab_theme.set_constant("underline_spacing", "LinkButton", 7 if themed else 2)
+	lab_theme.set_color("font_color", "LineEdit", PINK if themed else WHITE)
+	lab_theme.set_color("font_placeholder_color", "LineEdit", Color(CYAN if themed else MUTED, 0.8 if themed else 0.6))
+	lab_theme.set_font_size("font_size", "LineEdit", 20 if themed else 18)
+	lab_theme.set_color("font_color", "TextEdit", CYAN if themed else WHITE)
+	lab_theme.set_color("font_placeholder_color", "TextEdit", Color(PINK if themed else CYAN, 0.8 if themed else 0.6))
+	lab_theme.set_font_size("font_size", "TextEdit", 18 if themed else 16)
 	theme_label.text = "THEME TARGET %d" % size
 	theme_label.add_theme_font_size_override("font_size", size)
 	theme_label.add_theme_color_override("font_color", color)
@@ -242,10 +297,36 @@ func _toggle_theme() -> void:
 	theme_button.add_theme_font_size_override("font_size", 23 if themed else 17)
 	theme_button.add_theme_color_override("font_color", PINK if themed else WHITE)
 	theme_button.text = "THEME ACTIVE" if themed else "THEME OVERRIDE"
+	line_input.text = "PROGRAMMATIC"
+	line_input.caret_column = line_input.text.length()
+	text_area.text = "PROGRAM\nMODEL"
+	text_area.set_caret_line(1)
+	text_area.set_caret_column(5)
 
-# LinkButtonのCanvas入力結果をDOM文字へ反映する。
+# LinkButtonのnative click結果を同じDOM要素へ反映する。
 func _link_pressed() -> void:
-	link.text = "LINK PRESSED"
+	link.text = "LINK BUTTON" if link.text == "LINK PRESSED" else "LINK PRESSED"
+
+# 標準Buttonの押下開始を記録する。
+func _button_down() -> void:
+	button_edge = "DOWN"
+
+# 標準Buttonの押下終了を記録する。
+func _button_up() -> void:
+	button_edge = "UP"
+
+# 押下時発火を記録し、GodotからDOM focusを解放する。
+func _press_fired() -> void:
+	press_button.text = "PRESS FIRED"
+	call_deferred("_release_press_focus")
+
+# Browserのnative focus確定後にGodotを正本として解放する。
+func _release_press_focus() -> void:
+	press_button.release_focus()
+
+# Enter確定後にGodot側からinput focusを解放する。
+func _line_submitted(_text: String) -> void:
+	line_input.release_focus()
 
 # 時間終了した動的LabelをSceneTreeから解放する。
 func _remove_temp() -> void:
@@ -268,7 +349,7 @@ func _label(parent: Node, node_name: String, text: String, position: Vector2, si
 	parent.add_child(label)
 	return label
 
-# Canvas入力と背景を保つButtonへ文字DOM指定を付ける。
+# Canvas背景を保つButtonへ意味DOM指定を付ける。
 func _button(parent: Node, node_name: String, text: String, position: Vector2, size: Vector2) -> Button:
 	var button := Button.new()
 	button.name = node_name

@@ -154,7 +154,9 @@ async function stableShot(page, file) {
 		assert.equal(domText.includes('OPEN SELECTED WORKS  ↗'), true, 'Button文字がDOM化されていない');
 		assert.equal(await page.locator('[data-gdweb-kind="Label"]').count(), 34, 'Label所有数が不正');
 		assert.equal(await page.locator('[data-gdweb-kind="Button"]').count(), 18, 'Button所有数が不正');
-		assert.equal(await page.locator('#gdweb-text-root button, #gdweb-text-root input, #gdweb-text-root select').count(), 0, '操作要素全体がDOM化された');
+		assert.equal(await page.locator('#gdweb-text-root button').count(), 18, 'Button意味tag数が不正');
+		assert.equal(await page.locator('#gdweb-text-root button').first().evaluate((node) => getComputedStyle(node).pointerEvents), 'none', 'Button文字がCanvas pointer入力を遮断');
+		assert.equal(await page.locator('#gdweb-text-root input, #gdweb-text-root textarea, #gdweb-text-root select').count(), 0, '未指定入力ControlがDOM化された');
 
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.waitForFunction(() => {
@@ -220,7 +222,7 @@ async function stableShot(page, file) {
 			ok: true,
 			initial: { previewMs, readyMs, loaderHidden: true },
 			renderer: { contexts, canvasOwned: true },
-			ownership: { labelCount: 34, buttonCount: 18, controlElements: 0 },
+			ownership: { labelCount: 34, buttonCount: 18, semanticButtons: 18, canvasPointerBridge: true },
 			containment: { desktop, mobile, dpr1 },
 			title: { desktop: desktopTitle, mobile: mobileTitle },
 			image: { loadedBeforeShot: true, ...shot },

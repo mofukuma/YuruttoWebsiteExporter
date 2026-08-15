@@ -1,7 +1,7 @@
 --- a/platform/web/detect.py
 +++ b/platform/web/detect.py
 @@ -54,0 +55 @@
-+        BoolVariable("gdweb_text_dom", "Render supported Control glyphs in the DOM", False),
++        BoolVariable("gdweb_text_dom", "Render supported Control text and input in the DOM", False),
 @@ -256,0 +258,3 @@
 +
 +    if env["gdweb_text_dom"]:
@@ -70,6 +70,25 @@
 +			}
 +#endif
 +
+--- a/scene/gui/base_button.cpp
++++ b/scene/gui/base_button.cpp
+@@ -136,0 +137,9 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++// DOMのnative clickを標準アクセシビリティ操作と同じ状態遷移へ渡す。
++void BaseButton::gdweb_click() {
++	if (!status.disabled) {
++		_accessibility_action_click(Variant());
++	}
++}
++#endif
++
+--- a/scene/gui/base_button.h
++++ b/scene/gui/base_button.h
+@@ -95,0 +96,4 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++	// DOMの意味要素から一回のButton操作を受ける。
++	void gdweb_click();
++#endif
 --- a/scene/gui/button.cpp
 +++ b/scene/gui/button.cpp
 @@ -31,0 +32,4 @@
@@ -81,7 +100,7 @@
 +#ifdef GDWEB_TEXT_DOM_ENABLED
 +				// DOM所有Buttonは背景とiconをCanvasへ残し、確定した文字矩形だけを同期する。
 +				if (gdweb_text_dom_owns(this)) {
-+					const int flags = is_clipped ? 4 : 0;
++					const int flags = (is_clipped ? 4 : 0) | (has_focus() ? 64 : 0) | (is_disabled() ? 256 : 0) | (get_focus_mode_with_override() == FOCUS_ALL ? 1024 : 0);
 +					gdweb_text_sync_control(this, xl_text, Rect2(text_ofs, Size2(text_buf_width, text_buf->get_size().height)), 1, flags, align_rtl_checked, VERTICAL_ALIGNMENT_TOP, font_color, theme_cache.font_size, theme_cache.line_spacing, font_outline_color, outline_size);
 +					break;
 +				}
@@ -98,10 +117,72 @@
 +			// DOM所有LinkButtonはfocus枠をCanvasへ残し、文字とunderlineだけを同期する。
 +			if (gdweb_text_dom_owns(this)) {
 +				const Vector2 text_offset = is_layout_rtl() ? Vector2(size.width - width, 0) : Vector2();
-+				const int flags = do_underline ? 16 : 0;
++				const int flags = (do_underline ? 16 : 0) | (has_focus() ? 64 : 0) | (is_disabled() ? 256 : 0) | (get_focus_mode_with_override() == FOCUS_ALL ? 1024 : 0);
 +				const float underline_offset = theme_cache.underline_spacing + text_buf->get_line_underline_position();
 +				const float underline_thickness = MAX(1, text_buf->get_line_underline_thickness());
-+				gdweb_text_sync_control(this, xl_text, Rect2(text_offset, Size2(width, text_buf->get_size().height)), 2, flags, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_TOP, color, theme_cache.font_size, 0, font_outline_color, outline_size, Color(), Vector2(), underline_offset, underline_thickness);
++				gdweb_text_sync_control(this, xl_text, Rect2(text_offset, Size2(width, text_buf->get_size().height)), 2, flags, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_TOP, color, theme_cache.font_size, 0, font_outline_color, outline_size, Color(), Vector2(), underline_offset, underline_thickness, get_uri());
 +				break;
 +			}
++#endif
+--- a/scene/gui/line_edit.cpp
++++ b/scene/gui/line_edit.cpp
+@@ -33,0 +34,4 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++#include "platform/web/gdweb_text_sync.h"
++#endif
++
+@@ -133,0 +138,6 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++	// DOM inputがIME候補とfocusを所有する場合はWeb標準の隠しIMEを起動しない。
++	if (gdweb_text_dom_owns(this)) {
++		return;
++	}
++#endif
+@@ -1401,0 +1412,6 @@
++			}
++
++#ifdef GDWEB_TEXT_DOM_ENABLED
++			// DOM所有LineEditは背景とfocus枠だけをCanvasへ残す。
++			if (gdweb_text_dom_owns(this)) {
++				break;
+@@ -1402,0 +1419 @@
++#endif
+--- a/scene/gui/text_edit.cpp
++++ b/scene/gui/text_edit.cpp
+@@ -33,0 +34,4 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++#include "platform/web/gdweb_text_sync.h"
++#endif
++
+@@ -965,0 +970,9 @@
++			}
++
++#ifdef GDWEB_TEXT_DOM_ENABLED
++			// DOM所有TextEditは背景とfocus枠だけをCanvasへ残す。
++			if (gdweb_text_dom_owns(this)) {
++				h_scroll->hide();
++				v_scroll->hide();
++				RS::get_singleton()->canvas_item_clear(text_ci);
++				break;
+@@ -966,0 +980 @@
++#endif
+@@ -3452,0 +3467,6 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++	// DOM textareaがIME候補とfocusを所有する場合はWeb標準の隠しIMEを起動しない。
++	if (gdweb_text_dom_owns(this)) {
++		return;
++	}
++#endif
+--- a/scene/gui/text_edit.h
++++ b/scene/gui/text_edit.h
+@@ -860,0 +861,10 @@
++#ifdef GDWEB_TEXT_DOM_ENABLED
++	// DOM確定入力を標準のtext_changed通知付きで反映する。
++	void gdweb_set_text(const String &p_text) { _set_text(p_text, true); }
++	// 非表示Canvas scrollbarへDOMの縦横scroll位置を保持する。
++	void gdweb_set_scroll(double p_vertical, int p_horizontal) {
++		first_visible_col = p_horizontal;
++		set_v_scroll(p_vertical);
++		set_h_scroll(p_horizontal);
++	}
 +#endif

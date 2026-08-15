@@ -1,6 +1,6 @@
 #!/bin/sh
-# Godot 4.7.1標準Web rendererへ対応Controlの文字DOMだけを足したruntimeを再現する。
-# 3Dだけを外し、非文字2D、GUI操作、2D物理、2D Shaderを本家Canvasへ残す。
+# Godot 4.7.1標準Web rendererへ対応Controlの意味DOMだけを足したruntimeを再現する。
+# 3Dだけを外し、背景、2D描画、物理、Shaderを本家Canvasへ残す。
 
 set -eu
 
@@ -29,5 +29,8 @@ mkdir -p "$out"
 archive=$src/bin/godot.web.template_release.wasm32.nothreads.gdwebminimum.zip
 unzip -oq "$archive" godot.js godot.wasm godot.audio.worklet.js godot.audio.position.worklet.js -d "$out"
 cp "$font" "$out/godot.font.woff2"
+cp "$repo/LICENSES/GODOT-MIT.txt" "$out/GODOT_LICENSE.txt"
+cp "$repo/LICENSES/GODOT-COPYRIGHT.txt" "$out/GODOT_COPYRIGHT.txt"
+cp "$repo/LICENSES/OFL-1.1.txt" "$out/FONT_LICENSE.txt"
 cp "$archive" "$out/gdweb-minimum-template.zip"
-(cd "$out" && zip -X -q gdweb-minimum-template.zip godot.font.woff2)
+(cd "$out" && zip -X -q gdweb-minimum-template.zip godot.font.woff2 GODOT_LICENSE.txt GODOT_COPYRIGHT.txt FONT_LICENSE.txt)
