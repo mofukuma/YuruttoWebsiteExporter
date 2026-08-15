@@ -32,7 +32,8 @@ Godotを配置と状態の正本とする。CSS flow、Flexbox、Gridで画面�
 - LinkButtonのURIとunderlineは`a`へ反映
 - LineEditのsecret、Unicode文字数上限、placeholder、editableを`input`へ反映
 - placeholderのTheme色を疑似要素へ反映し、TextEditのscrollbarは`textarea`だけが表示
-- 親clip、Material、文字省略、複合outline・shadow、独自fontはCanvas表示へ戻す
+- 親clip、Material、文字省略、複合outline・shadowはCanvas表示へ戻す
+- 対応Web fontがないfontはBrowser標準`sans-serif`でDOM表示
 - DOM rootはCanvas矩形と同じ大きさで切り抜く
 
 Canvas項目との途中z合成は行わない。DOM文字はCanvasより前面の画面UIに限定。条件外ControlはCanvas表示へ戻し、一度だけ警告。

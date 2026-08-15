@@ -17,16 +17,20 @@
 #include "scene/gui/line_edit.h"
 #include "scene/gui/link_button.h"
 #include "scene/gui/text_edit.h"
+#include "scene/main/scene_tree.h"
+#include "scene/resources/font.h"
 #include "scene/resources/label_settings.h"
 #include "scene/resources/style_box.h"
-#include "scene/theme/theme_db.h"
 
 typedef void (*GDWebTextEvent)(const char *, int, const char *, int, int);
+typedef void (*GDWebSiteEvent)(const char *);
 
 extern "C" {
 void gdweb_text_set_event_cb(GDWebTextEvent p_callback);
+void gdweb_site_set_event_cb(GDWebSiteEvent p_callback);
+void gdweb_site_scene(const char *p_path);
 void gdweb_text_begin();
-void gdweb_text_sync(const char *p_uid, const char *p_text, const char *p_aux, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_flags, int p_z, int p_horizontal, int p_vertical, int p_kind, int p_max_length, int p_selection_start, int p_selection_end, float p_red, float p_green, float p_blue, float p_alpha, float p_font_size, float p_line_spacing, float p_outline_red, float p_outline_green, float p_outline_blue, float p_outline_alpha, float p_outline_size, float p_shadow_red, float p_shadow_green, float p_shadow_blue, float p_shadow_alpha, float p_shadow_x, float p_shadow_y, float p_underline_offset, float p_underline_thickness, float p_placeholder_red, float p_placeholder_green, float p_placeholder_blue, float p_placeholder_alpha, float p_scroll_x, float p_scroll_y);
+void gdweb_text_sync(const char *p_uid, const char *p_text, const char *p_aux, const char *p_font, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_flags, int p_z, int p_horizontal, int p_vertical, int p_kind, int p_max_length, int p_selection_start, int p_selection_end, float p_red, float p_green, float p_blue, float p_alpha, float p_font_size, float p_line_spacing, float p_outline_red, float p_outline_green, float p_outline_blue, float p_outline_alpha, float p_outline_size, float p_shadow_red, float p_shadow_green, float p_shadow_blue, float p_shadow_alpha, float p_shadow_x, float p_shadow_y, float p_underline_offset, float p_underline_thickness, float p_placeholder_red, float p_placeholder_green, float p_placeholder_blue, float p_placeholder_alpha, float p_scroll_x, float p_scroll_y);
 void gdweb_text_remove(const char *p_uid);
 void gdweb_text_end();
 }
@@ -80,6 +84,7 @@ static HashSet<ObjectID> dirty; // 登録状態を見直すControl識別子。
 static HashSet<ObjectID> tracked; // 毎frame追従するDOM指定Control。
 static HashMap<ObjectID, TextState> states; // draw時に確定したButton系文字状態。
 static bool event_ready = false; // Browser入力callbackの登録状態。
+static ObjectID site_scene; // Browserへ通知済みのcurrent scene識別子。
 
 // ObjectIDをDOM IDへ直接使える十進文字列へ変換する。
 static CharString text_uid(ObjectID p_object) {
@@ -108,9 +113,26 @@ static bool common_supported(const Control *p_control) {
 	return true;
 }
 
-// 固定Web fontと異なるTheme fontをCanvasへ残す。
-static bool font_supported(const Control *p_control) {
-	return p_control->get_theme_font(SNAME("font")) == ThemeDB::get_singleton()->get_fallback_font();
+// LabelSettingsを含む実際のfont resourceを取得する。
+static Ref<Font> control_font(const Control *p_control) {
+	Ref<Font> font;
+	if (const Label *label = Object::cast_to<Label>(p_control)) {
+		const Ref<LabelSettings> settings = label->get_label_settings();
+		if (settings.is_valid()) font = settings->get_font();
+	}
+	if (font.is_null()) font = p_control->get_theme_font(SNAME("font"));
+	while (font.is_valid()) {
+		Ref<FontVariation> variation = font;
+		if (variation.is_null()) break;
+		font = variation->get_base_font();
+	}
+	return font;
+}
+
+// Theme fontの元resource pathを取得する。
+static String font_path(const Control *p_control) {
+	const Ref<Font> font = control_font(p_control);
+	return font.is_valid() ? font->get_path() : String();
 }
 
 // DOMで正確に再現できるControl文字だけを所有する。
@@ -119,42 +141,42 @@ bool gdweb_text_dom_owns(const Control *p_control) {
 		return false;
 	}
 	if (const Label *label = Object::cast_to<Label>(p_control)) {
-		bool supported = font_supported(label) && label->get_visible_characters() < 0 && label->get_visible_ratio() >= 1.0f;
+		bool supported = label->get_visible_characters() < 0 && label->get_visible_ratio() >= 1.0f;
 		supported = supported && !label->is_uppercase() && label->get_tab_stops().is_empty() && label->get_text_overrun_behavior() == TextServer::OVERRUN_NO_TRIMMING && label->get_lines_skipped() == 0 && label->get_max_lines_visible() < 0;
 		const Ref<LabelSettings> settings = label->get_label_settings();
 		if (settings.is_valid()) {
-			supported = supported && settings->get_font().is_null() && settings->get_shadow_size() == 0 && settings->get_paragraph_spacing() == 0 && settings->get_stacked_outline_data().is_empty() && settings->get_stacked_shadow_data().is_empty();
+			supported = supported && settings->get_shadow_size() == 0 && settings->get_paragraph_spacing() == 0 && settings->get_stacked_outline_data().is_empty() && settings->get_stacked_shadow_data().is_empty();
 		}
 		if (!supported) {
-			WARN_PRINT_ONCE("DOM指定Labelに非対応のfont、文字整形、複合装飾があります。Canvas表示へ戻します。");
+			WARN_PRINT_ONCE("DOM指定Labelに非対応の文字整形または複合装飾があります。Canvas表示へ戻します。");
 		}
 		return supported;
 	}
 	if (const Button *button = Object::cast_to<Button>(p_control)) {
-		const bool supported = font_supported(button) && button->get_autowrap_mode() == TextServer::AUTOWRAP_OFF && button->get_text_overrun_behavior() == TextServer::OVERRUN_NO_TRIMMING;
+		const bool supported = button->get_autowrap_mode() == TextServer::AUTOWRAP_OFF && button->get_text_overrun_behavior() == TextServer::OVERRUN_NO_TRIMMING;
 		if (!supported) {
-			WARN_PRINT_ONCE("DOM指定Buttonに非対応のfont、wrap、文字省略があります。Canvas表示へ戻します。");
+			WARN_PRINT_ONCE("DOM指定Buttonに非対応のwrapまたは文字省略があります。Canvas表示へ戻します。");
 		}
 		return supported;
 	}
 	if (const LinkButton *link = Object::cast_to<LinkButton>(p_control)) {
-		const bool supported = font_supported(link) && link->get_text_overrun_behavior() == TextServer::OVERRUN_NO_TRIMMING;
+		const bool supported = link->get_text_overrun_behavior() == TextServer::OVERRUN_NO_TRIMMING;
 		if (!supported) {
-			WARN_PRINT_ONCE("DOM指定LinkButtonに非対応のfont、文字省略があります。Canvas表示へ戻します。");
+			WARN_PRINT_ONCE("DOM指定LinkButtonに非対応の文字省略があります。Canvas表示へ戻します。");
 		}
 		return supported;
 	}
 	if (const LineEdit *line = Object::cast_to<LineEdit>(p_control)) {
-		const bool supported = font_supported(line) && !line->is_clear_button_enabled() && const_cast<LineEdit *>(line)->get_right_icon().is_null();
+		const bool supported = !line->is_clear_button_enabled() && const_cast<LineEdit *>(line)->get_right_icon().is_null();
 		if (!supported) {
-			WARN_PRINT_ONCE("DOM指定LineEditに非対応のfontまたはiconがあります。Canvas表示へ戻します。");
+			WARN_PRINT_ONCE("DOM指定LineEditに非対応のiconがあります。Canvas表示へ戻します。");
 		}
 		return supported;
 	}
 	if (const TextEdit *edit = Object::cast_to<TextEdit>(p_control)) {
-		const bool supported = p_control->get_class() == SNAME("TextEdit") && font_supported(edit) && edit->get_caret_count() == 1 && edit->get_gutter_count() == 0 && !edit->is_drawing_minimap() && edit->get_line_wrapping_mode() == TextEdit::LINE_WRAPPING_NONE && edit->get_syntax_highlighter().is_null();
+		const bool supported = p_control->get_class() == SNAME("TextEdit") && edit->get_caret_count() == 1 && edit->get_gutter_count() == 0 && !edit->is_drawing_minimap() && edit->get_line_wrapping_mode() == TextEdit::LINE_WRAPPING_NONE && edit->get_syntax_highlighter().is_null();
 		if (!supported) {
-			WARN_PRINT_ONCE("DOM指定TextEditに非対応のfont、複数caret、gutter、wrap、装飾があります。Canvas表示へ戻します。");
+			WARN_PRINT_ONCE("DOM指定TextEditに非対応の複数caret、gutter、wrap、装飾があります。Canvas表示へ戻します。");
 		}
 		return supported;
 	}
@@ -182,8 +204,9 @@ static void sync_text(Control *p_control, const TextState &p_state) {
 	flags = p_control->is_layout_rtl() ? flags | TEXT_RTL : flags & ~TEXT_RTL;
 	const CharString text = p_state.text.utf8();
 	const CharString aux = p_state.aux.utf8();
+	const CharString font = font_path(p_control).utf8();
 	gdweb_text_sync(
-			uid.get_data(), text.get_data(), aux.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
+			uid.get_data(), text.get_data(), aux.get_data(), font.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
 			p_state.rect.size.x, p_state.rect.size.y, flags, p_control->get_z_index(), p_state.horizontal, p_state.vertical, p_state.kind, p_state.max_length, p_state.selection_start, p_state.selection_end,
 			color.r, color.g, color.b, color.a, p_state.font_size, p_state.line_spacing,
 			outline.r, outline.g, outline.b, outline.a, p_state.outline_size,
@@ -331,6 +354,15 @@ static void text_event(const char *p_uid, int p_kind, const char *p_text, int p_
 	dirty.insert(object);
 }
 
+// Browserの直リンクと履歴操作をSceneTreeへ遅延反映する。
+static void site_event(const char *p_path) {
+	SceneTree *tree = SceneTree::get_singleton();
+	const String path = String::utf8(p_path);
+	if (!tree || !path.begins_with("res://")) return;
+	Node *current = tree->get_current_scene();
+	if (!current || current->get_scene_file_path() != path) tree->call_deferred(SNAME("change_scene_to_file"), path);
+}
+
 // Button系のdrawで確定した文字矩形とTheme状態を追従表へ保存する。
 void gdweb_text_sync_control(Control *p_control, const String &p_text, const Rect2 &p_rect, int p_kind, int p_flags, int p_horizontal, int p_vertical, const Color &p_color, float p_font_size, float p_line_spacing, const Color &p_outline, float p_outline_size, const Color &p_shadow, const Vector2 &p_shadow_offset, float p_underline_offset, float p_underline_thickness, const String &p_aux) {
 	if (!p_control) return;
@@ -365,7 +397,16 @@ void gdweb_text_sync_queue(ObjectID p_object) {
 void gdweb_text_sync_process() {
 	if (!event_ready) {
 		gdweb_text_set_event_cb(&text_event);
+		gdweb_site_set_event_cb(&site_event);
 		event_ready = true;
+	}
+	// current sceneが変わったframeだけをBrowser routeへ通知する。
+	SceneTree *tree = SceneTree::get_singleton();
+	Node *scene = tree ? tree->get_current_scene() : nullptr;
+	if (scene && scene->get_instance_id() != site_scene) {
+		site_scene = scene->get_instance_id();
+		const CharString path = scene->get_scene_file_path().utf8();
+		gdweb_site_scene(path.get_data());
 	}
 	Vector<ObjectID> removed;
 	for (ObjectID object : dirty) {

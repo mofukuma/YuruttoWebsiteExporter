@@ -21,7 +21,7 @@ Godotを配置と状態の正本に保ちながら、Browser標準の意味要�
 - `max_length`はUTF-16数へ直変換せず、Godotと同じUnicode文字数で制限。
 - TextEditのscrollbarはDOMだけを表示し、位置をGodotのscroll状態と双方向同期。
 - IME変換中はGodotへ未確定文字を送らず、`compositionend`で一回確定。通常入力は`input` eventごとに反映。
-- 独自font、親clip、Material、複雑なTextEdit表示はCanvasへ戻す境界。
+- Web font不在時はBrowser標準fontでDOMを維持。親clip、Material、複雑なTextEdit表示はCanvasへ戻す境界。
 
 ## 圧縮境界
 

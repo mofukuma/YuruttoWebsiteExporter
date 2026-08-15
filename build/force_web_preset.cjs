@@ -25,15 +25,34 @@ const next = text.indexOf('\n[preset.', body);
 const end = next >= 0 ? next : text.length;
 let options = text.slice(body, end);
 
-// machine依存pathとAdaptive値を現在repositoryの一意な値へ正規化する。
-const values = {
+// Machine依存pathとAdaptiveだけを一意な値へ正規化する。
+const forced = {
 	'custom_template/release': `"${template}"`,
 	'html/canvas_resize_policy': '2',
 };
-for (const [key, value] of Object.entries(values)) {
+const defaults = {
+	'gdweb/site/enabled': 'true',
+	'gdweb/site/config': '"res://gdweb-site.json"',
+	'gdweb/site/base_url': '"https://example.com"',
+	'gdweb/site/description': '"Godotで作成したWebサイトです。"',
+	'gdweb/site/locale': '"ja_JP"',
+	'gdweb/site/favicon': '""',
+	'gdweb/routing/mode': '0',
+	'gdweb/font/matching_webfont': 'true',
+	'gdweb/ogp/image': '"res://web/ogp.png"',
+	'gdweb/ogp/alt': '"サイトのプレビュー画像"',
+	'gdweb/ogp/frame': '2',
+};
+for (const [key, value] of Object.entries(forced)) {
 	const line = new RegExp(`^${key.replace('/', '\\/')}=.*$`, 'm');
 	if (line.test(options)) options = options.replace(line, `${key}=${value}`);
 	else options = `${options.replace(/\s*$/, '')}\n${key}=${value}\n`;
+}
+
+// Site設定は未設定時だけ既定値を補い、ユーザー選択を保持する。
+for (const [key, value] of Object.entries(defaults)) {
+	const line = new RegExp(`^${key.replace('/', '\\/')}=.*$`, 'm');
+	if (!line.test(options)) options = `${options.replace(/\s*$/, '')}\n${key}=${value}\n`;
 }
 text = text.slice(0, body) + options + text.slice(end);
 fs.writeFileSync(file, text);

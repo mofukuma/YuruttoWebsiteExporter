@@ -10,6 +10,8 @@ const GDWebText = {
 	$GDWebText: {
 		elements: new Map(),
 		event: null,
+		siteEvent: null,
+		siteCallback: null,
 		root: null,
 		rootSize: '',
 		mouseDown: false,
@@ -21,10 +23,9 @@ const GDWebText = {
 			const canvas = GodotConfig.canvas;
 			const root = document.createElement('div');
 			root.id = 'gdweb-text-root';
-			root.style.cssText = 'position:absolute;transform-origin:0 0;pointer-events:none;overflow:hidden;z-index:1;font-family:GDWeb,sans-serif';
+			root.style.cssText = 'position:absolute;transform-origin:0 0;pointer-events:none;overflow:hidden;z-index:1;font-family:sans-serif';
 			const style = document.createElement('style');
-			const base = location.pathname.split('/').pop().replace(/\.html$/, '') || 'index';
-			style.textContent = `@font-face{font-family:GDWeb;src:url('${base}.font.woff2') format('woff2');font-display:swap}#gdweb-text-root input::placeholder,#gdweb-text-root textarea::placeholder{color:var(--gdweb-placeholder,currentColor);opacity:1}`;
+			style.textContent = '#gdweb-text-root input::placeholder,#gdweb-text-root textarea::placeholder{color:var(--gdweb-placeholder,currentColor);opacity:1}';
 			document.head.appendChild(style);
 			canvas.parentElement.appendChild(root);
 			canvas.addEventListener('mousedown', () => { GDWebText.mouseDown = true; });
@@ -179,17 +180,34 @@ const GDWebText = {
 	gdweb_text_set_event_cb: function (callback) {
 		GDWebText.event = GodotRuntime.get_func(callback);
 	},
+	gdweb_site_set_event_cb__sig: 'vp',
+	// Browser route通知をGodot scene切替callbackへ結ぶ。
+	gdweb_site_set_event_cb: function (callback) {
+		GDWebText.siteEvent = GodotRuntime.get_func(callback);
+		GDWebText.siteCallback = (path) => {
+			const value = GodotRuntime.allocString(path);
+			GDWebText.siteEvent(value);
+			GodotRuntime.free(value);
+		};
+		globalThis.GDWebSite?.bind(GDWebText.siteCallback);
+	},
+	gdweb_site_scene__sig: 'vi',
+	// Godot current sceneのresource pathをBrowser titleとURLへ通知する。
+	gdweb_site_scene: function (pPath) {
+		globalThis.GDWebSite?.scene(GodotRuntime.parseString(pPath));
+	},
 	gdweb_text_begin__sig: 'v',
 	// 一frameの文字同期前にroot寸法を更新する。
 	gdweb_text_begin: function () {
 		GDWebText.resizeRoot();
 	},
-	gdweb_text_sync__sig: 'viii' + 'f'.repeat(8) + 'i'.repeat(8) + 'f'.repeat(25),
+	gdweb_text_sync__sig: 'viiii' + 'f'.repeat(8) + 'i'.repeat(8) + 'f'.repeat(25),
 	// 一つのControl状態をObjectID対応の意味要素へ反映する。
-	gdweb_text_sync: function (pUid, pText, pAux, xx, xy, yx, yy, x, y, width, height, flags, z, horizontal, vertical, kind, maxLength, selectionStart, selectionEnd, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha, scrollX, scrollY) {
+	gdweb_text_sync: function (pUid, pText, pAux, pFont, xx, xy, yx, yy, x, y, width, height, flags, z, horizontal, vertical, kind, maxLength, selectionStart, selectionEnd, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha, scrollX, scrollY) {
 		const uid = GodotRuntime.parseString(pUid);
 		const text = GodotRuntime.parseString(pText);
 		const aux = GodotRuntime.parseString(pAux);
+		const font = GodotRuntime.parseString(pFont);
 		const tag = GDWebText.tags[kind] || 'span';
 		let element = GDWebText.elements.get(uid);
 		if (!element || element.tagName.toLowerCase() !== tag) {
@@ -246,7 +264,7 @@ const GDWebText = {
 			if (Math.abs(element.scrollLeft - scrollX) > 0.5) element.scrollLeft = scrollX;
 			if (Math.abs(element.scrollTop - scrollY) > 0.5) element.scrollTop = scrollY;
 		}
-		const appearance = [width, height, flags, z, horizontal, vertical, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha].join(',');
+		const appearance = [width, height, flags, z, horizontal, vertical, font, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha].join(',');
 		if (element.dataset.gdwebAppearance === appearance) return;
 		element.dataset.gdwebAppearance = appearance;
 		element.style.display = flags & 1 ? (tag === 'input' || tag === 'textarea' ? 'block' : 'flex') : 'none';
@@ -262,6 +280,7 @@ const GDWebText = {
 		element.style.textAlign = ['left', 'center', 'right', 'justify'][horizontal] || 'left';
 		element.style.color = GDWebText.color(red, green, blue, alpha);
 		element.style.setProperty('--gdweb-placeholder', GDWebText.color(placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha));
+		element.style.fontFamily = globalThis.GDWEB_FONT_MAP?.[font]?.family || 'sans-serif';
 		element.style.fontSize = `${fontSize}px`;
 		element.style.lineHeight = `${fontSize + lineSpacing}px`;
 		element.style.webkitTextStroke = outlineSize > 0 && outlineAlpha > 0 ? `${outlineSize}px ${GDWebText.color(outlineRed, outlineGreen, outlineBlue, outlineAlpha)}` : '0 transparent';

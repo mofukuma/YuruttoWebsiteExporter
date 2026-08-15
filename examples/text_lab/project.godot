@@ -25,3 +25,7 @@ renderer/rendering_method.mobile="gl_compatibility"
 [physics]
 
 2d/default_gravity=980.0
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gdweb_site/plugin.cfg")

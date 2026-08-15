@@ -1,0 +1,18 @@
+; OGP中央切り抜きの縦横比を検査する正方形Scene。
+
+config_version=5
+
+[application]
+
+config/name="OGP Aspect Test"
+run/main_scene="res://main.tscn"
+
+[display]
+
+window/size/viewport_width=600
+window/size/viewport_height=600
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

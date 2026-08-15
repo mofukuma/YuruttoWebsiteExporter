@@ -1,0 +1,19 @@
+; 同名同path Web fontのDOM適用境界を検査するproject。
+
+config_version=5
+
+[application]
+
+config/name="Web Font Test"
+run/main_scene="res://main.tscn"
+
+[display]
+
+window/size/viewport_width=640
+window/size/viewport_height=240
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

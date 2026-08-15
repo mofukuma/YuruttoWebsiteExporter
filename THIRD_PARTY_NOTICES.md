@@ -19,3 +19,5 @@
 
 `LINE Seed` is a registered trademark of LINE. The font software is provided
 without warranty under the SIL Open Font License 1.1.
+
+Export時にprojectから公開されるWeb fontのlicense通知は、各projectで用意する。

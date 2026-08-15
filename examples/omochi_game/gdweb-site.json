@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "site": {
+    "name": "Godou-san Omochi Catch",
+    "base_url": "https://example.com",
+    "description": "ゴドウさんを動かして、落ちてくるおもちを受け取る2D物理ゲーム。",
+    "locale": "ja_JP",
+    "favicon": "res://web/favicon.svg",
+    "styles": [
+      { "href": "/web/site.css" }
+    ],
+    "scripts": [
+      { "src": "/web/site.js", "defer": "defer" }
+    ]
+  },
+  "scenes": {
+    "OmochiGame": {
+      "scene": "res://main.tscn",
+      "uri": "/",
+      "title": "ゴドウさんのおもちキャッチ",
+      "description": "ゴドウさんをマウスで動かし、坂とピンを跳ねるおもちを受け取るゲーム。",
+      "summary": "ゴドウさんを左右へ動かして、30フレームごとに落ちるおもちを受け取ります。",
+      "json_ld": {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "ゴドウさんのおもちキャッチ",
+        "inLanguage": "ja"
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "scenes": {
+    "HomePage": {
+      "scene": "res://main.tscn",
+      "uri": "/",
+      "title": "Main Route",
+      "description": "Main scene"
+    },
+    "AboutPage": {
+      "scene": "res://about.tscn",
+      "uri": "/about/",
+      "title": "About Route",
+      "description": "About scene"
+    }
+  }
+}

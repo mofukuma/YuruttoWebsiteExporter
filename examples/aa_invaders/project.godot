@@ -1,18 +1,18 @@
-; DOM文字と2D物理を組み合わせる捕獲ゲーム。
+; スマートフォン向けAA固定画面シューティングゲーム。
 
 config_version=5
 
 [application]
 
-config/name="Godou-san Omochi Catch"
+config/name="Kaomoji AA Invaders"
 run/main_scene="res://main.tscn"
 
 [display]
 
-window/size/viewport_width=960
-window/size/viewport_height=640
-window/size/window_width_override=960
-window/size/window_height_override=640
+window/size/viewport_width=390
+window/size/viewport_height=844
+window/size/window_width_override=390
+window/size/window_height_override=844
 window/stretch/mode="canvas_items"
 window/stretch/aspect="ignore"
 
@@ -20,10 +20,6 @@ window/stretch/aspect="ignore"
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-
-[physics]
-
-2d/default_gravity=980.0
 
 [editor_plugins]
 

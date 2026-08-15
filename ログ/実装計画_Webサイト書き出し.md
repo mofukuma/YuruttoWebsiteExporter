@@ -11,35 +11,37 @@ Godot sceneをpageとして扱い、Web exportだけで検索、共有、直リ�
 - Godotの`SceneTree.current_scene`を表示内容の正本にする。
 - JSONのscene keyとscene fileを一対一にする。
 - 初期HTMLへSEO情報を静的出力し、scene遷移後だけDOM headを差分更新する。
-- `/uri/`とHistory APIを標準にし、`/#uri`は限定配布向けfallbackにする。
+- Server設定不要の`/#/uri/`を既定にし、公開siteでは`/uri/`とHistory APIを推奨する。
 - 既知routeごとにHTMLを生成し、OGP crawlerへJavaScript不要の情報を返す。
 - 文字DOMとCanvas物理の所有境界を変えない。
 
 ## Exporter設定
 
-`EditorExportPlatformWeb::get_export_options()`へ次の項目を追加。
+標準Godot 4.7.1へ導入できる`EditorExportPlugin`で次の項目を追加。
 
 | 設定 | 型 | 内容 |
 |---|---|---|
-| `site/enabled` | bool | site書き出しの有効化 |
-| `site/metadata_source` | enum | JSON file、inline JSON |
-| `site/metadata_file` | file | scene情報JSON |
-| `site/metadata_json` | multiline | preset内へ保持するJSON |
-| `site/base_url` | string | canonical、OGP、sitemapのorigin |
-| `site/routing` | enum | History、Hash |
-| `site/static_routes` | bool | route別HTML生成 |
-| `site/sitemap` | bool | `sitemap.xml`生成 |
-| `site/robots` | bool | `robots.txt`生成 |
-| `site/server_examples` | bool | nginx設定例と配信説明の生成 |
-| `site/strict_validation` | bool | 不足、重複、不正URLで書き出し停止 |
+| `gdweb/site/enabled` | bool | site書き出し。既定ON |
+| `gdweb/site/config` | file | scene情報JSON |
+| `gdweb/site/base_url` | string | canonical、OGP、sitemapのorigin |
+| `gdweb/site/title` | string | site既定title |
+| `gdweb/site/description` | string | site既定概要 |
+| `gdweb/site/locale` | string | HTMLとOGPの言語 |
+| `gdweb/site/favicon` | file | site icon |
+| `gdweb/routing/mode` | enum | Hash、History。Hash既定 |
+| `gdweb/font/matching_webfont` | bool | Theme fontと同じpathのwoff2使用。既定ON |
+| `gdweb/ogp/image` | file | 全pageで共有する一枚のOGP画像 |
+| `gdweb/ogp/alt` | string | 共有画像の代替説明 |
+| `gdweb/ogp/frame` | int | Autoで撮影する描画frame。既定2 |
+| `gdweb/ogp/auto` | tool button | 現在Sceneを指定frameまで動かし1200×630で保存 |
 
-`site/enabled=false`ではsite項目を非表示。JSON fileとinline JSONは選択方式だけを表示。設定警告へJSON parse error、scene不足、URI重複、base URL不正を表示。
+設定警告へJSON parse error、scene不足、URI重複、base URL不正を表示。OGP Autoは保存済み現在Sceneを独立processで実行し、Editor実行状態を変えない。
 
 `html/canvas_resize_policy`は設定画面から除外し、生成configの`canvasResizePolicy`を常に`2`へ固定。CLI wrapperもpresetを`2`へ正規化。
 
 ## JSON形式
 
-scene名をkeyにし、scene fileで同名衝突を検査。
+pageを表すkeyにし、scene resource pathで実Sceneと照合。
 
 ```json
 {
@@ -47,7 +49,6 @@ scene名をkeyにし、scene fileで同名衝突を検査。
   "site": {
     "name": "Example Site",
     "locale": "ja_JP",
-    "default_scene": "Home",
     "favicon": "res://web/favicon.svg",
     "styles": [{ "href": "/assets/site.css" }],
     "scripts": [{ "src": "/assets/site.js", "type": "module" }]
@@ -58,16 +59,8 @@ scene名をkeyにし、scene fileで同名衝突を検査。
       "uri": "/",
       "title": "ホーム | Example Site",
       "description": "サイトの概要",
-      "canonical": "/",
       "robots": "index,follow",
       "meta": [{ "name": "theme-color", "content": "#07101f" }],
-      "og": {
-        "title": "ホーム | Example Site",
-        "type": "website",
-        "image": "/assets/og/home.png",
-        "description": "サイトの概要"
-      },
-      "twitter": { "card": "summary_large_image" },
       "json_ld": [{ "@context": "https://schema.org", "@type": "WebPage" }],
       "styles": [{ "href": "/assets/home.css" }],
       "scripts": [{ "src": "/assets/home.js", "type": "module" }],
@@ -77,15 +70,13 @@ scene名をkeyにし、scene fileで同名衝突を検査。
       "scene": "res://pages/about.tscn",
       "uri": "/about/",
       "title": "概要 | Example Site",
-      "description": "このサイトについて",
-      "canonical": "/about/",
-      "og": { "type": "website", "image": "/assets/og/about.png" }
+      "description": "このサイトについて"
     }
   }
 }
 ```
 
-global値をscene値で上書き。`canonical`、OGP URL、asset URLは`site/base_url`から絶対URL化。title、description、URI、scene fileを必須化。
+Global値をscene値で上書き。`canonical`、OGP URL、asset URLはbase URLから絶対URL化。title、description、URI、scene fileを必須化。Scene root名に依存せずscene resource pathでruntime同期。
 
 ## Head生成
 
@@ -99,6 +90,10 @@ global値をscene値で上書き。`canonical`、OGP URL、asset URLは`site/bas
 - global scriptとscene script
 - `html lang`
 - preload対象font、JavaScript、WebAssembly
+
+OGP画像は一枚から`og:image`、`og:image:url`、HTTPS時の`og:image:secure_url`、MIME、幅、高さ、alt、Twitter image、Twitter image altへ展開。Auto PNGは1200×630固定。元画面と寸法が違う場合は縦横比を保って中央切り抜き。
+
+Theme fontが`res://path/name.otf`または`.ttf`の場合、同じ`res://path/name.woff2`を公開assetへcopy。resource pathをkeyにしたfont mapを初期HTMLへ入れ、対応mapがないfontはBrowser標準`sans-serif`でDOM表示。
 
 値と属性をHTML escape。tag名と属性をallowlistで検証。inline scriptとstyleは明示指定時だけ許可し、Content Security Policy用hashを生成。
 
@@ -122,6 +117,8 @@ route HTMLは同じ`.wasm`、`.pck`、JavaScriptを参照。相対path差をな�
 
 ## SceneとBrowser履歴の同期
 
+Minimum runtimeの毎frame同期へScene専用callbackを追加。`javascript_eval`は無効のまま維持し、検証済み`res://` pathだけを受け渡す。
+
 ### GodotからBrowser
 
 1. `SceneTree.current_scene.scene_file_path`からJSON keyを取得。
@@ -144,7 +141,7 @@ route HTMLは同じ`.wasm`、`.pck`、JavaScriptを参照。相対path差をな�
 
 ### History
 
-推奨方式。URLは`https://example.com/about/`。既知routeには静的`about/index.html`があるため、一般的なstatic hostingでも直リンク可能。
+SEO公開の推奨方式。URLは`https://example.com/about/`。既知routeには静的`about/index.html`があるため、JavaScriptなしでも個別metadataを取得可能。
 
 未知routeや単一shell運用ではnginxへ次を案内。
 
@@ -158,7 +155,7 @@ location / {
 
 ### Hash
 
-URL rewrite不能な配布先向け。`https://example.com/#/about/`。検索URLと静的OGPの品質が落ちるため非推奨表示。
+既定方式。URL rewrite不能な配布先でも`https://example.com/#/about/`で動作。検索URLとpage別静的OGPが必要な公開siteではHistoryを案内。
 
 ## SEO付属物
 
@@ -190,7 +187,7 @@ URL rewrite不能な配布先向け。`https://example.com/#/about/`。検索URL
 ### M1 設定と検証
 
 - Adaptive固定
-- Exporter設定追加
+- EditorExportPlugin設定とOGP Auto追加
 - JSON parser、schema version、escape、URL正規化
 - scene、URI、canonical、assetの重複・不足検査
 
@@ -199,6 +196,7 @@ URL rewrite不能な配布先向け。`https://example.com/#/about/`。検索URL
 - default shellへのhead埋め込み
 - route別HTML、404、sitemap、robots生成
 - favicon、OGP、style、script copy
+- 同path Web font mapとfont asset生成
 - Brotliとcontent hash manifest連携
 
 ### M3 runtime同期
@@ -212,6 +210,7 @@ URL rewrite不能な配布先向け。`https://example.com/#/about/`。検索URL
 ### M4 配信資料
 
 - nginx設定例
+- static origin向けreverse proxy設定例
 - static hosting別route案内
 - MIME、Brotli、cache、security header案内
 

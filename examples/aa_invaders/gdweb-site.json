@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "site": {
+    "name": "顔文字 AA INVADERS",
+    "locale": "ja_JP"
+  },
+  "scenes": {
+    "AAInvaders": {
+      "scene": "res://main.tscn",
+      "uri": "/",
+      "title": "顔文字 AA INVADERS",
+      "description": "顔文字の自機で独自AAの侵入者を迎撃するスマートフォン向け2Dゲーム。",
+      "summary": "左右移動と射撃でAA侵入者のwaveを迎撃します。"
+    }
+  }
+}

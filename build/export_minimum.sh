@@ -12,10 +12,12 @@ template=$repo/tmp/minimum/runtime-proof/gdweb-minimum-template.zip # 再現buil
 case $output in /*) ;; *) output=$repo/$output ;; esac
 
 test -f "$template" || { echo "minimum templateなし。先に sh build/prepare_runtime.sh を実行" >&2; exit 1; }
+mkdir -p "$(dirname "$output")"
 node "$repo/build/check_minimum.cjs" "$project"
+node "$repo/build/install_site_addon.cjs" "$project"
 node "$repo/build/force_web_preset.cjs" "$project" Web
 "$godot" --headless --path "$project" --export-release Web "$output"
+node "$repo/addons/gdweb_site/site_export.cjs" "$project" "$output" Web
 cp "$repo/LICENSES/GODOT-MIT.txt" "$(dirname "$output")/GODOT_LICENSE.txt"
 cp "$repo/LICENSES/GODOT-COPYRIGHT.txt" "$(dirname "$output")/GODOT_COPYRIGHT.txt"
-cp "$repo/LICENSES/OFL-1.1.txt" "$(dirname "$output")/FONT_LICENSE.txt"
-node "$repo/build/compress_web.cjs" "$(dirname "$output")"
+rm -f "$(dirname "$output")/FONT_LICENSE.txt"

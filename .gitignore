@@ -14,3 +14,4 @@ coverage/
 .idea/
 .vscode/
 *.swp
+examples/*/addons/gdweb_site/

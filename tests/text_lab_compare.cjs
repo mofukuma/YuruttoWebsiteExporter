@@ -13,19 +13,19 @@ const roots = { minimum: path.join(base, 'site'), standard: path.join(base, 'sta
 const browserPath = '/Users/k/Library/Caches/ms-playwright/chromium-1194/chrome-mac/Chromium.app/Contents/MacOS/Chromium'; // 固定Chromium。
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.woff2': 'font/woff2', '.png': 'image/png' }; // 配信に必要な応答型。
 
-// 方式名の範囲だけを配信する。
-const server = http.createServer((request, response) => {
-	const [, kind, ...parts] = request.url.split('/');
-	const root = roots[kind];
-	const name = parts.join('/').split('?')[0] || 'index.html';
-	const file = root && path.resolve(root, name);
-	if (!file || !file.startsWith(`${root}${path.sep}`) || !fs.existsSync(file)) {
-		response.writeHead(404).end();
-		return;
-	}
-	response.writeHead(200, { 'content-type': mime[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
-	fs.createReadStream(file).pipe(response);
-});
+// 一方式をsite rootとして独立originへ配信する。
+function serve(root) {
+	return http.createServer((request, response) => {
+		const name = request.url.slice(1).split('?')[0] || 'index.html';
+		const file = path.resolve(root, name);
+		if (!file.startsWith(`${root}${path.sep}`) || !fs.existsSync(file)) {
+			response.writeHead(404).end();
+			return;
+		}
+		response.writeHead(200, { 'content-type': mime[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
+		fs.createReadStream(file).pipe(response);
+	});
+}
 
 // 数列の中央値を返す。
 function median(values) {
@@ -39,7 +39,7 @@ async function measure(browser, kind, port) {
 	page.setDefaultTimeout(12000);
 	const errors = [];
 	page.on('pageerror', (error) => errors.push(error.message));
-	await page.goto(`http://127.0.0.1:${port}/${kind}/index.html`, { waitUntil: 'domcontentloaded' });
+	await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
 	await page.locator('#status').waitFor({ state: 'detached' });
 	if (kind === 'minimum') {
 		await page.waitForFunction(() => document.querySelectorAll('[data-gdweb-text]').length >= 110);
@@ -68,7 +68,7 @@ async function capture(browser, kind, port) {
 	const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 2 });
 	const page = await context.newPage();
 	page.setDefaultTimeout(12000);
-	await page.goto(`http://127.0.0.1:${port}/${kind}/index.html`, { waitUntil: 'domcontentloaded' });
+	await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
 	await page.locator('#status').waitFor({ state: 'detached' });
 	if (kind === 'minimum') {
 		await page.waitForFunction(() => document.querySelectorAll('[data-gdweb-text]').length >= 110);
@@ -148,18 +148,20 @@ async function compareImages(browser, standard, minimum, masks) {
 
 // 順序を交替し、frame負荷の中央値と倍率を保存する。
 (async () => {
-	await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+	const servers = { minimum: serve(roots.minimum), standard: serve(roots.standard) };
+	await Promise.all(Object.values(servers).map((server) => new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))));
+	const ports = Object.fromEntries(Object.entries(servers).map(([kind, server]) => [kind, server.address().port]));
 	const browser = await chromium.launch({ executablePath: browserPath, headless: true, args: ['--use-angle=swiftshader'] });
 	try {
 		const samples = { minimum: [], standard: [] };
 		for (const order of [['standard', 'minimum'], ['minimum', 'standard'], ['standard', 'minimum']]) {
-			for (const kind of order) samples[kind].push(await measure(browser, kind, server.address().port));
+			for (const kind of order) samples[kind].push(await measure(browser, kind, ports[kind]));
 		}
 		const frameMs = { minimum: median(samples.minimum), standard: median(samples.standard) };
 		const ratio = frameMs.minimum / frameMs.standard;
 		assert.ok(ratio < 2, `動的文字DOM負荷: ${ratio.toFixed(2)}倍`);
-		const standard = await capture(browser, 'standard', server.address().port);
-		const minimum = await capture(browser, 'minimum', server.address().port);
+		const standard = await capture(browser, 'standard', ports.standard);
+		const minimum = await capture(browser, 'minimum', ports.minimum);
 		fs.writeFileSync(path.join(base, 'standard-frozen.png'), standard.image);
 		fs.writeFileSync(path.join(base, 'minimum-frozen.png'), minimum.image);
 		const nonText = await compareImages(browser, standard.image, minimum.image, minimum.masks);
@@ -169,10 +171,9 @@ async function compareImages(browser, standard, minimum, masks) {
 		console.log(JSON.stringify(result));
 	} finally {
 		await browser.close();
-		server.close();
+		for (const server of Object.values(servers)) server.close();
 	}
 })().catch((error) => {
 	console.error(error.stack || error);
-	server.close();
 	process.exitCode = 1;
 });

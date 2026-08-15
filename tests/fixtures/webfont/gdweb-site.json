@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "scenes": {
+    "WebFont": {
+      "scene": "res://main.tscn",
+      "uri": "/",
+      "title": "Web Font Test",
+      "description": "Themeと同名同pathのWeb font検査"
+    }
+  }
+}

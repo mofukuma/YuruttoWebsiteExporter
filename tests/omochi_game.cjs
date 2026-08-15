@@ -47,9 +47,14 @@ async function item(page, text) {
 		browser = await chromium.launch({ executablePath: browserPath, headless: true, args: ['--use-angle=swiftshader'] });
 		const page = await browser.newPage({ viewport: { width: 960, height: 640 }, deviceScaleFactor: 1 });
 		page.setDefaultTimeout(45000);
-		page.on('pageerror', (error) => errors.push(error.message));
+		page.on('pageerror', (error) => errors.push(error.stack || error.message));
 		await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
-		await page.waitForFunction(() => document.querySelector('[data-gdweb-kind="LinkButton"]') && document.querySelector('[data-gdweb-kind="Button"]'));
+		try {
+			await page.waitForFunction(() => document.querySelector('[data-gdweb-kind="LinkButton"]') && document.querySelector('[data-gdweb-kind="Button"]'), null, { timeout: 12000 });
+		} catch {
+			const state = await page.evaluate(() => ({ url: location.href, title: document.title, text: document.body?.innerText || '', status: document.querySelector('#status-notice')?.textContent, labels: [...document.querySelectorAll('[data-gdweb-text]')].map((node) => node.textContent) }));
+			throw new Error(`Omochi起動失敗: ${JSON.stringify({ state, errors })}`);
+		}
 		await page.evaluate(() => document.fonts.ready);
 
 		// 意味要素とObjectIDを確認する。
