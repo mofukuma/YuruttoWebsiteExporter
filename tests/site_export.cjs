@@ -16,6 +16,7 @@ const project = path.join(root, 'project'); // exporter fixture project。
 const hashOut = path.join(root, 'hash'); // 無設定配信用Hash成果物。
 const historyOut = path.join(root, 'history'); // nginx配信用History成果物。
 const browserPath = '/Users/k/Library/Caches/ms-playwright/chromium-1194/chrome-mac/Chromium.app/Contents/MacOS/Chromium'; // 固定Chromium。
+const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // Exporterを実行する固定Godot。
 const rawPort = 49181; // raw nginx比較port。
 const sitePort = 49182; // History nginx検査port。
 const containers = []; // 必ず終了するDocker container ID。
@@ -27,10 +28,12 @@ function fixture(mode, target) {
 	fs.mkdirSync(path.join(project, 'fonts'), { recursive: true });
 	fs.mkdirSync(path.join(project, 'web'), { recursive: true });
 	fs.mkdirSync(target, { recursive: true });
-	fs.writeFileSync(path.join(project, 'project.godot'), '[application]\nconfig/name="Site Test"\nrun/main_scene="res://main.tscn"\n');
+	fs.cpSync(path.join(repo, 'addons/gdweb_site'), path.join(project, 'addons/gdweb_site'), { recursive: true });
+	fs.writeFileSync(path.join(project, 'project.godot'), '[application]\nconfig/name="Site Test"\nrun/main_scene="res://main.tscn"\n[editor_plugins]\nenabled=PackedStringArray("res://addons/gdweb_site/plugin.cfg")\n');
 	fs.writeFileSync(path.join(project, 'main.tscn'), '[gd_scene format=3]\n[node name="Main" type="Node"]\n');
 	fs.writeFileSync(path.join(project, 'about.tscn'), '[gd_scene format=3]\n[node name="About" type="Node"]\n');
-	fs.writeFileSync(path.join(project, 'export_presets.cfg'), `[preset.0]\nname="Web"\nplatform="Web"\n[preset.0.options]\ngdweb/site/enabled=true\ngdweb/site/config="res://gdweb-site.json"\ngdweb/site/base_url="http://127.0.0.1:${sitePort}"\ngdweb/site/title="Site Test"\ngdweb/site/description="既定概要"\ngdweb/site/locale="ja_JP"\ngdweb/site/favicon=""\ngdweb/routing/mode=${mode}\ngdweb/font/matching_webfont=true\ngdweb/ogp/image="res://web/ogp.png"\ngdweb/ogp/alt="自動生成OGP"\n`);
+	const basePath = mode === 1 ? '/sub/' : '/';
+	fs.writeFileSync(path.join(project, 'export_presets.cfg'), `[preset.0]\nname="Web"\nplatform="ゆるっとWeb"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\nhtml/focus_canvas_on_start=true\ngdweb/site/enabled=true\ngdweb/site/config="res://gdweb-site.json"\ngdweb/site/base_url="http://127.0.0.1:${sitePort}${basePath}"\ngdweb/site/title="Site Test"\ngdweb/site/description="既定概要"\ngdweb/site/locale="ja_JP"\ngdweb/site/favicon=""\ngdweb/routing/mode=${mode}\ngdweb/font/matching_webfont=true\ngdweb/font/avoid_canvas_theme_font=true\ngdweb/ogp/image="res://web/ogp.png"\ngdweb/ogp/alt="自動生成OGP"\nvram_texture_compression/for_desktop=true\n`);
 	fs.writeFileSync(path.join(project, 'gdweb-site.json'), JSON.stringify({ version: 1, scenes: {
 		Main: { scene: 'res://main.tscn', uri: '/', title: 'メイン', description: 'メイン概要', scripts: [{ src: 'res://web/main.js', defer: true }], meta: [{ name: 'theme-color', content: '#111111' }], json_ld: { '@context': 'https://schema.org', '@type': 'WebPage', name: 'Main' } },
 		About: { scene: 'res://about.tscn', uri: '/about/', title: '概要ページ', description: '概要の説明', scripts: [{ src: 'res://web/about.js', defer: true }], meta: [{ name: 'theme-color', content: '#222222' }], json_ld: { '@context': 'https://schema.org', '@type': 'AboutPage', name: 'About' } },
@@ -40,10 +43,11 @@ function fixture(mode, target) {
 	fs.copyFileSync(path.join(repo, 'examples/omochi_game/web/ogp.png'), path.join(project, 'web/ogp.png'));
 	fs.copyFileSync(path.join(repo, 'LINESeedJP_A_OTF_Rg.otf'), path.join(project, 'fonts/LINESeedJP_A_OTF_Rg.otf'));
 	fs.copyFileSync(path.join(repo, 'LINESeedJP_A_OTF_Rg.woff2'), path.join(project, 'fonts/LINESeedJP_A_OTF_Rg.woff2'));
-	fs.writeFileSync(path.join(target, 'index.html'), '<!doctype html><html><head><title>Godot</title></head><body><canvas></canvas></body></html>');
-	fs.writeFileSync(path.join(target, 'index.js'), 'globalThis.GODOT_TEST="' + 'x'.repeat(4096) + '";');
-	fs.writeFileSync(path.join(target, 'index.wasm'), Buffer.alloc(4096, 0));
-	child.execFileSync('node', [path.join(repo, 'addons/gdweb_site/site_export.cjs'), project, path.join(target, 'index.html'), 'Web']);
+	const emptyPath = path.join(root, 'empty-path');
+	fs.mkdirSync(emptyPath, { recursive: true });
+	child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(target, 'index.html')], {
+		stdio: 'pipe', env: { ...process.env, PATH: emptyPath },
+	});
 }
 
 // Docker nginxを固定portで開始し、container IDを回収対象へ積む。
@@ -85,12 +89,15 @@ async function main() {
 	assert.match(hashHtml, /og:image:height" content="630"/);
 	assert.equal(hashData.mode, 'Hash');
 	assert.equal(Object.keys(hashData.webfonts).length, 1);
+	assert.equal(hashHtml.includes('gdweb-site.js'), false, 'site runtimeが外部file化');
+	assert.match(hashHtml, /id="gdweb-site-runtime"/, '埋込site runtimeなし');
 	assert.ok(!fs.existsSync(path.join(hashOut, 'about/index.html')));
 
 	fixture(1, historyOut);
 	assert.ok(fs.existsSync(path.join(historyOut, 'about/index.html')));
 	assert.match(fs.readFileSync(path.join(historyOut, 'about/index.html'), 'utf8'), /<title>概要ページ<\/title>/);
 	assert.ok(fs.existsSync(path.join(historyOut, 'nginx-gdweb-proxy.conf.example')));
+	assert.match(fs.readFileSync(path.join(historyOut, 'nginx-gdweb.conf.example'), 'utf8'), /location \^~ \/sub\//);
 	assert.equal(JSON.parse(fs.readFileSync(path.join(historyOut, 'gdweb-compression.json'))).encoding, 'br');
 
 	const browser = await chromium.launch({ executablePath: browserPath, headless: true });
@@ -131,10 +138,10 @@ async function main() {
 		assert.deepEqual(rejected.body, identity.body);
 
 		const page = await browser.newPage({ viewport: { width: 1200, height: 630 } });
-		await page.goto(`http://127.0.0.1:${sitePort}/about/`, { waitUntil: 'domcontentloaded' });
+		await page.goto(`http://127.0.0.1:${sitePort}/sub/about/`, { waitUntil: 'domcontentloaded' });
 		assert.equal(await page.title(), '概要ページ');
 		assert.equal(await page.evaluate(() => window.aboutLoads), 1);
-		assert.equal(await page.locator('script[src="/web/about.js"]').count(), 1);
+		assert.equal(await page.locator('script[src="/sub/web/about.js"]').count(), 1);
 		assert.equal(await page.locator('meta[name="theme-color"]').getAttribute('content'), '#222222');
 		assert.equal(JSON.parse(await page.locator('#gdweb-json-ld').textContent())['@type'], 'AboutPage');
 		await page.evaluate(() => {
@@ -147,12 +154,12 @@ async function main() {
 			GDWebSite.scene('res://main.tscn');
 		});
 		await page.waitForFunction(() => window.mainLoads === 1);
-		assert.equal(new URL(page.url()).pathname, '/');
+		assert.equal(new URL(page.url()).pathname, '/sub/');
 		assert.equal(await page.title(), 'メイン');
 		assert.deepEqual(await page.evaluate(() => routeEvents), ['leave:About', 'enter:Main']);
 		assert.equal(await page.locator('meta[name="theme-color"]').getAttribute('content'), '#111111');
 		await page.goBack({ waitUntil: 'domcontentloaded' });
-		assert.equal(new URL(page.url()).pathname, '/about/');
+		assert.equal(new URL(page.url()).pathname, '/sub/about/');
 		assert.equal(await page.title(), '概要ページ');
 		assert.equal(await page.evaluate(() => window.aboutLoads), 1);
 		assert.deepEqual(await page.evaluate(() => routeEvents), ['leave:About', 'enter:Main', 'leave:Main', 'enter:About']);
@@ -160,7 +167,7 @@ async function main() {
 	} finally {
 		await browser.close();
 	}
-	fs.writeFileSync(path.join(root, 'result.json'), `${JSON.stringify({ hashDefault: true, hashTraversalCallbacks: 1, rawUnknown: 404, historyUnknown: 200, ogp: '1200x630', webfonts: 1, brotli: wasm.headers['content-encoding'], identity: true, sceneScriptLoads: 1 }, null, 2)}\n`);
+	fs.writeFileSync(path.join(root, 'result.json'), `${JSON.stringify({ hashDefault: true, hashTraversalCallbacks: 1, basePath: '/sub/', rawUnknown: 404, historyUnknown: 200, ogp: '1200x630', webfonts: 1, brotli: wasm.headers['content-encoding'], identity: true, sceneScriptLoads: 1 }, null, 2)}\n`);
 }
 
 main().catch((error) => {

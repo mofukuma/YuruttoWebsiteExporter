@@ -51,7 +51,7 @@ Godotのテンプレート管理画面は公式プラットフォーム用テン
 - 3D混入検査
 - Godot licenseと著作権通知
 
-Node.jsは静的site生成とBrotli圧縮の実行環境として必要。リポジトリ外のbuild scriptやGodot公式テンプレートは不要。Node.js不足はExport設定画面と実行時に明示エラー。
+静的site生成はGDScriptで実行。Brotliは固定runtimeと一緒に同梱。リポジトリ外のbuild script、Node.js、Godot公式テンプレートは不要。
 
 ## 結論
 

@@ -7,4 +7,4 @@ Godot 4.7.1用の独立Webエクスポーター。
 3. `プロジェクト > エクスポート > 追加 > ゆるっとWeb`を選択。
 4. 出力先を`.html`にしてエクスポート。
 
-専用Web runtimeを内蔵。Godot公式Webテンプレートは不要。site生成とBrotli圧縮にNode.jsを使用。
+専用Web runtimeとBrotliを内蔵。Godot公式WebテンプレートとNode.jsは不要。

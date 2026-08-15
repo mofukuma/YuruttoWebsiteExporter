@@ -7,17 +7,15 @@ extends EditorExportPlatformExtension
 const NAME := "ゆるっとWeb" # Export画面へ表示する名称。
 const TEMPLATE := "res://addons/gdweb_site/templates/yurutto_web_4.7.1.zip" # 固定4.7.1 runtime。
 const TEMPLATE_HASH := "res://addons/gdweb_site/templates/yurutto_web_4.7.1.sha256" # runtime識別値。
-const SITE_SCRIPT := "res://addons/gdweb_site/site_export.cjs" # SEOとBrotliの生成処理。
-const CHECK_SCRIPT := "res://addons/gdweb_site/check_project.cjs" # 3D境界検査。
+const SiteBuilder := preload("site_builder.gd") # SEOと配信物の生成処理。
+const ProjectCheck := preload("project_check.gd") # 3D境界検査。
 const OGP_PATH := "res://web/ogp.png" # OGP画像の既定位置。
 
 var editor: EditorPlugin # Editor機能への接続元。
-var node_command := "" # 検出済みNode.js実行path。
 
-# Editorとの接続と外部実行環境を一度だけ準備する。
+# Editorとの接続元を保持する。
 func _init(owner: EditorPlugin) -> void:
 	editor = owner
-	node_command = _find_node()
 
 # 独立プラットフォーム名を返す。
 func _get_name() -> String:
@@ -51,7 +49,6 @@ func _get_export_options() -> Array[Dictionary]:
 	return [
 		_option("vram_texture_compression/for_desktop", TYPE_BOOL, true),
 		_option("html/focus_canvas_on_start", TYPE_BOOL, true),
-		_option("gdweb/tools/node", TYPE_STRING, "", PROPERTY_HINT_GLOBAL_FILE, "node,node.exe"),
 		_option("gdweb/site/enabled", TYPE_BOOL, true, PROPERTY_HINT_NONE, "", true),
 		_option("gdweb/site/config", TYPE_STRING, "res://gdweb-site.json", PROPERTY_HINT_FILE, "*.json"),
 		_option("gdweb/site/base_url", TYPE_STRING, "https://example.com"),
@@ -69,15 +66,13 @@ func _get_export_options() -> Array[Dictionary]:
 
 # Site無効時もDOM文字設定だけを表示する。
 func _get_export_option_visibility(preset: EditorExportPreset, option: String) -> bool:
-	if option == "gdweb/site/enabled" or option.begins_with("gdweb/font/") or option.begins_with("gdweb/tools/"):
+	if option == "gdweb/site/enabled" or option.begins_with("gdweb/font/"):
 		return true
 	return not option.begins_with("gdweb/") or bool(preset.get("gdweb/site/enabled"))
 
 # 設定画面で直せる不足を対象項目へ表示する。
 func _get_export_option_warning(preset: EditorExportPreset, option: StringName) -> String:
 	var name := String(option)
-	if name == "gdweb/tools/node" and _node(preset).is_empty():
-		return "Node.jsを自動検出できません。実行fileを指定してください。"
 	if not bool(preset.get("gdweb/site/enabled")):
 		return ""
 	if name == "gdweb/site/config":
@@ -94,7 +89,7 @@ func _get_export_option_warning(preset: EditorExportPreset, option: StringName) 
 			return "OGP画像がありません。OGP Autoで現在Sceneから生成できます。"
 	return ""
 
-# 内蔵runtimeと実行環境が揃う場合だけExportを許可する。
+# 内蔵runtimeと対応Godotが揃う場合だけExportを許可する。
 func _has_valid_export_configuration(preset: EditorExportPreset, _debug: bool) -> bool:
 	var errors: Array[String] = []
 	var version := Engine.get_version_info()
@@ -106,8 +101,6 @@ func _has_valid_export_configuration(preset: EditorExportPreset, _debug: bool) -
 		errors.append("内蔵Web runtimeがありません。アドオンを再導入してください。")
 	elif FileAccess.get_sha256(TEMPLATE) != FileAccess.get_file_as_string(TEMPLATE_HASH).strip_edges():
 		errors.append("内蔵Web runtimeの内容が一致しません。")
-	if _node(preset).is_empty():
-		errors.append("Node.jsがありません。site生成とBrotliに必要です。")
 	set_config_error("\n".join(errors))
 	set_config_missing_templates(false)
 	return errors.is_empty()
@@ -126,13 +119,9 @@ func _export_project(preset: EditorExportPreset, debug: bool, path: String, flag
 	var made := DirAccess.make_dir_recursive_absolute(directory)
 	if made != OK:
 		return _fail("Export", "出力directoryを作成できません: %s" % directory, made)
-	var checked := _command(_node(preset), PackedStringArray([
-		ProjectSettings.globalize_path(CHECK_SCRIPT),
-		ProjectSettings.globalize_path("res://"),
-		OS.get_executable_path(),
-	]), "3D検査")
-	if checked != OK:
-		return checked
+	var blocked: Array[String] = ProjectCheck.new().inspect(ProjectSettings.globalize_path("res://"))
+	if not blocked.is_empty():
+		return _fail("Project検査", "\n".join(blocked), ERR_UNAVAILABLE)
 	var base := path.get_file().get_basename()
 	var pack := path.get_basename() + ".pck"
 	var saved: Dictionary = save_pack(preset, debug, pack)
@@ -147,14 +136,10 @@ func _export_project(preset: EditorExportPreset, debug: bool, path: String, flag
 	error = _write_html(preset, path, base, pack, flags)
 	if error != OK:
 		return error
-	error = _command(_node(preset), PackedStringArray([
-		ProjectSettings.globalize_path(SITE_SCRIPT),
-		ProjectSettings.globalize_path("res://"),
-		path,
-		preset.get_preset_name(),
-	]), "Site生成")
+	var builder := SiteBuilder.new()
+	error = builder.build(_site_options(preset), path)
 	if error != OK:
-		return error
+		return _fail("Site生成", builder.error_message, error)
 	error = _copy_licenses(directory)
 	if error != OK:
 		return error
@@ -173,41 +158,12 @@ func _option(name: StringName, type: int, value: Variant, hint := PROPERTY_HINT_
 		"update_visibility": update,
 	}
 
-# PATHと一般的な導入先からNode.jsを一度だけ探す。
-func _find_node() -> String:
-	var candidates := PackedStringArray([
-		"node", "/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node",
-		"C:/Program Files/nodejs/node.exe",
-	])
-	for candidate in candidates:
-		if candidate.contains("/") and not FileAccess.file_exists(candidate):
-			continue
-		if _valid_node(candidate):
-			return candidate
-	return ""
-
-# preset指定を優先し、空なら自動検出したNode.jsを返す。
-func _node(preset: EditorExportPreset) -> String:
-	var custom := String(preset.get("gdweb/tools/node"))
-	if custom.is_empty():
-		return node_command
-	return custom if _valid_node(custom) else ""
-
-# 一つの実行pathがNode.jsとして動くかを判断する。
-func _valid_node(command: String) -> bool:
-	var output: Array = []
-	return OS.execute(command, PackedStringArray(["--version"]), output, true) == 0
-
-# 3D検査とsite生成を同期実行し、全出力をExport messageへ伝える。
-func _command(command: String, args: PackedStringArray, category: String) -> Error:
-	var output: Array = []
-	var code := OS.execute(command, args, output, true)
-	var message := "\n".join(output).strip_edges()
-	if code != 0:
-		return _fail(category, message if not message.is_empty() else "%sが失敗しました。" % category, FAILED)
-	if not message.is_empty():
-		add_message(EditorExportPlatform.EXPORT_MESSAGE_INFO, category, message)
-	return OK
+# Site生成に必要な値だけをpresetから複製する。
+func _site_options(preset: EditorExportPreset) -> Dictionary:
+	var options := {}
+	for name in SiteBuilder.OPTIONS:
+		options[name] = preset.get(name)
+	return options
 
 # 内蔵ZIPを安全に展開し、runtime名を出力名へ揃える。
 func _extract(directory: String, base: String) -> Error:

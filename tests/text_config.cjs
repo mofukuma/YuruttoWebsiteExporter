@@ -9,17 +9,21 @@ const path = require('node:path');
 
 const repo = path.resolve(__dirname, '..'); // gdweb project root。
 const root = path.join(repo, 'tmp/text-config'); // 最小exporter fixture。
+const project = path.join(root, 'project'); // addonだけを導入するGodot project。
 const html = path.join(root, 'index.html'); // 設定注入対象。
+const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot。
 
-// false指定と再実行時の一意性を確認する。
+// false指定とscriptの一意性を確認する。
 fs.rmSync(root, { recursive: true, force: true });
-fs.mkdirSync(root, { recursive: true });
-fs.writeFileSync(path.join(root, 'export_presets.cfg'), '[preset.0]\nname="Web"\nplatform="Web"\n[preset.0.options]\ngdweb/site/enabled=false\ngdweb/font/avoid_canvas_theme_font=false\n');
-fs.writeFileSync(html, '<!doctype html><html><head></head><body><canvas></canvas></body></html>');
-fs.writeFileSync(path.join(root, 'index.js'), `globalThis.TEST='${'x'.repeat(4096)}';`);
-fs.writeFileSync(path.join(root, 'index.wasm'), Buffer.alloc(4096));
-for (let count = 0; count < 2; count++) child.execFileSync('node', [path.join(repo, 'addons/gdweb_site/site_export.cjs'), root, html, 'Web']);
+fs.mkdirSync(project, { recursive: true });
+fs.cpSync(path.join(repo, 'addons/gdweb_site'), path.join(project, 'addons/gdweb_site'), { recursive: true });
+fs.writeFileSync(path.join(project, 'project.godot'), '[application]\nconfig/name="Text Config"\nrun/main_scene="res://main.tscn"\n[editor_plugins]\nenabled=PackedStringArray("res://addons/gdweb_site/plugin.cfg")\n');
+fs.writeFileSync(path.join(project, 'main.tscn'), '[gd_scene format=3]\n[node name="Main" type="Node"]\n');
+fs.writeFileSync(path.join(project, 'export_presets.cfg'), '[preset.0]\nname="Web"\nplatform="ゆるっとWeb"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\nhtml/focus_canvas_on_start=true\ngdweb/site/enabled=false\ngdweb/font/matching_webfont=true\ngdweb/font/avoid_canvas_theme_font=false\nvram_texture_compression/for_desktop=true\n');
+const emptyPath = path.join(root, 'empty-path');
+fs.mkdirSync(emptyPath, { recursive: true });
+child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', html], { stdio: 'pipe', env: { ...process.env, PATH: emptyPath } });
 const output = fs.readFileSync(html, 'utf8');
 assert.match(output, /GDWEB_TEXT_CONFIG=\{"avoidCanvasThemeFont":false\}/);
 assert.equal((output.match(/id="gdweb-text-config"/g) || []).length, 1, '設定scriptが重複');
-console.log(JSON.stringify({ ok: true, site: false, avoidCanvasThemeFont: false, scripts: 1 }));
+console.log(JSON.stringify({ ok: true, site: false, avoidCanvasThemeFont: false, scripts: 1, nodeRequired: false }));

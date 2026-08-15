@@ -20,7 +20,6 @@ const removed = new Set([
 const defaults = {
 	'vram_texture_compression/for_desktop': 'true',
 	'html/focus_canvas_on_start': 'true',
-	'gdweb/tools/node': '""',
 	'gdweb/site/enabled': 'true',
 	'gdweb/site/config': '"res://gdweb-site.json"',
 	'gdweb/site/base_url': '"https://example.com"',

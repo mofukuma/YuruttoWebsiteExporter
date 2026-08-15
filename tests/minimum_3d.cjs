@@ -7,13 +7,14 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..'); // 検査対象を含むproject root。
-const checker = path.join(root, 'addons/gdweb_site/check_project.cjs'); // 配布addonの3D境界検査。
+const checker = path.join(root, 'addons/gdweb_site/project_check.gd'); // 配布addonの3D境界検査。
+const runner = path.join(root, 'tests/project_check_runner.gd'); // Godot内で検査する入口。
 const cases = path.join(root, 'tmp/minimum-3d-cases'); // 動的生成とbinary用の短命fixture。
 const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // binary fixture生成用Godot。
 
 // projectを検査し、終了値と説明を返す。
 function check(project) {
-	return spawnSync(process.execPath, [checker, project, godot], { encoding: 'utf8' });
+	return spawnSync(godot, ['--headless', '--path', project, '--script', runner, '--', checker, project], { encoding: 'utf8' });
 }
 
 const allowed = check(path.join(root, 'examples/daito_projects'));

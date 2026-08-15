@@ -28,18 +28,18 @@ Godot 4.7.1の標準Web描画を保ちながら、文字と入力だけを意味
 
 ## Web書き出し
 
-Godot 4.7.1とNode.jsを使用。アドオンをprojectへ入れて有効化後、`プロジェクト > エクスポート > 追加 > ゆるっとWeb`を選び、エクスポート。Node.jsはPATH、Homebrew、標準導入先から自動検出。
+Godot 4.7.1を使用。アドオンをprojectへ入れて有効化後、`プロジェクト > エクスポート > 追加 > ゆるっとWeb`を選び、エクスポート。Godot公式WebテンプレートとNode.jsは不要。
 
 ```sh
-node build/install_site_addon.cjs examples/omochi_game
-sh build/export_minimum.sh examples/omochi_game tmp/omochi-game/site/index.html
+mkdir -p /path/to/project/addons
+cp -R addons/gdweb_site /path/to/project/addons/
 ```
 
 `ゆるっとWeb`は固定4.7.1 runtimeをアドオンへ内蔵。Godot公式Webテンプレートの導入、標準Web preset、custom template指定は不要。
 
 成果物にはScene別HTML、site controller、sitemap、robots、nginx設定例、Brotli圧縮、各licenseを生成。CanvasはBrowser全域へ追従。
 
-runtimeを再生成する開発時だけ、macOS、Xcode Command Line Tools、Git、curl、uv、SCons、Emscriptenを使用。
+runtime再生成と自動testの開発時だけ、macOS、Xcode Command Line Tools、Git、curl、Node.js、uv、SCons、Emscriptenを使用。
 
 ```sh
 uv tool install scons
@@ -54,7 +54,7 @@ Themeで`res://fonts/Title.otf`を使う場合、`res://fonts/Title.woff2`があ
 
 `GDWeb > Font > Avoid Canvas Theme Font`は既定ON。再現できない文字装飾をwarning後にBrowser標準表示へ置換。OFFでは該当文字だけをGodot標準Canvas表示へ退避。背景、icon、focus枠、pointer処理は設定に関係なくCanvasへ維持。
 
-Routing既定はserver設定不要のHash。SEOと`/about/`直リンクにはHistoryを選び、成果物の`nginx-gdweb.conf.example`を使用。
+Routing既定はserver設定不要のHash。SEOと`/about/`直リンクにはHistoryを選び、成果物の`nginx-gdweb.conf.example`を使用。base URLに`/site/`のような公開pathがある場合も、同設定へ内部rewriteを自動生成。
 
 ```sh
 docker run --rm -p 8080:8080 \

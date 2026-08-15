@@ -30,8 +30,11 @@ unzip -oq "$archive" godot.js godot.wasm godot.audio.worklet.js godot.audio.posi
 cp "$repo/LICENSES/GODOT-MIT.txt" "$out/GODOT_LICENSE.txt"
 cp "$repo/LICENSES/GODOT-COPYRIGHT.txt" "$out/GODOT_COPYRIGHT.txt"
 rm -f "$out/godot.font.woff2" "$out/FONT_LICENSE.txt"
+node "$repo/build/compress_web.cjs" "$out" >/dev/null
 cp "$archive" "$out/gdweb-minimum-template.zip"
-(cd "$out" && zip -X -q gdweb-minimum-template.zip GODOT_LICENSE.txt GODOT_COPYRIGHT.txt)
+(cd "$out" && zip -X -q gdweb-minimum-template.zip \
+  GODOT_LICENSE.txt GODOT_COPYRIGHT.txt \
+  godot.js.br godot.wasm.br godot.audio.worklet.js.br godot.audio.position.worklet.js.br)
 
 # 独立Exporterへ使用entryだけを同梱し、内容識別値も同時更新する。
 zip -d "$out/gdweb-minimum-template.zip" godot.service.worker.js godot.offline.html >/dev/null 2>&1 || true
