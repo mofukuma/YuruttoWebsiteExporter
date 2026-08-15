@@ -28,23 +28,23 @@ Godot 4.7.1の標準Web描画を保ちながら、文字と入力だけを意味
 
 ## Web書き出し
 
-前提はmacOS、Godot 4.7.1、Xcode Command Line Tools、Git、curl、uv。SConsはuvで導入。
-
-```sh
-uv tool install scons
-sh build/prepare_runtime.sh
-```
-
-初回準備では固定Godot source、Emscripten 4.0.11を`tmp/`へ取得し、minimum Web templateを生成。その後にprojectを書き出し。
+Godot 4.7.1とNode.jsを使用。アドオンをprojectへ入れて有効化後、`プロジェクト > エクスポート > 追加 > ゆるっとWeb`を選び、エクスポート。Node.jsはPATH、Homebrew、標準導入先から自動検出。
 
 ```sh
 node build/install_site_addon.cjs examples/omochi_game
 sh build/export_minimum.sh examples/omochi_game tmp/omochi-game/site/index.html
 ```
 
-最初のcommandでGodotのWeb Export設定へ`GDWeb`項目と`OGP Auto`ボタンを追加。書き出しcommandも未導入時は同じ処理を自動実行。
+`ゆるっとWeb`は固定4.7.1 runtimeをアドオンへ内蔵。Godot公式Webテンプレートの導入、標準Web preset、custom template指定は不要。
 
-`Web` presetのtemplate pathを現在repositoryへ正規化し、CanvasをAdaptiveへ統一。成果物にはScene別HTML、site controller、sitemap、robots、nginx設定例、Brotli圧縮、各licenseを生成。
+成果物にはScene別HTML、site controller、sitemap、robots、nginx設定例、Brotli圧縮、各licenseを生成。CanvasはBrowser全域へ追従。
+
+runtimeを再生成する開発時だけ、macOS、Xcode Command Line Tools、Git、curl、uv、SCons、Emscriptenを使用。
+
+```sh
+uv tool install scons
+sh build/prepare_runtime.sh
+```
 
 Site情報は`res://gdweb-site.json`へ記述。Sceneを表すkeyへscene resource、URI、title、descriptionを対応付け。実行時は一意なscene resource pathで照合するため、root Node名の変更に影響されない構成。Export設定側にはbase URL、locale、favicon、OGP画像、routing、Web fontを用意。
 

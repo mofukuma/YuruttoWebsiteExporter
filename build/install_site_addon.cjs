@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Web site ExportPluginを対象Godot projectへ同じ内容で導入する。
-// Editor設定を決定的に揃え、GUIとCLI exportを一致させる。
+// ゆるっとWebを対象Godot projectへ同じ内容で導入する。
+// 独立platformを有効化し、GUIとCLI exportを一致させる。
 
 'use strict';
 
@@ -10,7 +10,7 @@ const path = require('node:path');
 
 const repo = path.resolve(__dirname, '..'); // gdweb project root。
 const project = path.resolve(process.argv[2] || '.'); // 導入先Godot project。
-const source = path.join(repo, 'addons/gdweb_site'); // 正本addon。
+const source = path.join(repo, 'addons/gdweb_site'); // 単体配布する正本addon。
 const target = path.join(project, 'addons/gdweb_site'); // project内addon。
 const file = path.join(project, 'project.godot'); // 有効化するproject設定。
 
@@ -36,4 +36,4 @@ else if (!/res:\/\/addons\/gdweb_site\/plugin\.cfg/.test(text)) {
 }
 
 fs.writeFileSync(file, text.replace(/\n{3,}/g, '\n\n'));
-console.log(JSON.stringify({ project, addon: 'res://addons/gdweb_site' }));
+console.log(JSON.stringify({ project, addon: 'res://addons/gdweb_site', platform: 'ゆるっとWeb' }));

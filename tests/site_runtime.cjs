@@ -23,7 +23,7 @@ async function main() {
 	fs.cpSync(path.join(repo, 'tests/fixtures/site_runtime'), project, { recursive: true });
 	child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), project, path.join(site, 'index.html')], { stdio: 'pipe' });
 	container = child.execFileSync('docker', ['run', '--rm', '-d', '-p', `127.0.0.1:${port}:8080`, '-v', `${site}:/usr/share/nginx/html:ro`, '-v', `${path.join(site, 'nginx-gdweb.conf.example')}:/etc/nginx/conf.d/default.conf:ro`, 'nginx:alpine'], { encoding: 'utf8' }).trim();
-	child.execFileSync('curl', ['-fsS', '--retry', '20', '--retry-connrefused', '--retry-delay', '0', '--max-time', '5', `http://127.0.0.1:${port}/`], { stdio: 'ignore' });
+	child.execFileSync('curl', ['-fsS', '--retry', '20', '--retry-all-errors', '--retry-delay', '0', '--max-time', '5', `http://127.0.0.1:${port}/`], { stdio: 'ignore' });
 	const browser = await chromium.launch({ executablePath: browserPath, headless: true });
 	try {
 		const page = await browser.newPage({ viewport: { width: 640, height: 240 } });

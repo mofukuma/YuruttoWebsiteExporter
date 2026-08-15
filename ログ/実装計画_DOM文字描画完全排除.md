@@ -302,7 +302,7 @@ Godot 4.7公式BBCode表の全tagを一sceneへ配置。同じ内容をBBCodeと
 ## 成果物
 
 - `build/overlay`のDOM tree、event、Canvas guard
-- `build/check_minimum.cjs`とGodot型走査の文字描画gate
+- `addons/gdweb_site/check_project.cjs`とGodot型走査の文字描画gate
 - `examples/rich_text_lab`
 - `tests/rich_text_lab.cjs`
 - `tests/input_dom_full.cjs`

@@ -32,3 +32,10 @@ cp "$repo/LICENSES/GODOT-COPYRIGHT.txt" "$out/GODOT_COPYRIGHT.txt"
 rm -f "$out/godot.font.woff2" "$out/FONT_LICENSE.txt"
 cp "$archive" "$out/gdweb-minimum-template.zip"
 (cd "$out" && zip -X -q gdweb-minimum-template.zip GODOT_LICENSE.txt GODOT_COPYRIGHT.txt)
+
+# 独立Exporterへ使用entryだけを同梱し、内容識別値も同時更新する。
+zip -d "$out/gdweb-minimum-template.zip" godot.service.worker.js godot.offline.html >/dev/null 2>&1 || true
+addon=$repo/addons/gdweb_site/templates # 単体配布するruntime位置。
+mkdir -p "$addon"
+cp "$out/gdweb-minimum-template.zip" "$addon/yurutto_web_4.7.1.zip"
+shasum -a 256 "$addon/yurutto_web_4.7.1.zip" | awk '{print $1}' > "$addon/yurutto_web_4.7.1.sha256"

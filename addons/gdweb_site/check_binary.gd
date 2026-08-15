@@ -1,4 +1,4 @@
-# binary sceneとresourceの3D型だけを検出する書き出し前検査。
+# ゆるっとWebへ渡すbinary sceneとresourceの3D型だけを検出する検査。
 # ResourceLoaderで実体化し、Node、Resource、配列の保存propertyを再帰走査する。
 # 設計思想：2D binaryは許可し、3D型または読めないbinaryだけを明示拒否する。
 

@@ -1,5 +1,5 @@
-// minimum版へ渡すprojectから3D Node、resource、shader、assetを検出する。
-// 標準Web exporterの前段で境界違反を止め、3D欠落runtimeを配布しない。
+// ゆるっとWebへ渡すprojectから非対応の3DとGDExtensionを検出する。
+// 独立Exporterの前段で固定runtimeの機能境界を明示する。
 // 設計思想：変換や黙認を行わず、該当fileと理由を短く返す。
 
 const fs = require('node:fs');
@@ -36,6 +36,10 @@ function inspect(root) {
 	for (const file of files(root)) {
 		const ext = path.extname(file).toLowerCase();
 		const relative = path.relative(root, file);
+		if (ext === '.gdextension') {
+			blocked.push({ file: relative, reason: 'GDExtension非対応' });
+			continue;
+		}
 		if (ext === '.mesh') blocked.push({ file: relative, reason: '3D mesh resource' });
 		if (binaryTypes.has(ext)) continue;
 		if (modelTypes.has(ext)) {
@@ -54,8 +58,8 @@ function inspect(root) {
 // binary resourceがあるprojectだけGodotの型走査へ渡す。
 function inspectBinary(root) {
 	if (!files(root).some((file) => binaryTypes.has(path.extname(file).toLowerCase()))) return { status: 0, stderr: '' };
-	const godot = process.env.GODOT_BIN || '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot';
-	const script = path.join(__dirname, 'check_minimum_binary.gd');
+	const godot = process.argv[3] || process.env.GODOT_BIN || '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot';
+	const script = path.join(__dirname, 'check_binary.gd');
 	const result = spawnSync(godot, ['--headless', '--path', root, '--script', script, '--', root], { encoding: 'utf8' });
 	if (/SCRIPT ERROR|Failed to load script/.test(result.stderr)) result.status = result.status || 2;
 	return result;
