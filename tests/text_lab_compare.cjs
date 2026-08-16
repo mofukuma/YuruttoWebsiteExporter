@@ -8,8 +8,10 @@ const http = require('node:http');
 const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 
+const { ensure, ensureStandard } = require('./site.cjs'); // 比較する二方式の書き出し。
+const project = path.resolve(__dirname, '../examples/text_lab'); // 同一の検査対象Godot project。
 const base = path.resolve(__dirname, '../tmp/text-lab'); // 比較成果物と結果の保存先。
-const roots = { minimum: path.join(base, 'site'), standard: path.join(base, 'standard') }; // 同一sceneの二方式。
+const roots = { minimum: ensure(project, path.join(base, 'site')), standard: ensureStandard(project, path.join(base, 'standard')) }; // 同一sceneの二方式。
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.woff2': 'font/woff2', '.png': 'image/png' }; // 配信に必要な応答型。
 

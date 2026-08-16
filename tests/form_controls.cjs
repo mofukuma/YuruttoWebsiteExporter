@@ -10,7 +10,7 @@ const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 const { ensure } = require('../build/fetch_webfont.cjs');
 
-const root = path.resolve(__dirname, '../tmp/form-controls/site'); // 検査対象site。
+const root = require('./site.cjs').ensure(path.resolve(__dirname, '../examples/form_controls'), path.resolve(__dirname, '../tmp/form-controls/site')); // 検査対象site。
 const out = path.resolve(__dirname, '../tmp/form-controls'); // 数値結果と画面画像。
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
 const delayedFont = ensure().woff2; // 遅延読込で幅補正を検査するfont。
