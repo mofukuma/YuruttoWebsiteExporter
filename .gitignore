@@ -24,3 +24,5 @@ examples/progsha_site/
 tests/progsha_site.cjs
 tests/progsha_assets.cjs
 tests/progsha_site_scene.gd
+ログ/実装計画_progsha白テーマ再現.md
+ログ/調査メモ_progsha再現の件.md
