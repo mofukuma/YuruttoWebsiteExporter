@@ -36,4 +36,4 @@ else if (!/res:\/\/addons\/gdweb_site\/plugin\.cfg/.test(text)) {
 }
 
 fs.writeFileSync(file, text.replace(/\n{3,}/g, '\n\n'));
-console.log(JSON.stringify({ project, addon: 'res://addons/gdweb_site', platform: 'ゆるっとWeb' }));
+console.log(JSON.stringify({ project, addon: 'res://addons/gdweb_site', platform: 'ゆるっとWebサイト' }));

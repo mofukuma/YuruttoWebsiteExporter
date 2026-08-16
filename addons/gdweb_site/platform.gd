@@ -1,10 +1,10 @@
-# ゆるっとWebの独立Exportプラットフォーム。
+# ゆるっとWebサイトの独立Exportプラットフォーム。
 # 固定runtime、PCK、HTML、site設定を一つの失敗境界で書き出す設計。
 
 @tool
 extends EditorExportPlatformExtension
 
-const NAME := "ゆるっとWeb" # Export画面へ表示する名称。
+const NAME := "ゆるっとWebサイト" # Export画面へ表示する名称。
 const RUNTIME := "res://addons/gdweb_site/templates/runtime.json" # 対応版と配布runtimeの由来。
 const SiteBuilder := preload("site_builder.gd") # SEOと配信物の生成処理。
 const ProjectCheck := preload("project_check.gd") # 3D境界検査。
@@ -148,7 +148,7 @@ func _export_project(preset: EditorExportPreset, debug: bool, path: String, flag
 	error = _copy_licenses(directory)
 	if error != OK:
 		return error
-	add_message(EditorExportPlatform.EXPORT_MESSAGE_INFO, "ゆるっとWeb", "独立runtimeで書き出しました: %s" % path)
+	add_message(EditorExportPlatform.EXPORT_MESSAGE_INFO, NAME, "独立runtimeで書き出しました: %s" % path)
 	return OK
 
 # PropertyInfo互換の一設定を生成する。

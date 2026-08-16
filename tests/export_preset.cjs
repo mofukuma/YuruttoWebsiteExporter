@@ -16,7 +16,7 @@ try {
 	fs.writeFileSync(file, fixture);
 	childProcess.execFileSync(process.execPath, [tool, work]);
 	const once = fs.readFileSync(file, 'utf8');
-	assert.match(once, /platform="ゆるっとWeb"/, '独立platform設定なし');
+	assert.match(once, /platform="ゆるっとWebサイト"/, '独立platform設定なし');
 	assert.equal(once.includes('html/canvas_resize_policy'), false, '標準Web表示設定が残留');
 	assert.equal(once.includes('custom_template'), false, '標準Web template設定が残留');
 	assert.equal(once.includes('gdweb/tools/node'), false, 'Node.js設定が残存');
@@ -27,7 +27,7 @@ try {
 	assert.match(once, /gdweb\/ogp\/frame=27/, 'OGP撮影frameを上書き');
 	childProcess.execFileSync(process.execPath, [tool, work]);
 	assert.equal(fs.readFileSync(file, 'utf8'), once, '再実行でpresetが変化');
-	console.log(JSON.stringify({ ok: true, platform: 'ゆるっとWeb', embeddedTemplate: true, stable: true }));
+	console.log(JSON.stringify({ ok: true, platform: 'ゆるっとWebサイト', embeddedTemplate: true, stable: true }));
 } finally {
 	fs.rmSync(work, { recursive: true, force: true });
 }

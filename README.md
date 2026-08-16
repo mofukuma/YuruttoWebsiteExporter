@@ -1,6 +1,8 @@
 # gdweb
 
 固定したGodot Web描画を保ちながら、文字と入力だけを意味のあるHTMLへ重ねるWeb exporter実験実装。
+GodotだけでWebサイトを完結。軽量に書き出し、文字は実HTMLなので検索結果にも出ます。
+Lightweight, SEO-ready web export.
 
 ## 特徴
 
@@ -28,14 +30,14 @@
 
 ## Web書き出し
 
-Godot 4.7.1を使用。アドオンをprojectへ入れて有効化後、`プロジェクト > エクスポート > 追加 > ゆるっとWeb`を選び、エクスポート。Godot公式WebテンプレートとNode.jsは不要。
+Godot 4.7.1を使用。アドオンをprojectへ入れて有効化後、`プロジェクト > エクスポート > 追加 > ゆるっとWebサイト`を選び、エクスポート。Godot公式WebテンプレートとNode.jsは不要。
 
 ```sh
 mkdir -p /path/to/project/addons
 cp -R addons/gdweb_site /path/to/project/addons/
 ```
 
-`ゆるっとWeb`は対応Godotから生成済みのruntimeをアドオンへ内蔵。Godot公式Webテンプレートの導入、標準Web preset、custom template指定は不要。現行配布物はGodot 4.7.1-stableの固定commit専用。
+`ゆるっとWebサイト`は対応Godotから生成済みのruntimeをアドオンへ内蔵。Godot公式Webテンプレートの導入、標準Web preset、custom template指定は不要。現行配布物はGodot 4.7.1-stableの固定commit専用。
 
 成果物にはScene別HTML、site controller、sitemap、robots、nginx設定例、Brotli圧縮、各licenseを生成。CanvasはBrowser全域へ追従。
 

@@ -47,8 +47,8 @@ let index = '';
 text = text.replace(preset, (section, head, number, body) => {
 	if (!new RegExp(`^name="${escaped}"$`, 'm').test(body)) return section;
 	index = number;
-	let meta = body.replace(/^platform=.*$/m, 'platform="ゆるっとWeb"');
-	if (!/^platform=/m.test(meta)) meta = `${meta.replace(/\s*$/, '')}\nplatform="ゆるっとWeb"\n`;
+	let meta = body.replace(/^platform=.*$/m, 'platform="ゆるっとWebサイト"');
+	if (!/^platform=/m.test(meta)) meta = `${meta.replace(/\s*$/, '')}\nplatform="ゆるっとWebサイト"\n`;
 	if (/^runnable=/m.test(meta)) meta = meta.replace(/^runnable=.*$/m, 'runnable=true');
 	else meta = `${meta.replace(/\s*$/, '')}\nrunnable=true\n`;
 	return head + meta;
@@ -70,4 +70,4 @@ for (const [key, value] of Object.entries(defaults)) if (!values.has(key)) value
 const options = `\n\n${[...values].map(([key, value]) => `${key}=${value}`).join('\n')}\n`;
 text = text.slice(0, bodyStart) + options + text.slice(end);
 fs.writeFileSync(file, text.replace(/\n{3,}/g, '\n\n'));
-console.log(JSON.stringify({ preset: name, platform: 'ゆるっとWeb', embeddedTemplate: true }));
+console.log(JSON.stringify({ preset: name, platform: 'ゆるっとWebサイト', embeddedTemplate: true }));

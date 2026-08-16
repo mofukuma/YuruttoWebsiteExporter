@@ -16,7 +16,7 @@ func _init(owner: EditorPlugin) -> void:
 
 # pluginを安定した識別名で登録する。
 func _get_name() -> String:
-	return "YuruttoWebOGP"
+	return "GDWebOGP"
 
 # ゆるっとWebだけへ撮影ボタンを追加する。
 func _supports_platform(platform: EditorExportPlatform) -> bool:

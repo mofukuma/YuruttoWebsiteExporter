@@ -70,6 +70,6 @@ const html = fs.readFileSync(path.join(site, 'index.html'), 'utf8');
 assert.match(html, /"canvasResizePolicy":2/, 'Browser全域表示なし');
 assert.match(html, /"gdextensionLibs":\[\]/, 'GDExtension無効境界なし');
 assert.equal(html.includes('$GODOT_'), false, 'HTML placeholder残留');
-const result = { ok: true, platform: 'ゆるっとWeb', godot: runtime.godot.version, profile: runtime.profile, nodeRequired: false, templateBytes: fs.statSync(template).size, entries: entries.length, compressed: manifest.entries.length, licenses: 2 };
+const result = { ok: true, platform: 'ゆるっとWebサイト', godot: runtime.godot.version, profile: runtime.profile, nodeRequired: false, templateBytes: fs.statSync(template).size, entries: entries.length, compressed: manifest.entries.length, licenses: 2 };
 fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
 console.log(JSON.stringify(result));
