@@ -12,7 +12,7 @@ Godot 4.7.1と`addons/gdweb_site`だけで、検査、PCK、runtime、SEO、rout
 - `site_runtime.js`：scene resource pathとBrowser URL・headの同期。
 - `nginx-gdweb.conf`：History fallback、MIME、Brotli選択。
 - `nginx-gdweb-proxy.conf`：既存origin向けHistory fallback例。
-- `templates/yurutto_web_4.7.1.zip`：固定runtimeと対応する事前圧縮`.br`。
+- `templates/yurutto_web.zip`：manifest対応runtimeと事前圧縮`.br`。
 
 ## Export設定
 

@@ -1,0 +1,3 @@
+# 配布builderはrepositoryをbind mountし、imageへsourceを複製しない。
+**
+!build/distribution/Dockerfile

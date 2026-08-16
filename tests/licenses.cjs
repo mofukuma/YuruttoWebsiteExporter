@@ -7,7 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..'); // gdweb project root。
-const template = path.join(root, 'addons/gdweb_site/templates/yurutto_web_4.7.1.zip'); // 配布template。
+const runtime = JSON.parse(fs.readFileSync(path.join(root, 'addons/gdweb_site/templates/runtime.json'))); // 配布runtime情報。
+const template = path.join(root, 'addons/gdweb_site/templates', runtime.template.file); // 配布template。
 const files = [
 	['GODOT_LICENSE.txt', 'LICENSES/GODOT-MIT.txt'],
 	['GODOT_COPYRIGHT.txt', 'LICENSES/GODOT-COPYRIGHT.txt'],

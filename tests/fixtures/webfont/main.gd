@@ -6,7 +6,7 @@ extends Control
 # 対応font付きThemeとDOM指定Labelを構築する。
 func _ready() -> void:
 	var text_theme := Theme.new()
-	text_theme.default_font = load("res://fonts/Test.otf")
+	text_theme.default_font = load("res://fonts/Test.ttf")
 	text_theme.default_font_size = 42
 	theme = text_theme
 	var label := Label.new()

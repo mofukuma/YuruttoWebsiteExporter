@@ -5,17 +5,18 @@
 extends EditorExportPlatformExtension
 
 const NAME := "ゆるっとWeb" # Export画面へ表示する名称。
-const TEMPLATE := "res://addons/gdweb_site/templates/yurutto_web_4.7.1.zip" # 固定4.7.1 runtime。
-const TEMPLATE_HASH := "res://addons/gdweb_site/templates/yurutto_web_4.7.1.sha256" # runtime識別値。
+const RUNTIME := "res://addons/gdweb_site/templates/runtime.json" # 対応版と配布runtimeの由来。
 const SiteBuilder := preload("site_builder.gd") # SEOと配信物の生成処理。
 const ProjectCheck := preload("project_check.gd") # 3D境界検査。
 const OGP_PATH := "res://web/ogp.png" # OGP画像の既定位置。
 
 var editor: EditorPlugin # Editor機能への接続元。
+var runtime: Dictionary # 読込済み配布runtime情報。
 
 # Editorとの接続元を保持する。
 func _init(owner: EditorPlugin) -> void:
 	editor = owner
+	runtime = _runtime()
 
 # 独立プラットフォーム名を返す。
 func _get_name() -> String:
@@ -93,13 +94,17 @@ func _get_export_option_warning(preset: EditorExportPreset, option: StringName) 
 func _has_valid_export_configuration(preset: EditorExportPreset, _debug: bool) -> bool:
 	var errors: Array[String] = []
 	var version := Engine.get_version_info()
-	if int(version.major) != 4 or int(version.minor) != 7 or int(version.patch) != 1:
-		errors.append("ゆるっとWebはGodot 4.7.1専用です。")
+	var supported := String(runtime.get("godot", {}).get("version", ""))
+	if runtime.is_empty():
+		errors.append("runtime manifestがありません。アドオンを再導入してください。")
+	elif not _version_matches(version, runtime.godot):
+		errors.append("内蔵runtimeはGodot %s専用です。対応addonを導入してください。" % supported)
 	if ClassDB.class_exists("CSharpScript"):
-		errors.append("Godot 4.7.1のC# projectはWebへ書き出せません。")
-	if not FileAccess.file_exists(TEMPLATE):
+		errors.append("Godot %sのC# projectはWebへ書き出せません。" % supported)
+	var template := _template()
+	if template.is_empty() or not FileAccess.file_exists(template):
 		errors.append("内蔵Web runtimeがありません。アドオンを再導入してください。")
-	elif FileAccess.get_sha256(TEMPLATE) != FileAccess.get_file_as_string(TEMPLATE_HASH).strip_edges():
+	elif FileAccess.get_sha256(template) != String(runtime.get("template", {}).get("sha256", "")):
 		errors.append("内蔵Web runtimeの内容が一致しません。")
 	set_config_error("\n".join(errors))
 	set_config_missing_templates(false)
@@ -165,10 +170,41 @@ func _site_options(preset: EditorExportPreset) -> Dictionary:
 		options[name] = preset.get(name)
 	return options
 
+# 配布manifestを安全なJSON objectとして読む。
+func _runtime() -> Dictionary:
+	if not FileAccess.file_exists(RUNTIME):
+		return {}
+	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(RUNTIME))
+	return value if value is Dictionary and int(value.get("schema", 0)) == 1 else {}
+
+# manifestが指すaddon内templateだけを返す。
+func _template() -> String:
+	var name := String(runtime.get("template", {}).get("file", ""))
+	if name.is_empty() or name != name.get_file() or name.get_extension() != "zip":
+		return ""
+	return "res://addons/gdweb_site/templates/%s" % name
+
+# EditorとruntimeのGodot版・commitが同じか判断する。
+func _version_matches(version: Dictionary, godot: Dictionary) -> bool:
+	var expected := String(godot.get("version", ""))
+	var dash := expected.rfind("-")
+	if dash < 0:
+		return false
+	var parts := expected.substr(0, dash).split(".")
+	if parts.size() != 3:
+		return false
+	if int(version.get("major", -1)) != int(parts[0]) or int(version.get("minor", -1)) != int(parts[1]) or int(version.get("patch", -1)) != int(parts[2]):
+		return false
+	if String(version.get("status", "")) != expected.substr(dash + 1):
+		return false
+	var current := String(version.get("hash", ""))
+	var commit := String(godot.get("commit", ""))
+	return not current.is_empty() and (commit.begins_with(current) or current.begins_with(commit))
+
 # 内蔵ZIPを安全に展開し、runtime名を出力名へ揃える。
 func _extract(directory: String, base: String) -> Error:
 	var zip := ZIPReader.new()
-	var error := zip.open(ProjectSettings.globalize_path(TEMPLATE))
+	var error := zip.open(ProjectSettings.globalize_path(_template()))
 	if error != OK:
 		return _fail("Runtime", "内蔵Web runtimeを開けません。", error)
 	for name in zip.get_files():

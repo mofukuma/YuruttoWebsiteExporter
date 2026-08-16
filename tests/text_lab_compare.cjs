@@ -10,7 +10,7 @@ const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 
 const base = path.resolve(__dirname, '../tmp/text-lab'); // 比較成果物と結果の保存先。
 const roots = { minimum: path.join(base, 'site'), standard: path.join(base, 'standard') }; // 同一sceneの二方式。
-const browserPath = '/Users/k/Library/Caches/ms-playwright/chromium-1194/chrome-mac/Chromium.app/Contents/MacOS/Chromium'; // 固定Chromium。
+const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.woff2': 'font/woff2', '.png': 'image/png' }; // 配信に必要な応答型。
 
 // 一方式をsite rootとして独立originへ配信する。

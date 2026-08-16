@@ -15,3 +15,12 @@ coverage/
 .vscode/
 *.swp
 examples/*/addons/gdweb_site/
+# 検査用Web fontはbuild/fetch_webfont.cjsで取得する。
+*.ttf
+*.otf
+*.woff2
+# 外部sourceの取得素材を含む個人用exampleとその検査。
+examples/progsha_site/
+tests/progsha_site.cjs
+tests/progsha_assets.cjs
+tests/progsha_site_scene.gd

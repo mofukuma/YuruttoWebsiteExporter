@@ -9,7 +9,7 @@ Godot 4.7.1のExport画面へ「ゆるっとWeb」を追加し、専用runtime�
 - `EditorExportPlatformExtension`を使用。
 - `EditorPlugin.add_export_platform()`で登録。
 - 公式Webプラットフォーム、公式テンプレートdirectory、custom template設定へ非依存。
-- 固定4.7.1 runtime ZIPをアドオンへ同梱。
+- 対応版をmanifestで固定したruntime ZIPをアドオンへ同梱。
 - runtime ZIPのSHA-256不一致をExport前に拒否。
 - PCK生成だけGodot共通の`save_pack()`を使用。
 - 3DをExport前に拒否し、2DとControlを標準PCKへ収録。
@@ -48,7 +48,7 @@ Godot 4.7.1のExport画面へ「ゆるっとWeb」を追加し、専用runtime�
 ## ファイル構成
 
 - `addons/gdweb_site/platform.gd`：独立Exportプラットフォーム。
-- `addons/gdweb_site/templates/yurutto_web_4.7.1.zip`：専用runtime。
+- `addons/gdweb_site/templates/yurutto_web.zip`：専用runtime。
 - `addons/gdweb_site/site_builder.gd`：site生成と圧縮manifest。
 - `addons/gdweb_site/project_check.gd`：文字形式とbinary resourceの3D検査。
 - `addons/gdweb_site/icon.svg`：Export一覧用ロゴ。

@@ -9,17 +9,19 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
+const { ensure, stem } = require('../build/fetch_webfont.cjs');
 
 const repo = path.resolve(__dirname, '..'); // gdweb project root。
 const root = path.join(repo, 'tmp/site-export'); // 全中間成果物。
 const project = path.join(root, 'project'); // exporter fixture project。
 const hashOut = path.join(root, 'hash'); // 無設定配信用Hash成果物。
 const historyOut = path.join(root, 'history'); // nginx配信用History成果物。
-const browserPath = '/Users/k/Library/Caches/ms-playwright/chromium-1194/chrome-mac/Chromium.app/Contents/MacOS/Chromium'; // 固定Chromium。
+const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
 const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // Exporterを実行する固定Godot。
 const rawPort = 49181; // raw nginx比較port。
 const sitePort = 49182; // History nginx検査port。
 const containers = []; // 必ず終了するDocker container ID。
+const font = ensure(); // 取得済みWeb fontのpath。
 
 // 検査用projectと最小Godot HTML成果物を生成する。
 function fixture(mode, target) {
@@ -41,8 +43,8 @@ function fixture(mode, target) {
 	fs.writeFileSync(path.join(project, 'web/main.js'), 'window.mainLoads=(window.mainLoads||0)+1;');
 	fs.writeFileSync(path.join(project, 'web/about.js'), 'window.aboutLoads=(window.aboutLoads||0)+1;');
 	fs.copyFileSync(path.join(repo, 'examples/omochi_game/web/ogp.png'), path.join(project, 'web/ogp.png'));
-	fs.copyFileSync(path.join(repo, 'LINESeedJP_A_OTF_Rg.otf'), path.join(project, 'fonts/LINESeedJP_A_OTF_Rg.otf'));
-	fs.copyFileSync(path.join(repo, 'LINESeedJP_A_OTF_Rg.woff2'), path.join(project, 'fonts/LINESeedJP_A_OTF_Rg.woff2'));
+	fs.copyFileSync(font.ttf, path.join(project, `fonts/${stem}.ttf`));
+	fs.copyFileSync(font.woff2, path.join(project, `fonts/${stem}.woff2`));
 	const emptyPath = path.join(root, 'empty-path');
 	fs.mkdirSync(emptyPath, { recursive: true });
 	child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(target, 'index.html')], {

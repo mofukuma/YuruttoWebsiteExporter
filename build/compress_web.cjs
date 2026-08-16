@@ -7,9 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
 
-const site = path.resolve(process.argv[2] || '.'); // 圧縮するWeb書き出し先。
 const extensions = new Set(['.wasm', '.js']); // Brotliで転送量が減る必須形式。
-const quality = 6; // 書き出し待ちと圧縮率を両立する品質。
 
 // 配信manifestへ使う内容hashを返す。
 function hash(data) {
@@ -28,7 +26,7 @@ function files(root, current = root) {
 }
 
 // 一つの成果物をBrowser標準Brotliへ圧縮する。
-function compress(file) {
+function compress(file, site, quality) {
 	const raw = fs.readFileSync(file);
 	const encoded = zlib.brotliCompressSync(raw, {
 		params: { [zlib.constants.BROTLI_PARAM_QUALITY]: quality },
@@ -45,10 +43,22 @@ function compress(file) {
 	};
 }
 
-// 必須形式の存在と圧縮成功を検査し、配信側が読める一覧を保存する。
-const entries = files(site).map(compress);
-assert.ok(entries.some((entry) => entry.file.endsWith('.wasm')), 'WebAssembly成果物なし');
-assert.ok(entries.some((entry) => entry.file.endsWith('.js')), 'JavaScript成果物なし');
-const manifest = { encoding: 'br', quality, entries };
-fs.writeFileSync(path.join(site, 'gdweb-compression.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-console.log(JSON.stringify(manifest));
+// 一directoryの必須形式を圧縮し、配信manifestを返す。
+function compressSite(target, quality = 6) {
+	const site = path.resolve(target);
+	const entries = files(site).map((file) => compress(file, site, quality));
+	assert.ok(entries.some((entry) => entry.file.endsWith('.wasm')), 'WebAssembly成果物なし');
+	assert.ok(entries.some((entry) => entry.file.endsWith('.js')), 'JavaScript成果物なし');
+	const manifest = { encoding: 'br', quality, entries };
+	fs.writeFileSync(path.join(site, 'gdweb-compression.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+	return manifest;
+}
+
+// CLI利用時だけ指定directoryを圧縮する。
+if (require.main === module) {
+	const site = path.resolve(process.argv[2] || '.');
+	const quality = Number(process.env.GDWEB_BROTLI_QUALITY || 6);
+	console.log(JSON.stringify(compressSite(site, quality)));
+}
+
+module.exports = { compressSite };

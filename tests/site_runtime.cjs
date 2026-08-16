@@ -14,7 +14,7 @@ const work = path.join(repo, 'tmp/site-runtime'); // Project copyとWeb成果物
 const project = path.join(work, 'project'); // addonを導入するfixture。
 const site = path.join(work, 'site'); // nginx配信成果物。
 const port = 49183; // 固定nginx検査port。
-const browserPath = '/Users/k/Library/Caches/ms-playwright/chromium-1194/chrome-mac/Chromium.app/Contents/MacOS/Chromium'; // 固定Chromium。
+const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
 let container = '';
 
 // Export、nginx、Browserを一つの失敗境界で検査する。

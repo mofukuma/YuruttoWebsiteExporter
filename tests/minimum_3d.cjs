@@ -17,7 +17,7 @@ function check(project) {
 	return spawnSync(godot, ['--headless', '--path', project, '--script', runner, '--', checker, project], { encoding: 'utf8' });
 }
 
-const allowed = check(path.join(root, 'examples/daito_projects'));
+const allowed = check(path.join(root, 'examples/text_lab'));
 const blocked = check(path.join(root, 'tests/fixtures/minimum_3d'));
 fs.mkdirSync(path.join(cases, 'dynamic'), { recursive: true });
 for (const name of ['allowed', 'scene_3d', 'resource_3d', 'curve_3d', 'extension']) {

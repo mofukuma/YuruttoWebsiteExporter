@@ -12,13 +12,14 @@ const zlib = require('node:zlib');
 
 const root = path.resolve(__dirname, '..'); // gdweb project root。
 const addon = path.join(root, 'addons/gdweb_site'); // 配布単位のaddon。
-const template = path.join(addon, 'templates/yurutto_web_4.7.1.zip'); // 内蔵runtime。
+const runtime = JSON.parse(fs.readFileSync(path.join(addon, 'templates/runtime.json'))); // 対応版とruntime由来。
+const template = path.join(addon, 'templates', runtime.template.file); // manifestが指す内蔵runtime。
 const work = path.join(root, 'tmp/yurutto-exporter'); // 検査専用directory。
 const site = path.join(work, 'site'); // 実書き出し確認先。
 const project = path.join(work, 'project'); // addonを導入するproject copy。
 const fixture = path.join(root, 'tests/fixtures/site_runtime'); // 最小projectの正本。
 const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot 4.7.1。
-const expectedHash = fs.readFileSync(`${template.replace(/\.zip$/, '')}.sha256`, 'utf8').trim(); // buildとplatformが共有する識別値。
+const expectedHash = runtime.template.sha256; // buildとplatformが共有する識別値。
 
 const plugin = fs.readFileSync(path.join(addon, 'plugin.gd'), 'utf8');
 const platform = fs.readFileSync(path.join(addon, 'platform.gd'), 'utf8');
@@ -26,6 +27,8 @@ assert.match(plugin, /add_export_platform\(platform\)/, '独立platform登録な
 assert.match(platform, /extends EditorExportPlatformExtension/, '拡張platformではない');
 assert.equal(platform.includes('EditorExportPlatformWeb'), false, '標準Web実装へ依存');
 assert.equal(platform.includes('find_export_template'), false, '公式template探索へ依存');
+assert.match(platform, /templates\/runtime\.json/, 'runtime manifest参照なし');
+assert.equal(platform.includes('Godot 4.7.1専用'), false, '対応版をcodeへ固定');
 assert.equal(platform.includes('OS.execute'), false, '外部processへ依存');
 assert.equal(platform.includes('gdweb/tools/node'), false, 'Node.js設定が残存');
 assert.equal(fs.readdirSync(addon).some((name) => name.endsWith('.cjs')), false, '実行時CJSが残存');
@@ -67,6 +70,6 @@ const html = fs.readFileSync(path.join(site, 'index.html'), 'utf8');
 assert.match(html, /"canvasResizePolicy":2/, 'Browser全域表示なし');
 assert.match(html, /"gdextensionLibs":\[\]/, 'GDExtension無効境界なし');
 assert.equal(html.includes('$GODOT_'), false, 'HTML placeholder残留');
-const result = { ok: true, platform: 'ゆるっとWeb', nodeRequired: false, templateBytes: fs.statSync(template).size, entries: entries.length, compressed: manifest.entries.length, licenses: 2 };
+const result = { ok: true, platform: 'ゆるっとWeb', godot: runtime.godot.version, profile: runtime.profile, nodeRequired: false, templateBytes: fs.statSync(template).size, entries: entries.length, compressed: manifest.entries.length, licenses: 2 };
 fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
 console.log(JSON.stringify(result));

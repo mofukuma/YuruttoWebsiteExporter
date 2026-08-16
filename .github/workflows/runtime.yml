@@ -1,0 +1,26 @@
+# ゆるっとWebの配布addonを固定containerから生成する手動workflow。
+# Godot版更新時にruntimeと由来manifestを同じartifactへまとめる。
+
+name: Build distribution runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Build fixed runtime
+        run: sh build/build_distribution.sh
+      - name: Upload addon
+        uses: actions/upload-artifact@v4
+        with:
+          name: gdweb-site-${{ github.sha }}
+          path: addons/gdweb_site
+          if-no-files-found: error

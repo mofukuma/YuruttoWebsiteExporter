@@ -13,7 +13,7 @@ const project = path.join(root, 'examples/omochi_game'); // 検査対象Godot pr
 const site = path.join(root, 'tmp/omochi-game/site'); // Brotli済みWeb成果物。
 const output = path.join(root, 'tmp/omochi-game'); // 数値結果と確認画像の保存先。
 const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot 4.7.1。
-const browserPath = '/Users/k/Library/Caches/ms-playwright/chromium-1194/chrome-mac/Chromium.app/Contents/MacOS/Chromium'; // 固定Chromium。
+const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
 
 // 表示文字を指定して現在の矩形とtransformを返す。
 async function item(page, text) {
