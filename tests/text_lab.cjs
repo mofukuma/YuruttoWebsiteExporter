@@ -29,14 +29,14 @@ const server = http.createServer((request, response) => {
 // 表示文字を一意に選び、DOM IDと表示状態を返す。
 async function item(page, text) {
 	return page.evaluate((value) => {
-		const node = [...document.querySelectorAll('[data-gdweb-text]')].find((entry) => entry.textContent === value);
+		const node = [...document.querySelectorAll('[data-yuruttoweb-text]')].find((entry) => entry.textContent === value);
 		if (!node) return null;
 		const box = node.getBoundingClientRect();
 		const style = getComputedStyle(node);
 		return {
 			id: node.id,
-			uid: node.dataset.gdwebText,
-			kind: node.dataset.gdwebKind,
+			uid: node.dataset.yuruttowebText,
+			kind: node.dataset.yuruttowebKind,
 			box: { x: box.x, y: box.y, width: box.width, height: box.height },
 			fontSize: Number.parseFloat(style.fontSize),
 			color: style.color,
@@ -54,7 +54,7 @@ async function item(page, text) {
 // Control種別から入力要素の値、tag、位置、Theme状態を返す。
 async function control(page, kind) {
 	return page.evaluate((type) => {
-		const node = document.querySelector(`[data-gdweb-kind="${type}"]`);
+		const node = document.querySelector(`[data-yuruttoweb-kind="${type}"]`);
 		if (!node) return null;
 		const box = node.getBoundingClientRect();
 		const style = getComputedStyle(node);
@@ -64,7 +64,7 @@ async function control(page, kind) {
 			value: node.value,
 			placeholder: node.placeholder,
 			maxLength: node.maxLength,
-			logicalMaxLength: Number(node.dataset.gdwebMaxLength || 0),
+			logicalMaxLength: Number(node.dataset.yuruttowebMaxLength || 0),
 			selectionStart: node.selectionStart,
 			selectionEnd: node.selectionEnd,
 			fontSize: Number.parseFloat(style.fontSize),
@@ -117,14 +117,14 @@ async function cyanPixels(page, image, rect) {
 		page.setDefaultTimeout(12000);
 		page.on('pageerror', (error) => browserErrors.push(error.message));
 		await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
-		await page.waitForFunction(() => document.querySelectorAll('[data-gdweb-text]').length >= 114);
+		await page.waitForFunction(() => document.querySelectorAll('[data-yuruttoweb-text]').length >= 114);
 		await page.evaluate(() => document.fonts.ready);
 
 		// ObjectID、Control種別、DOM所有範囲を棚卸しする。
 		const inventory = await page.evaluate(() => {
-			const nodes = [...document.querySelectorAll('[data-gdweb-text]')];
+			const nodes = [...document.querySelectorAll('[data-yuruttoweb-text]')];
 			const kinds = nodes.reduce((groups, node) => {
-				const key = node.dataset.gdwebKind;
+				const key = node.dataset.yuruttowebKind;
 				(groups[key] ||= []).push(node);
 				return groups;
 			}, {});
@@ -133,7 +133,7 @@ async function cyanPixels(page, image, rect) {
 			return {
 				count: nodes.length,
 				kinds: Object.fromEntries(Object.entries(kinds).map(([key, values]) => [key, values.length])),
-				ids: nodes.map((node) => ({ id: node.id, uid: node.dataset.gdwebText, kind: node.dataset.gdwebKind, tag: node.tagName })),
+				ids: nodes.map((node) => ({ id: node.id, uid: node.dataset.yuruttowebText, kind: node.dataset.yuruttowebKind, tag: node.tagName })),
 				texts: nodes.map((node) => node.textContent),
 				canvas: { left: canvas.left, top: canvas.top, right: canvas.right, bottom: canvas.bottom },
 				bounds: {
@@ -153,8 +153,8 @@ async function cyanPixels(page, image, rect) {
 		const expectedTags = { Label: 'SPAN', Button: 'BUTTON', LinkButton: 'A', LineEdit: 'INPUT', TextEdit: 'TEXTAREA' };
 		for (const entry of inventory.ids) {
 			assert.equal(entry.tag, expectedTags[entry.kind], `${entry.kind}のtag: ${entry.tag}`);
-			assert.match(entry.id, /^gdweb-text-\d+$/, `ObjectID形式: ${entry.id}`);
-			assert.equal(entry.id, `gdweb-text-${entry.uid}`, `IDとObjectID不一致: ${entry.id}`);
+			assert.match(entry.id, /^yuruttoweb-text-\d+$/, `ObjectID形式: ${entry.id}`);
+			assert.equal(entry.id, `yuruttoweb-text-${entry.uid}`, `IDとObjectID不一致: ${entry.id}`);
 		}
 		for (const fallback of ['CLIPPED FALLBACK LONG', 'MATERIAL FALLBACK', 'ELLIPSIS FALLBACK LONG', 'THEME FONT FALLBACK']) {
 			assert.equal(inventory.texts.includes(fallback), true, `${fallback}の簡易DOM代替なし`);
@@ -193,11 +193,11 @@ async function cyanPixels(page, image, rect) {
 		const hovered = await item(page, 'THEME OVERRIDE');
 		assert.notEqual(hovered.color, buttonBefore.color, 'Button hover色が未反映');
 		await page.mouse.down();
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'BUTTON MODEL:DOWN:1:0'));
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'BUTTON MODEL:DOWN:1:0'));
 		assert.equal((await item(page, 'THEME OVERRIDE')).color, 'rgb(255, 79, 154)', 'Button pressed色が未反映');
 		await page.mouse.up();
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent.startsWith('BUTTON MODEL:UP:')));
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'THEME ACTIVE'));
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent.startsWith('BUTTON MODEL:UP:')));
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'THEME ACTIVE'));
 		const buttonAfter = await item(page, 'THEME ACTIVE');
 		const themeAfter = await item(page, 'THEME TARGET 40');
 		const inheritedLabelAfter = await item(page, 'INHERITED THEME');
@@ -232,77 +232,77 @@ async function cyanPixels(page, image, rect) {
 		const pressMode = await item(page, 'PRESS MODE');
 		await page.mouse.move(pressMode.box.x + pressMode.box.width / 2, pressMode.box.y + pressMode.box.height / 2);
 		await page.mouse.down();
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'PRESS FIRED'));
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'PRESS FIRED'));
 		await page.waitForFunction(() => document.activeElement?.textContent !== 'PRESS FIRED');
 		await page.mouse.up();
 
 		// LinkButtonもglyphだけをDOM化し、入力結果とunderlineを追従する。
 		const linkBefore = await item(page, 'LINK BUTTON');
 		assert.equal(linkBefore?.kind, 'LinkButton');
-		assert.equal(await page.locator('[data-gdweb-kind="LinkButton"]').getAttribute('href'), 'https://docs.godotengine.org/', 'LinkButton URI未反映');
+		assert.equal(await page.locator('[data-yuruttoweb-kind="LinkButton"]').getAttribute('href'), 'https://docs.godotengine.org/', 'LinkButton URI未反映');
 		assert.equal(linkBefore.decoration, 'underline');
 		assert.notEqual(linkBefore.underlineOffset, linkInitial.underlineOffset, 'underline間隔がTheme変更へ未追従');
 		assert.match(linkBefore.underlineThickness, /^\d+(?:\.\d+)?px$/, `underline太さ: ${linkBefore.underlineThickness}`);
 		await page.mouse.click(linkBefore.box.x + linkBefore.box.width / 2, linkBefore.box.y + linkBefore.box.height / 2);
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'LINK PRESSED'));
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'LINK PRESSED'));
 		assert.equal((await item(page, 'LINK PRESSED')).id, linkBefore.id, 'LinkButtonのObjectIDが入力で変化');
-		await page.locator('[data-gdweb-kind="LinkButton"]').focus();
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'BUTTON MODEL:UP:0:1'));
-		await page.locator('[data-gdweb-kind="LinkButton"]').press('Enter');
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'LINK BUTTON'));
+		await page.locator('[data-yuruttoweb-kind="LinkButton"]').focus();
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'BUTTON MODEL:UP:0:1'));
+		await page.locator('[data-yuruttoweb-kind="LinkButton"]').press('Enter');
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'LINK BUTTON'));
 		assert.equal((await item(page, 'LINK BUTTON')).id, linkBefore.id, 'LinkButtonのkeyboard入力でObjectIDが変化');
-		await page.locator('[data-gdweb-kind="LinkButton"]').blur();
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'BUTTON MODEL:UP:0:0'));
+		await page.locator('[data-yuruttoweb-kind="LinkButton"]').blur();
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'BUTTON MODEL:UP:0:0'));
 
 		// composition中はDOMに保持し、確定時だけLineEditへ日本語と絵文字を戻す。
 		const composingLineState = await page.evaluate(() => {
-			const input = document.querySelector('[data-gdweb-kind="LineEdit"]');
+			const input = document.querySelector('[data-yuruttoweb-kind="LineEdit"]');
 			input.focus();
 			input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
 			input.value = '日本語😀';
 			input.setSelectionRange(input.value.length, input.value.length);
 			input.dispatchEvent(new InputEvent('input', { bubbles: true, data: '日本語😀', inputType: 'insertCompositionText', isComposing: true }));
-			return [...document.querySelectorAll('[data-gdweb-text]')].find((node) => node.textContent.startsWith('LINE MODEL:'))?.textContent;
+			return [...document.querySelectorAll('[data-yuruttoweb-text]')].find((node) => node.textContent.startsWith('LINE MODEL:'))?.textContent;
 		});
 		assert.ok(!composingLineState.includes('日本語'), `IME未確定値がGodotへ流入: ${composingLineState}`);
-		await page.evaluate(() => document.querySelector('[data-gdweb-kind="LineEdit"]').dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '日本語😀' })));
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'LINE MODEL:日本語😀:4:4'));
+		await page.evaluate(() => document.querySelector('[data-yuruttoweb-kind="LineEdit"]').dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '日本語😀' })));
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'LINE MODEL:日本語😀:4:4'));
 
 		// Godotから値を上書き後、直前と同じ入力へ戻しても通知を省略しない。
 		const activeButton = await item(page, 'THEME ACTIVE');
 		await page.mouse.click(activeButton.box.x + activeButton.box.width / 2, activeButton.box.y + activeButton.box.height / 2);
-		await page.waitForFunction(() => document.querySelector('[data-gdweb-kind="LineEdit"]')?.value === 'PROGRAMMATIC');
+		await page.waitForFunction(() => document.querySelector('[data-yuruttoweb-kind="LineEdit"]')?.value === 'PROGRAMMATIC');
 		await page.evaluate(() => {
-			const input = document.querySelector('[data-gdweb-kind="LineEdit"]');
+			const input = document.querySelector('[data-yuruttoweb-kind="LineEdit"]');
 			input.value = '日本語😀';
 			input.setSelectionRange(input.value.length, input.value.length);
 			input.dispatchEvent(new InputEvent('input', { bubbles: true, data: '日本語😀', inputType: 'insertText' }));
 		});
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'LINE MODEL:日本語😀:4:4'));
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'LINE MODEL:日本語😀:4:4'));
 		await page.evaluate(() => {
-			const input = document.querySelector('[data-gdweb-kind="LineEdit"]');
+			const input = document.querySelector('[data-yuruttoweb-kind="LineEdit"]');
 			input.setSelectionRange(1, 3);
 			input.dispatchEvent(new Event('select', { bubbles: true }));
 		});
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'LINE MODEL:日本語😀:1:3'));
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'LINE MODEL:日本語😀:1:3'));
 
 		// Unicode文字数上限は絵文字を一文字として扱い、Enter後のGodot focus解放をDOMへ戻す。
 		const limited = `${'a'.repeat(23)}😀`;
 		await page.evaluate((value) => {
-			const input = document.querySelector('[data-gdweb-kind="LineEdit"]');
+			const input = document.querySelector('[data-yuruttoweb-kind="LineEdit"]');
 			input.focus();
 			input.value = `${value}Z`;
 			input.setSelectionRange(input.value.length, input.value.length);
 			input.dispatchEvent(new InputEvent('input', { bubbles: true, data: 'Z', inputType: 'insertText' }));
 		}, limited);
-		await page.waitForFunction((value) => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === `LINE MODEL:${value}:24:24`), limited);
+		await page.waitForFunction((value) => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === `LINE MODEL:${value}:24:24`), limited);
 		assert.equal(Array.from((await control(page, 'LineEdit')).value).length, 24, 'Unicode文字上限を超過');
-		await page.locator('[data-gdweb-kind="LineEdit"]').press('Enter');
-		await page.waitForFunction(() => document.activeElement?.dataset.gdwebKind !== 'LineEdit');
+		await page.locator('[data-yuruttoweb-kind="LineEdit"]').press('Enter');
+		await page.waitForFunction(() => document.activeElement?.dataset.yuruttowebKind !== 'LineEdit');
 
 		// textareaも改行を保ったIME確定値とcaretをGodotへ戻す。
 		await page.evaluate(() => {
-			const area = document.querySelector('[data-gdweb-kind="TextEdit"]');
+			const area = document.querySelector('[data-yuruttoweb-kind="TextEdit"]');
 			area.focus();
 			area.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
 			area.value = '一行\n二行😀';
@@ -310,27 +310,27 @@ async function cyanPixels(page, image, rect) {
 			area.dispatchEvent(new InputEvent('input', { bubbles: true, data: '一行\n二行😀', inputType: 'insertCompositionText', isComposing: true }));
 			area.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '一行\n二行😀' }));
 		});
-		await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent.startsWith('AREA MODEL:一行|二行😀:1:3:1:3:')));
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent.startsWith('AREA MODEL:一行|二行😀:1:3:1:3:')));
 
 		// textareaのnative scrollを唯一の表示scrollbarとし、Godotのscroll値へ戻す。
 		await page.evaluate(() => {
-			const area = document.querySelector('[data-gdweb-kind="TextEdit"]');
+			const area = document.querySelector('[data-yuruttoweb-kind="TextEdit"]');
 			area.value = Array.from({ length: 10 }, (_, index) => `ROW${index} ${'X'.repeat(40)}`).join('\n');
 			area.setSelectionRange(0, 0);
 			area.dispatchEvent(new InputEvent('input', { bubbles: true, data: '', inputType: 'insertText' }));
 		});
 		await page.waitForFunction(() => {
-			const area = document.querySelector('[data-gdweb-kind="TextEdit"]');
+			const area = document.querySelector('[data-yuruttoweb-kind="TextEdit"]');
 			return area.scrollHeight > area.clientHeight && area.scrollWidth > area.clientWidth;
 		});
 		await page.evaluate(() => {
-			const area = document.querySelector('[data-gdweb-kind="TextEdit"]');
+			const area = document.querySelector('[data-yuruttoweb-kind="TextEdit"]');
 			area.scrollTop = 48;
 			area.scrollLeft = 32;
 			area.dispatchEvent(new Event('scroll'));
 		});
 		await page.waitForFunction(() => {
-			const state = [...document.querySelectorAll('[data-gdweb-text]')].find((node) => node.textContent.startsWith('AREA MODEL:ROW0'))?.textContent || '';
+			const state = [...document.querySelectorAll('[data-yuruttoweb-text]')].find((node) => node.textContent.startsWith('AREA MODEL:ROW0'))?.textContent || '';
 			const values = state.match(/:(\d+):(\d+)$/);
 			return values && Number(values[1]) > 0 && Number(values[2]) > 0;
 		});
@@ -352,10 +352,10 @@ async function cyanPixels(page, image, rect) {
 		assert.equal(new Set(falling.map((entry) => entry.id)).size, 1, '物理ButtonのIDが変化');
 		assert.ok(Math.max(...falling.map((entry) => entry.box.y)) - Math.min(...falling.map((entry) => entry.box.y)) > 15, `物理Buttonが未追従: ${falling.map((entry) => entry.box.y).join(',')}`);
 		assert.ok(new Set(falling.map((entry) => entry.transform)).size > 2, '物理回転が未追従');
-		assert.match((await item(page, 'SCORE 00000'))?.id || (await page.locator('[data-gdweb-text]', { hasText: 'SCORE ' }).first().getAttribute('id')), /^gdweb-text-\d+$/, 'score未同期');
+		assert.match((await item(page, 'SCORE 00000'))?.id || (await page.locator('[data-yuruttoweb-text]', { hasText: 'SCORE ' }).first().getAttribute('id')), /^yuruttoweb-text-\d+$/, 'score未同期');
 
 		// 解放済みObjectIDのDOMを一frame境界で回収する。
-		await page.waitForFunction(() => ![...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'TEMPORARY DOM'));
+		await page.waitForFunction(() => ![...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'TEMPORARY DOM'));
 		assert.equal((await item(page, 'HIDDEN DOM')).display, 'none', '非表示Labelが表示');
 
 		// 100件超の追従処理が一frameを大幅に塞がないことを定量化する。

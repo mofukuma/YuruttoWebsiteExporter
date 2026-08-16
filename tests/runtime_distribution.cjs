@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
 
-const root = path.resolve(__dirname, '..'); // gdweb project root。
+const root = path.resolve(__dirname, '..'); // yuruttoweb project root。
 const build = path.join(root, 'build'); // 配布build定義。
 const templateDir = path.join(root, 'addons/yurutto_website_exporter/templates'); // addon内runtime。
 const manifest = JSON.parse(fs.readFileSync(path.join(templateDir, 'runtime.json'))); // 配布物の由来正本。
@@ -87,7 +87,7 @@ assert.equal(manifest.features.webfont, 'external-project-asset');
 assert.equal(manifest.features.domText, true);
 assert.equal(manifest.features.threeD, false);
 assert.deepEqual(manifest.options, options);
-assert.ok(options.includes('gdweb_text_dom=yes'));
+assert.ok(options.includes('yuruttoweb_text_dom=yes'));
 assert.ok(options.includes('threads=no'));
 assert.ok(options.includes('dlink_enabled=no'));
 assert.ok(options.includes('disable_3d=yes'));
@@ -100,7 +100,7 @@ assert.match(distributionScript, /tests\/runtime_distribution\.cjs/);
 assert.equal(manifest.inputs.sourceLockSha256, sha(path.join(build, 'source.lock')));
 assert.equal(manifest.inputs.distributionLockSha256, sha(path.join(build, 'distribution.lock')));
 assert.equal(manifest.inputs.runtimeOptionsSha256, sha(path.join(build, 'runtime.options')));
-assert.equal(manifest.inputs.patchSha256, sha(path.join(build, 'patches/web_gdweb_text.patch')));
+assert.equal(manifest.inputs.patchSha256, sha(path.join(build, 'patches/web_yuruttoweb_text.patch')));
 assert.equal(manifest.inputs.overlaySha256, treeHash(path.join(build, 'overlay')));
 assert.equal(manifest.inputs.buildSha256, filesHash([
 	'distribution/Dockerfile', 'build_distribution.sh', 'prepare_runtime.sh',

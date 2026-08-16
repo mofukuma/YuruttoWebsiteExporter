@@ -12,7 +12,7 @@ const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 const { install } = require('../build/fetch_webfont.cjs');
 
-const repo = path.resolve(__dirname, '..'); // gdweb project root。
+const repo = path.resolve(__dirname, '..'); // yuruttoweb project root。
 const work = path.join(repo, 'tmp/webfont'); // 検査用projectと成果物。
 const project = path.join(work, 'project'); // Fontを加えたfixture。
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
@@ -37,7 +37,7 @@ function server(root) {
 // 指定optionで書き出し、DOM所有結果を返す。
 async function inspect(browser, enabled, output) {
 	let preset = fs.readFileSync(path.join(project, 'export_presets.cfg'), 'utf8');
-	preset = preset.replace(/^gdweb\/font\/matching_webfont=.*$/m, `gdweb/font/matching_webfont=${enabled}`);
+	preset = preset.replace(/^yuruttoweb\/font\/matching_webfont=.*$/m, `yuruttoweb/font/matching_webfont=${enabled}`);
 	fs.writeFileSync(path.join(project, 'export_presets.cfg'), preset);
 	child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), project, path.join(output, 'index.html')], { stdio: 'pipe' });
 	const host = server(output);
@@ -50,12 +50,12 @@ async function inspect(browser, enabled, output) {
 		await page.waitForFunction(() => document.querySelector('#canvas')?.width > 0);
 		await page.waitForTimeout(250);
 		const state = await page.evaluate(() => {
-			const node = [...document.querySelectorAll('[data-gdweb-text]')].find((item) => item.textContent.includes('Web Font'));
-			return { map: window.GDWEB_FONT_MAP, dom: !!node, family: node ? getComputedStyle(node).fontFamily : '' };
+			const node = [...document.querySelectorAll('[data-yuruttoweb-text]')].find((item) => item.textContent.includes('Web Font'));
+			return { map: window.YURUTTOWEB_FONT_MAP, dom: !!node, family: node ? getComputedStyle(node).fontFamily : '' };
 		});
 		const names = ['index.js', 'index.wasm', 'index.js.br', 'index.wasm.br'];
 		state.runtime = Object.fromEntries(names.map((name) => [name, hash(path.join(output, name))]));
-		const fonts = path.join(output, 'gdweb-fonts');
+		const fonts = path.join(output, 'yuruttoweb-fonts');
 		state.fontFiles = fs.existsSync(fonts) ? fs.readdirSync(fonts).filter((name) => name.endsWith('.woff2')).length : 0;
 		state.fontBrotli = fs.existsSync(fonts) ? fs.readdirSync(fonts).filter((name) => name.endsWith('.woff2.br')).length : 0;
 		return state;
@@ -77,7 +77,7 @@ async function main() {
 		fs.unlinkSync(path.join(project, 'fonts/Test.woff2'));
 		const missing = await inspect(browser, true, path.join(work, 'missing'));
 		assert.equal(on.dom, true);
-		assert.match(on.family, /^GDWeb-/);
+		assert.match(on.family, /^YuruttoWeb-/);
 		assert.ok(on.map['res://fonts/Test.ttf']);
 		assert.equal(off.dom, true);
 		assert.equal(off.family, 'sans-serif');

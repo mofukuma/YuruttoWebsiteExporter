@@ -1,12 +1,12 @@
 /**************************************************************************/
-/*  gdweb_text_sync.cpp                                                   */
+/*  yuruttoweb_text_sync.cpp                                                   */
 /**************************************************************************/
 
 // 対応Controlの文字と入力状態だけを意味に合うDOMへ同期する。
 // ObjectIDで対象を保持し、配置と確定値はGodotを唯一の正本にする。
 // 背景、icon、物理、2D描画はGodot標準Canvasへ残す。
 
-#include "gdweb_text_sync.h"
+#include "yuruttoweb_text_sync.h"
 
 #include "core/object/object.h"
 #include "core/templates/hash_map.h"
@@ -23,18 +23,18 @@
 #include "scene/resources/style_box.h"
 #include "scene/resources/texture.h"
 
-typedef void (*GDWebTextEvent)(const char *, int, const char *, int, int);
-typedef void (*GDWebSiteEvent)(const char *);
+typedef void (*YuruttoWebTextEvent)(const char *, int, const char *, int, int);
+typedef void (*YuruttoWebSiteEvent)(const char *);
 
 extern "C" {
-void gdweb_text_set_event_cb(GDWebTextEvent p_callback);
-void gdweb_site_set_event_cb(GDWebSiteEvent p_callback);
-int gdweb_text_prefer_dom();
-void gdweb_site_scene(const char *p_path);
-void gdweb_text_begin();
-void gdweb_text_sync(const char *p_uid, const char *p_text, const char *p_aux, const char *p_font, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_flags, int p_z, int p_horizontal, int p_vertical, int p_kind, int p_max_length, int p_selection_start, int p_selection_end, float p_red, float p_green, float p_blue, float p_alpha, float p_font_size, float p_line_spacing, float p_outline_red, float p_outline_green, float p_outline_blue, float p_outline_alpha, float p_outline_size, float p_shadow_red, float p_shadow_green, float p_shadow_blue, float p_shadow_alpha, float p_shadow_x, float p_shadow_y, float p_underline_offset, float p_underline_thickness, float p_placeholder_red, float p_placeholder_green, float p_placeholder_blue, float p_placeholder_alpha, float p_scroll_x, float p_scroll_y);
-void gdweb_text_remove(const char *p_uid);
-void gdweb_text_end();
+void yuruttoweb_text_set_event_cb(YuruttoWebTextEvent p_callback);
+void yuruttoweb_site_set_event_cb(YuruttoWebSiteEvent p_callback);
+int yuruttoweb_text_prefer_dom();
+void yuruttoweb_site_scene(const char *p_path);
+void yuruttoweb_text_begin();
+void yuruttoweb_text_sync(const char *p_uid, const char *p_text, const char *p_aux, const char *p_font, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_flags, int p_z, int p_horizontal, int p_vertical, int p_kind, int p_max_length, int p_selection_start, int p_selection_end, float p_red, float p_green, float p_blue, float p_alpha, float p_font_size, float p_line_spacing, float p_outline_red, float p_outline_green, float p_outline_blue, float p_outline_alpha, float p_outline_size, float p_shadow_red, float p_shadow_green, float p_shadow_blue, float p_shadow_alpha, float p_shadow_x, float p_shadow_y, float p_underline_offset, float p_underline_thickness, float p_placeholder_red, float p_placeholder_green, float p_placeholder_blue, float p_placeholder_alpha, float p_scroll_x, float p_scroll_y);
+void yuruttoweb_text_remove(const char *p_uid);
+void yuruttoweb_text_end();
 }
 
 enum TextKind {
@@ -115,7 +115,7 @@ static bool capture_control(const Control *p_control) {
 // 標準文字Controlを既定DOM対象にし、明示falseだけを除外する。
 static bool text_requested(const Control *p_control) {
 	if (!p_control) return false;
-	if (p_control->has_meta(SNAME("gdweb_dom_text"))) return (bool)p_control->get_meta(SNAME("gdweb_dom_text"));
+	if (p_control->has_meta(SNAME("yuruttoweb_dom_text"))) return (bool)p_control->get_meta(SNAME("yuruttoweb_dom_text"));
 	if (Object::cast_to<Label>(p_control) || Object::cast_to<Button>(p_control) || Object::cast_to<LinkButton>(p_control) || Object::cast_to<LineEdit>(p_control)) return true;
 	if (Object::cast_to<TextEdit>(p_control)) return p_control->get_class() == SNAME("TextEdit");
 	return capture_control(p_control);
@@ -123,7 +123,7 @@ static bool text_requested(const Control *p_control) {
 
 // 後続対応の文字Controlを黙示処理せず、現在のCanvas標準表示を知らせる。
 static void warn_pending(const Control *p_control) {
-	if (!p_control || gdweb_text_prefer_dom() == 0) return;
+	if (!p_control || yuruttoweb_text_prefer_dom() == 0) return;
 	if (p_control->is_class(SNAME("CodeEdit"))) {
 		WARN_PRINT_ONCE("CodeEditは後続対応です。暫定でGodot標準fontのCanvas表示を使います。");
 	} else if (p_control->is_class(SNAME("RichTextLabel"))) {
@@ -171,9 +171,9 @@ static String font_path(const Control *p_control) {
 }
 
 // DOMで正確に再現できるControl文字だけを所有する。
-bool gdweb_text_dom_owns(const Control *p_control) {
+bool yuruttoweb_text_dom_owns(const Control *p_control) {
 	if (!text_requested(p_control)) return false;
-	const bool prefer_dom = gdweb_text_prefer_dom() != 0;
+	const bool prefer_dom = yuruttoweb_text_prefer_dom() != 0;
 	if (!common_supported(p_control) && !prefer_dom) return false;
 	if (const Label *label = Object::cast_to<Label>(p_control)) {
 		bool supported = label->get_visible_characters() < 0 && label->get_visible_ratio() >= 1.0f;
@@ -216,8 +216,8 @@ bool gdweb_text_dom_owns(const Control *p_control) {
 static void sync_text(Control *p_control, const TextState &p_state, const CharString &p_uid = CharString()) {
 	const ObjectID object = p_control->get_instance_id();
 	const CharString uid = p_uid.is_empty() ? text_uid(object) : p_uid;
-	if (!p_control->is_inside_tree() || !gdweb_text_dom_owns(p_control)) {
-		gdweb_text_remove(uid.get_data());
+	if (!p_control->is_inside_tree() || !yuruttoweb_text_dom_owns(p_control)) {
+		yuruttoweb_text_remove(uid.get_data());
 		return;
 	}
 
@@ -233,7 +233,7 @@ static void sync_text(Control *p_control, const TextState &p_state, const CharSt
 	const CharString text = p_state.text.utf8();
 	const CharString aux = p_state.aux.utf8();
 	const CharString font = (p_state.font.is_empty() ? font_path(p_control) : p_state.font).utf8();
-	gdweb_text_sync(
+	yuruttoweb_text_sync(
 			uid.get_data(), text.get_data(), aux.get_data(), font.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
 			p_state.rect.size.x, p_state.rect.size.y, flags, p_control->get_z_index(), p_state.horizontal, p_state.vertical, p_state.kind, p_state.max_length, p_state.selection_start, p_state.selection_end,
 			color.r, color.g, color.b, color.a, p_state.font_size, p_state.line_spacing,
@@ -359,7 +359,7 @@ static void remove_canvases(ObjectID p_owner) {
 }
 
 // 複数文字項目を持つ標準Controlの一回の再描画を開始する。
-void gdweb_text_parts_begin(Control *p_control) {
+void yuruttoweb_text_parts_begin(Control *p_control) {
 	if (!capture_control(p_control) || !text_requested(p_control)) return;
 	const ObjectID object = p_control->get_instance_id();
 	parts[object].clear();
@@ -368,25 +368,25 @@ void gdweb_text_parts_begin(Control *p_control) {
 }
 
 // 標準Controlが補助CanvasItemへ描く文字も同じ所有者へ結ぶ。
-void gdweb_text_capture_canvas(Control *p_control, RID p_canvas) {
+void yuruttoweb_text_capture_canvas(Control *p_control, RID p_canvas) {
 	if (!capture_control(p_control) || !text_requested(p_control) || !p_canvas.is_valid()) return;
 	register_canvas(p_control->get_instance_id(), p_canvas);
 }
 
 // 通常文字の直前に描かれるoutlineを同じ文字項目へ保持する。
-bool gdweb_text_capture_outline(RID p_canvas, ObjectID p_source, int p_size, const Color &p_color) {
+bool yuruttoweb_text_capture_outline(RID p_canvas, ObjectID p_source, int p_size, const Color &p_color) {
 	const ObjectID *owner = canvas_owners.getptr(p_canvas);
 	Control *control = owner ? Object::cast_to<Control>(ObjectDB::get_instance(*owner)) : nullptr;
-	if (!control || !gdweb_text_dom_owns(control)) return false;
+	if (!control || !yuruttoweb_text_dom_owns(control)) return false;
 	outlines.insert(p_source, OutlineState{ p_color, p_size });
 	return true;
 }
 
 // TextLineとTextParagraphの確定文字矩形をControl内のDOM項目へ追加する。
-bool gdweb_text_capture_line(RID p_canvas, ObjectID p_source, const String &p_text, const String &p_font, const Rect2 &p_rect, int p_font_size, int p_horizontal, const Color &p_color, bool p_wrap) {
+bool yuruttoweb_text_capture_line(RID p_canvas, ObjectID p_source, const String &p_text, const String &p_font, const Rect2 &p_rect, int p_font_size, int p_horizontal, const Color &p_color, bool p_wrap) {
 	const ObjectID *owner = canvas_owners.getptr(p_canvas);
 	Control *control = owner ? Object::cast_to<Control>(ObjectDB::get_instance(*owner)) : nullptr;
-	if (!control || !gdweb_text_dom_owns(control)) return false;
+	if (!control || !yuruttoweb_text_dom_owns(control)) return false;
 	TextState state;
 	state.text = p_text;
 	state.font = p_font;
@@ -425,14 +425,14 @@ static Vector2i line_column(const String &p_text, int p_index) {
 static void text_event(const char *p_uid, int p_kind, const char *p_text, int p_start, int p_end) {
 	const ObjectID object = ObjectID((uint64_t)String::to_int(p_uid));
 	Control *control = Object::cast_to<Control>(ObjectDB::get_instance(object));
-	if (!control || !control->is_inside_tree() || !gdweb_text_dom_owns(control)) return;
+	if (!control || !control->is_inside_tree() || !yuruttoweb_text_dom_owns(control)) return;
 	const String incoming = String::utf8(p_text);
 	if (p_kind == 3) {
 		control->grab_focus();
 	} else if (p_kind == 4) {
 		if (control->has_focus()) control->release_focus();
 	} else if (p_kind == 6) {
-		if (BaseButton *button = Object::cast_to<BaseButton>(control)) button->gdweb_click();
+		if (BaseButton *button = Object::cast_to<BaseButton>(control)) button->yuruttoweb_click();
 	} else if (LineEdit *line = Object::cast_to<LineEdit>(control)) {
 		if ((p_kind == 1 || p_kind == 5) && line->get_text() != incoming) line->_set_text(incoming, true);
 		const int start = CLAMP(p_start, 0, line->get_text().length());
@@ -443,11 +443,11 @@ static void text_event(const char *p_uid, int p_kind, const char *p_text, int p_
 	} else if (TextEdit *edit = Object::cast_to<TextEdit>(control)) {
 		if (p_kind == 7) {
 			const float line_height = MAX(1.0f, (float)edit->get_theme_font_size(SNAME("font_size")) + edit->get_theme_constant(SNAME("line_spacing")));
-			edit->gdweb_set_scroll((double)p_start / line_height, p_end);
+			edit->yuruttoweb_set_scroll((double)p_start / line_height, p_end);
 			dirty.insert(object);
 			return;
 		}
-		if (p_kind == 1 && edit->get_text() != incoming) edit->gdweb_set_text(incoming);
+		if (p_kind == 1 && edit->get_text() != incoming) edit->yuruttoweb_set_text(incoming);
 		const Vector2i start = line_column(edit->get_text(), p_start);
 		const Vector2i end = line_column(edit->get_text(), p_end);
 		edit->set_caret_line(end.y);
@@ -467,7 +467,7 @@ static void site_event(const char *p_path) {
 }
 
 // Button系のdrawで確定した文字矩形とTheme状態を追従表へ保存する。
-void gdweb_text_sync_control(Control *p_control, const String &p_text, const Rect2 &p_rect, int p_kind, int p_flags, int p_horizontal, int p_vertical, const Color &p_color, float p_font_size, float p_line_spacing, const Color &p_outline, float p_outline_size, const Color &p_shadow, const Vector2 &p_shadow_offset, float p_underline_offset, float p_underline_thickness, const String &p_aux) {
+void yuruttoweb_text_sync_control(Control *p_control, const String &p_text, const Rect2 &p_rect, int p_kind, int p_flags, int p_horizontal, int p_vertical, const Color &p_color, float p_font_size, float p_line_spacing, const Color &p_outline, float p_outline_size, const Color &p_shadow, const Vector2 &p_shadow_offset, float p_underline_offset, float p_underline_thickness, const String &p_aux) {
 	if (!p_control) return;
 	TextState state;
 	state.text = p_text;
@@ -492,15 +492,15 @@ void gdweb_text_sync_control(Control *p_control, const String &p_text, const Rec
 }
 
 // 通知されたControlを次の登録見直し単位へ積む。
-void gdweb_text_sync_queue(ObjectID p_object) {
+void yuruttoweb_text_sync_queue(ObjectID p_object) {
 	dirty.insert(p_object);
 }
 
 // 登録済み文字を毎frame同期し、物理親、回転、入力へ追従する。
-void gdweb_text_sync_process() {
+void yuruttoweb_text_sync_process() {
 	if (!event_ready) {
-		gdweb_text_set_event_cb(&text_event);
-		gdweb_site_set_event_cb(&site_event);
+		yuruttoweb_text_set_event_cb(&text_event);
+		yuruttoweb_site_set_event_cb(&site_event);
 		event_ready = true;
 	}
 	// current sceneが変わったframeだけをBrowser routeへ通知する。
@@ -509,7 +509,7 @@ void gdweb_text_sync_process() {
 	if (scene && scene->get_instance_id() != site_scene) {
 		site_scene = scene->get_instance_id();
 		const CharString path = scene->get_scene_file_path().utf8();
-		gdweb_site_scene(path.get_data());
+		yuruttoweb_site_scene(path.get_data());
 	}
 	Vector<ObjectID> removed;
 	for (ObjectID object : dirty) {
@@ -519,7 +519,7 @@ void gdweb_text_sync_process() {
 	}
 	dirty.clear();
 
-	gdweb_text_begin();
+	yuruttoweb_text_begin();
 	for (ObjectID object : tracked) {
 		Control *control = Object::cast_to<Control>(ObjectDB::get_instance(object));
 		if (!control || !text_requested(control)) {
@@ -539,12 +539,12 @@ void gdweb_text_sync_process() {
 	}
 	for (ObjectID object : removed) {
 		const CharString uid = text_uid(object);
-		gdweb_text_remove(uid.get_data());
+		yuruttoweb_text_remove(uid.get_data());
 		tracked.erase(object);
 		states.erase(object);
 		parts.erase(object);
 		remove_canvases(object);
 	}
 	outlines.clear();
-	gdweb_text_end();
+	yuruttoweb_text_end();
 }

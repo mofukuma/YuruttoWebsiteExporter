@@ -3,15 +3,15 @@
 
 extends RefCounted
 
-const BEGIN := "<!-- GDWEB_SITE_BEGIN -->" # 再生成headの開始印。
-const END := "<!-- GDWEB_SITE_END -->" # 再生成headの終了印。
+const BEGIN := "<!-- YURUTTOWEB_SITE_BEGIN -->" # 再生成headの開始印。
+const END := "<!-- YURUTTOWEB_SITE_END -->" # 再生成headの終了印。
 const RUNTIME := "res://addons/yurutto_website_exporter/site_runtime.js" # Browser scene同期処理。
-const NGINX := "res://addons/yurutto_website_exporter/nginx-gdweb.conf" # 直接配信用設定。
-const NGINX_PROXY := "res://addons/yurutto_website_exporter/nginx-gdweb-proxy.conf" # reverse proxy設定。
+const NGINX := "res://addons/yurutto_website_exporter/nginx-yuruttoweb.conf" # 直接配信用設定。
+const NGINX_PROXY := "res://addons/yurutto_website_exporter/nginx-yuruttoweb-proxy.conf" # reverse proxy設定。
 const OPTIONS := [
-	"gdweb/site/enabled", "gdweb/site/config", "gdweb/site/base_url", "gdweb/site/title",
-	"gdweb/site/description", "gdweb/site/locale", "gdweb/site/favicon", "gdweb/routing/mode",
-	"gdweb/font/matching_webfont", "gdweb/font/avoid_canvas_theme_font", "gdweb/ogp/image", "gdweb/ogp/alt",
+	"yuruttoweb/site/enabled", "yuruttoweb/site/config", "yuruttoweb/site/base_url", "yuruttoweb/site/title",
+	"yuruttoweb/site/description", "yuruttoweb/site/locale", "yuruttoweb/site/favicon", "yuruttoweb/routing/mode",
+	"yuruttoweb/font/matching_webfont", "yuruttoweb/font/avoid_canvas_theme_font", "yuruttoweb/ogp/image", "yuruttoweb/ogp/alt",
 ] # Site生成へ渡すExport設定名。
 const STYLE_ATTRS := ["media", "integrity", "crossorigin", "referrerpolicy"] # styleで許可する属性。
 const SCRIPT_ATTRS := ["type", "defer", "async", "integrity", "crossorigin", "referrerpolicy"] # scriptで許可する属性。
@@ -29,15 +29,15 @@ func build(options: Dictionary, target: String) -> Error:
 	out = target.get_base_dir()
 	if not FileAccess.file_exists(output):
 		return _fail("Export HTMLがありません: %s" % output)
-	var avoid := bool(options.get("gdweb/font/avoid_canvas_theme_font", true))
-	if not bool(options.get("gdweb/site/enabled", true)):
+	var avoid := bool(options.get("yuruttoweb/font/avoid_canvas_theme_font", true))
+	if not bool(options.get("yuruttoweb/site/enabled", true)):
 		var error := _write_text_config(avoid)
 		return error if error != OK else _write_manifest()
 	var data := _configuration(options)
 	if not error_message.is_empty():
 		return FAILED
 	data.avoid_canvas_theme_font = avoid
-	data.mode = "History" if int(options.get("gdweb/routing/mode", 0)) == 1 else "Hash"
+	data.mode = "History" if int(options.get("yuruttoweb/routing/mode", 0)) == 1 else "Hash"
 	var url := _urls(data.site.base_url)
 	if not error_message.is_empty():
 		return FAILED
@@ -46,10 +46,10 @@ func build(options: Dictionary, target: String) -> Error:
 	_copy_assets(data, url)
 	if not error_message.is_empty():
 		return FAILED
-	var font_map := _webfonts(bool(options.get("gdweb/font/matching_webfont", true)), url.public_path)
+	var font_map := _webfonts(bool(options.get("yuruttoweb/font/matching_webfont", true)), url.public_path)
 	if not error_message.is_empty():
 		return FAILED
-	var asset_dir := out.path_join("gdweb-assets")
+	var asset_dir := out.path_join("yuruttoweb-assets")
 	DirAccess.make_dir_recursive_absolute(asset_dir)
 	var image := _ogp(data.ogp, asset_dir)
 	if not error_message.is_empty():
@@ -95,13 +95,13 @@ func build(options: Dictionary, target: String) -> Error:
 			if error != OK:
 				return error
 	data.webfonts = font_map
-	error = _write(out.path_join("gdweb-site.json"), JSON.stringify(data, "\t") + "\n")
+	error = _write(out.path_join("yuruttoweb-site.json"), JSON.stringify(data, "\t") + "\n")
 	if error != OK:
 		return error
-	error = _write_nginx(NGINX, out.path_join("nginx-gdweb.conf.example"), url.root)
+	error = _write_nginx(NGINX, out.path_join("nginx-yuruttoweb.conf.example"), url.root)
 	if error != OK:
 		return error
-	error = _write_nginx(NGINX_PROXY, out.path_join("nginx-gdweb-proxy.conf.example"), url.root)
+	error = _write_nginx(NGINX_PROXY, out.path_join("nginx-yuruttoweb-proxy.conf.example"), url.root)
 	if error != OK:
 		return error
 	var pages := ""
@@ -119,25 +119,25 @@ func _configuration(options: Dictionary) -> Dictionary:
 		"title": String(ProjectSettings.get_setting("application/config/name", "Godot Web Site")),
 		"scene": String(ProjectSettings.get_setting("application/run/main_scene", "")),
 	}
-	var config_path := String(options.get("gdweb/site/config", "res://gdweb-site.json"))
+	var config_path := String(options.get("yuruttoweb/site/config", "res://yuruttoweb-site.json"))
 	var file := _resource(config_path)
 	var source: Dictionary = {}
 	if not file.is_empty() and FileAccess.file_exists(file):
 		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(file))
 		if not parsed is Dictionary:
-			_fail("gdweb-site.jsonはJSON objectで指定してください。")
+			_fail("yuruttoweb-site.jsonはJSON objectで指定してください。")
 			return {}
 		source = parsed
 	if int(source.get("version", 1)) != 1:
-		_fail("gdweb-site.json versionは1だけ対応します。")
+		_fail("yuruttoweb-site.json versionは1だけ対応します。")
 		return {}
 	var source_site: Dictionary = source.get("site", {})
 	var site := {
-		"name": String(options.get("gdweb/site/title", source_site.get("name", info.title))),
-		"base_url": String(options.get("gdweb/site/base_url", source_site.get("base_url", "https://example.com"))),
-		"description": String(options.get("gdweb/site/description", source_site.get("description", "Godotで作成したWebサイトです。"))),
-		"locale": String(options.get("gdweb/site/locale", source_site.get("locale", "ja_JP"))),
-		"favicon": String(options.get("gdweb/site/favicon", source_site.get("favicon", ""))),
+		"name": String(options.get("yuruttoweb/site/title", source_site.get("name", info.title))),
+		"base_url": String(options.get("yuruttoweb/site/base_url", source_site.get("base_url", "https://example.com"))),
+		"description": String(options.get("yuruttoweb/site/description", source_site.get("description", "Godotで作成したWebサイトです。"))),
+		"locale": String(options.get("yuruttoweb/site/locale", source_site.get("locale", "ja_JP"))),
+		"favicon": String(options.get("yuruttoweb/site/favicon", source_site.get("favicon", ""))),
 		"meta": source_site.get("meta", []), "styles": source_site.get("styles", []), "scripts": source_site.get("scripts", []),
 	}
 	var entries: Dictionary = source.get("scenes", {})
@@ -175,8 +175,8 @@ func _configuration(options: Dictionary) -> Dictionary:
 		}
 	return {
 		"site": site, "scenes": scenes,
-		"ogp": String(options.get("gdweb/ogp/image", "res://web/ogp.png")),
-		"alt": String(options.get("gdweb/ogp/alt", "サイトのプレビュー画像")),
+		"ogp": String(options.get("yuruttoweb/ogp/image", "res://web/ogp.png")),
+		"alt": String(options.get("yuruttoweb/ogp/alt", "サイトのプレビュー画像")),
 	}
 
 # URIをsite rootから始まるdirectory形式へ正規化する。
@@ -251,7 +251,7 @@ func _webfonts(enabled: bool, public_path: Callable) -> Dictionary:
 	var map := {}
 	if not enabled:
 		return map
-	var target := out.path_join("gdweb-fonts")
+	var target := out.path_join("yuruttoweb-fonts")
 	for font in _files(project, ["woff2"]):
 		var stem := font.trim_suffix(".woff2")
 		for extension in ["ttf", "otf"]:
@@ -268,7 +268,7 @@ func _webfonts(enabled: bool, public_path: Callable) -> Dictionary:
 				return {}
 			var relative := source.trim_prefix(project + "/").replace("\\", "/")
 			var key := "res://%s" % relative
-			map[key] = {"family": "GDWeb-%s" % _sha_text(key), "url": public_path.call("gdweb-fonts/%s" % name)}
+			map[key] = {"family": "YuruttoWeb-%s" % _sha_text(key), "url": public_path.call("yuruttoweb-fonts/%s" % name)}
 	return map
 
 # 公開file名に使える英数字へ変換する。
@@ -340,7 +340,7 @@ func _ogp(value: String, asset_dir: String) -> Dictionary:
 # 一sceneの静的SEO headを生成する。
 func _head(data: Dictionary, scene: Dictionary, image: Dictionary, url: Dictionary, font_map: Dictionary) -> String:
 	var canonical: String = scene.canonical
-	var image_url: String = url.absolute.call("gdweb-assets/%s" % image.file) if not image.is_empty() else ""
+	var image_url: String = url.absolute.call("yuruttoweb-assets/%s" % image.file) if not image.is_empty() else ""
 	var tags := [
 		"<meta charset=\"utf-8\">", "<base href=\"%s\">" % _html(url.root),
 		"<meta name=\"description\" content=\"%s\">" % _html(scene.description),
@@ -369,21 +369,21 @@ func _head(data: Dictionary, scene: Dictionary, image: Dictionary, url: Dictiona
 		if image_url.begins_with("https:"):
 			tags.append("<meta property=\"og:image:secure_url\" content=\"%s\">" % _html(image_url))
 	if not String(data.site.favicon).is_empty():
-		tags.append("<link rel=\"icon\" href=\"%s\">" % _html(url.public_path.call("gdweb-assets/favicon.%s" % String(data.site.favicon).get_extension().to_lower())))
+		tags.append("<link rel=\"icon\" href=\"%s\">" % _html(url.public_path.call("yuruttoweb-assets/favicon.%s" % String(data.site.favicon).get_extension().to_lower())))
 	else:
 		tags.append("<link rel=\"icon\" href=\"data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=\">")
 	var faces := ""
 	for font in font_map.values():
 		faces += "@font-face{font-family:%s;src:url('%s') format('woff2');font-display:swap}" % [font.family, font.url]
-	tags.append("<style id=\"gdweb-font-faces\">%s</style>" % faces)
+	tags.append("<style id=\"yuruttoweb-font-faces\">%s</style>" % faces)
 	tags.append(_metas(data.site.meta))
 	tags.append(_metas(scene.meta, true))
 	tags.append(_assets(data.site.styles, data.site.scripts))
 	tags.append(_assets(scene.styles, scene.scripts, true))
-	tags.append("<script id=\"gdweb-json-ld\" type=\"application/ld+json\">%s</script>" % _json(scene.json_ld))
-	tags.append("<script>window.GDWEB_FONT_MAP=%s</script>" % _json(font_map))
+	tags.append("<script id=\"yuruttoweb-json-ld\" type=\"application/ld+json\">%s</script>" % _json(scene.json_ld))
+	tags.append("<script>window.YURUTTOWEB_FONT_MAP=%s</script>" % _json(font_map))
 	tags.append(_text_config(data.avoid_canvas_theme_font))
-	tags.append("<script id=\"gdweb-site-config\" type=\"application/json\">%s</script>" % _json({"mode": data.mode, "root": url.root, "site": data.site, "scenes": data.scenes}))
+	tags.append("<script id=\"yuruttoweb-site-config\" type=\"application/json\">%s</script>" % _json({"mode": data.mode, "root": url.root, "site": data.site, "scenes": data.scenes}))
 	var present: Array[String] = []
 	for tag in tags:
 		if not String(tag).is_empty():
@@ -395,10 +395,10 @@ func _assets(styles: Array, scripts: Array, scene := false) -> String:
 	var tags: Array[String] = []
 	for entry in styles:
 		var item: Dictionary = {"href": entry} if entry is String else entry
-		tags.append("<link rel=\"stylesheet\" href=\"%s\"%s%s>" % [_html(item.get("href", "")), _attrs(item, STYLE_ATTRS), " data-gdweb-scene-asset=\"true\"" if scene else ""])
+		tags.append("<link rel=\"stylesheet\" href=\"%s\"%s%s>" % [_html(item.get("href", "")), _attrs(item, STYLE_ATTRS), " data-yuruttoweb-scene-asset=\"true\"" if scene else ""])
 	for entry in scripts:
 		var item: Dictionary = {"src": entry} if entry is String else entry
-		var marker := " data-gdweb-asset=\"%s\"" % _html(item.get("src", "")) if scene else ""
+		var marker := " data-yuruttoweb-asset=\"%s\"" % _html(item.get("src", "")) if scene else ""
 		tags.append("<script src=\"%s\"%s%s></script>" % [_html(item.get("src", "")), _attrs(item, SCRIPT_ATTRS), marker])
 	return "\n".join(tags)
 
@@ -419,7 +419,7 @@ func _metas(items: Array, scene := false) -> String:
 			_fail("metaにはnameまたはpropertyとcontentが必要です。")
 			return ""
 		var key := "name" if item.has("name") else "property"
-		tags.append("<meta %s=\"%s\" content=\"%s\"%s>" % [key, _html(item[key]), _html(item.content), " data-gdweb-scene-meta=\"true\"" if scene else ""])
+		tags.append("<meta %s=\"%s\" content=\"%s\"%s>" % [key, _html(item[key]), _html(item.content), " data-yuruttoweb-scene-meta=\"true\"" if scene else ""])
 	return "\n".join(tags)
 
 # Godot HTMLへtitle、head、概要、Browser同期処理を差し込む。
@@ -439,12 +439,12 @@ func _render(base: String, data: Dictionary, scene: Dictionary, image: Dictionar
 		tag = lang.sub(tag, "lang=\"%s\"" % _html(language)) if lang.search(tag) else tag.trim_suffix(">") + " lang=\"%s\">" % _html(language)
 		html = html.substr(0, found.get_start()) + tag + html.substr(found.get_end())
 	html = html.replace("</head>", "%s\n</head>" % _head(data, scene, image, url, font_map))
-	var summary := "<main id=\"gdweb-site-summary\"><h1>%s</h1><p>%s</p></main><noscript>%s</noscript>" % [_html(scene.title), _html(scene.summary), _html(scene.summary)]
+	var summary := "<main id=\"yuruttoweb-site-summary\"><h1>%s</h1><p>%s</p></main><noscript>%s</noscript>" % [_html(scene.title), _html(scene.summary), _html(scene.summary)]
 	var body := RegEx.new()
 	body.compile("(?i)<body([^>]*)>")
 	html = body.sub(html, "<body$1>%s" % summary)
 	var runtime := FileAccess.get_file_as_string(RUNTIME)
-	return html.replace("</body>", "<script id=\"gdweb-site-runtime\">%s</script>\n</body>" % runtime)
+	return html.replace("</body>", "<script id=\"yuruttoweb-site-runtime\">%s</script>\n</body>" % runtime)
 
 # 既存のsite生成範囲と概要を再生成前に除く。
 func _remove_site(html: String) -> String:
@@ -452,24 +452,24 @@ func _remove_site(html: String) -> String:
 	head.compile("(?s)%s.*?%s\\n?" % [BEGIN, END])
 	html = head.sub(html, "", true)
 	var summary := RegEx.new()
-	summary.compile("(?s)<main id=\"gdweb-site-summary\">.*?</main><noscript>.*?</noscript>")
+	summary.compile("(?s)<main id=\"yuruttoweb-site-summary\">.*?</main><noscript>.*?</noscript>")
 	html = summary.sub(html, "", true)
 	var runtime := RegEx.new()
-	runtime.compile("(?s)<script id=\"gdweb-site-runtime\">.*?</script>\\n?")
+	runtime.compile("(?s)<script id=\"yuruttoweb-site-runtime\">.*?</script>\\n?")
 	return runtime.sub(html, "", true)
 
 # Site無効時も文字所有設定だけをHTMLへ反映する。
 func _write_text_config(avoid: bool) -> Error:
 	var html := FileAccess.get_file_as_string(output)
 	var pattern := RegEx.new()
-	pattern.compile("(?s)<script id=\"gdweb-text-config\">.*?</script>\\n?")
+	pattern.compile("(?s)<script id=\"yuruttoweb-text-config\">.*?</script>\\n?")
 	html = pattern.sub(html, "", true)
 	html = html.replace("</head>", "%s\n</head>" % _text_config(avoid))
 	return _write(output, html)
 
 # DOM文字所有設定を一つのscriptへまとめる。
 func _text_config(avoid: bool) -> String:
-	return "<script id=\"gdweb-text-config\">window.GDWEB_TEXT_CONFIG=%s</script>" % _json({"avoidCanvasThemeFont": avoid})
+	return "<script id=\"yuruttoweb-text-config\">window.YURUTTOWEB_TEXT_CONFIG=%s</script>" % _json({"avoidCanvasThemeFont": avoid})
 
 # 内蔵Brotliとraw成果物の対応をmanifestへ記録する。
 func _write_manifest() -> Error:
@@ -496,7 +496,7 @@ func _write_manifest() -> Error:
 		has_wasm = has_wasm or extension == "wasm"
 	if not has_js or not has_wasm:
 		return _fail("内蔵Brotli runtimeが不足しています。")
-	return _write(out.path_join("gdweb-compression.json"), JSON.stringify({"encoding": "br", "quality": 6, "entries": entries}, "\t") + "\n")
+	return _write(out.path_join("yuruttoweb-compression.json"), JSON.stringify({"encoding": "br", "quality": 6, "entries": entries}, "\t") + "\n")
 
 # res:// pathをproject外へ出さず絶対pathへ変換する。
 func _resource(value: String) -> String:
@@ -526,7 +526,7 @@ func _write_nginx(source: String, target: String, root: String) -> Error:
 	if root != "/":
 		var prefix := root.trim_suffix("/")
 		rule = "location = %s { return 308 %s; }\n    location ^~ %s { rewrite ^%s(.*)$ /$1 last; }" % [prefix, root, root, root]
-	text = text.replace("# GDWEB_BASE_PATH", rule)
+	text = text.replace("# YURUTTOWEB_BASE_PATH", rule)
 	return _write(target, text)
 
 # 文字列をfileへ確実に保存する。

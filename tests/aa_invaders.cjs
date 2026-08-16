@@ -10,7 +10,7 @@ const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 const { createServer } = require('../build/serve_web.cjs');
 
-const repo = path.resolve(__dirname, '..'); // gdweb project root。
+const repo = path.resolve(__dirname, '..'); // yuruttoweb project root。
 const work = path.join(repo, 'tmp/aa-invaders'); // Project copy、Web成果物、確認画像。
 const project = path.join(work, 'project'); // addonを導入する検査project。
 const site = path.join(work, 'site'); // Browser配信成果物。
@@ -22,7 +22,7 @@ let browser = null;
 // 表示文字を持つDOM要素の画面矩形を返す。
 async function box(page, text) {
 	return page.evaluate((value) => {
-		const node = [...document.querySelectorAll('[data-gdweb-text]')].find((item) => item.textContent === value);
+		const node = [...document.querySelectorAll('[data-yuruttoweb-text]')].find((item) => item.textContent === value);
 		if (!node) return null;
 		const rect = node.getBoundingClientRect();
 		return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, tag: node.tagName, family: getComputedStyle(node).fontFamily };
@@ -43,7 +43,7 @@ async function hold(page, text, duration) {
 async function aim(page) {
 	for (let count = 0; count < 4; count++) {
 		const state = await page.evaluate(() => {
-			const nodes = [...document.querySelectorAll('[data-gdweb-text]')];
+			const nodes = [...document.querySelectorAll('[data-yuruttoweb-text]')];
 			const player = nodes.find((node) => node.textContent === '(´・ω・`)').getBoundingClientRect();
 			const enemies = nodes.filter((node) => node.textContent === '≪(oo)≫' && getComputedStyle(node).display !== 'none').map((node) => node.getBoundingClientRect());
 			const gaps = enemies.filter((rect) => {
@@ -80,7 +80,7 @@ async function main() {
 	});
 	await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
 	await page.getByText('(´・ω・`)', { exact: true }).waitFor();
-	await page.waitForFunction(() => [...document.querySelectorAll('[data-gdweb-text]')].filter((node) => ['╱(• •)╲', '〈[°°]〉', 'Ψ(××)Ψ', '╭[••]╮', '≪(oo)≫'].includes(node.textContent)).length === 40);
+	await page.waitForFunction(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].filter((node) => ['╱(• •)╲', '〈[°°]〉', 'Ψ(××)Ψ', '╭[••]╮', '≪(oo)≫'].includes(node.textContent)).length === 40);
 
 	// DOM意味要素、Browser標準font、スマートフォン収容を確認する。
 	const initialPlayer = await box(page, '(´・ω・`)');
@@ -89,9 +89,9 @@ async function main() {
 	const layout = await page.evaluate(() => {
 		const canvasNode = document.querySelector('canvas');
 		const canvas = canvasNode.getBoundingClientRect();
-		const root = document.querySelector('#gdweb-text-root').getBoundingClientRect();
-		const nodes = [...document.querySelectorAll('[data-gdweb-text]')].map((node) => node.getBoundingClientRect());
-		return { canvas: { width: canvas.width, height: canvas.height }, canvasPixels: { width: canvasNode.width, height: canvasNode.height }, root: { width: root.width, height: root.height }, minLeft: Math.min(...nodes.map((rect) => rect.left)), maxRight: Math.max(...nodes.map((rect) => rect.right)), documentWidth: document.documentElement.scrollWidth, domCount: nodes.length, buttonCount: document.querySelectorAll('[data-gdweb-kind="Button"]').length, webgl2: !!canvasNode.getContext('webgl2') };
+		const root = document.querySelector('#yuruttoweb-text-root').getBoundingClientRect();
+		const nodes = [...document.querySelectorAll('[data-yuruttoweb-text]')].map((node) => node.getBoundingClientRect());
+		return { canvas: { width: canvas.width, height: canvas.height }, canvasPixels: { width: canvasNode.width, height: canvasNode.height }, root: { width: root.width, height: root.height }, minLeft: Math.min(...nodes.map((rect) => rect.left)), maxRight: Math.max(...nodes.map((rect) => rect.right)), documentWidth: document.documentElement.scrollWidth, domCount: nodes.length, buttonCount: document.querySelectorAll('[data-yuruttoweb-kind="Button"]').length, webgl2: !!canvasNode.getContext('webgl2') };
 	});
 	assert.deepEqual(layout.canvas, { width: 390, height: 844 });
 	assert.deepEqual(layout.canvasPixels, { width: 1170, height: 2532 });
@@ -113,16 +113,16 @@ async function main() {
 		await hold(page, 'FIRE', 35);
 		await page.waitForTimeout(620);
 	}
-	await page.waitForFunction(() => ![...document.querySelectorAll('[data-gdweb-text]')].some((node) => node.textContent === 'SCORE 0000'));
-	const score = await page.evaluate(() => [...document.querySelectorAll('[data-gdweb-text]')].find((node) => node.textContent.startsWith('SCORE ')).textContent);
+	await page.waitForFunction(() => ![...document.querySelectorAll('[data-yuruttoweb-text]')].some((node) => node.textContent === 'SCORE 0000'));
+	const score = await page.evaluate(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].find((node) => node.textContent.startsWith('SCORE ')).textContent);
 
 	// 編隊下降、敵弾、防壁損耗が同じ実行中に成立することを確認する。
 	await page.waitForFunction(() => {
-		const stats = [...document.querySelectorAll('[data-gdweb-text]')].find((node) => node.textContent.startsWith('INV '))?.textContent || '';
+		const stats = [...document.querySelectorAll('[data-yuruttoweb-text]')].find((node) => node.textContent.startsWith('INV '))?.textContent || '';
 		const values = Object.fromEntries([...stats.matchAll(/(INV|DROP|ESHOT|SHIELD) (\d+)/g)].map((match) => [match[1], Number(match[2])]));
 		return values.DROP >= 1 && values.ESHOT >= 1 && values.SHIELD < 42;
 	});
-	const stats = await page.evaluate(() => [...document.querySelectorAll('[data-gdweb-text]')].find((node) => node.textContent.startsWith('INV ')).textContent);
+	const stats = await page.evaluate(() => [...document.querySelectorAll('[data-yuruttoweb-text]')].find((node) => node.textContent.startsWith('INV ')).textContent);
 	assert.equal(await page.getByText('LIFE 3', { exact: true }).count(), 1);
 	assert.deepEqual(errors, []);
 	await page.screenshot({ path: path.join(work, 'mobile-game.png') });

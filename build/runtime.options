@@ -1,8 +1,8 @@
 # ゆるっとWebの配布runtimeを決定するSCons option。
 platform=web
 target=template_release
-extra_suffix=gdwebminimum
-gdweb_text_dom=yes
+extra_suffix=yuruttowebminimum
+yuruttoweb_text_dom=yes
 optimize=size_extra
 lto=none
 debug_symbols=no

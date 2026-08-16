@@ -44,7 +44,7 @@ async function measure(browser, kind, port) {
 	await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
 	await page.locator('#status').waitFor({ state: 'detached' });
 	if (kind === 'minimum') {
-		await page.waitForFunction(() => document.querySelectorAll('[data-gdweb-text]').length >= 110);
+		await page.waitForFunction(() => document.querySelectorAll('[data-yuruttoweb-text]').length >= 110);
 		await page.evaluate(() => document.fonts.ready);
 	}
 	const gaps = await page.evaluate(() => new Promise((resolve) => {
@@ -73,12 +73,12 @@ async function capture(browser, kind, port) {
 	await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
 	await page.locator('#status').waitFor({ state: 'detached' });
 	if (kind === 'minimum') {
-		await page.waitForFunction(() => document.querySelectorAll('[data-gdweb-text]').length >= 110);
+		await page.waitForFunction(() => document.querySelectorAll('[data-yuruttoweb-text]').length >= 110);
 		await page.evaluate(() => document.fonts.ready);
 	}
 	await page.keyboard.press('f');
 	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
-	const masks = kind === 'minimum' ? await page.evaluate(() => [...document.querySelectorAll('[data-gdweb-text]')]
+	const masks = kind === 'minimum' ? await page.evaluate(() => [...document.querySelectorAll('[data-yuruttoweb-text]')]
 		.filter((node) => getComputedStyle(node).display !== 'none')
 		.map((node) => {
 			const box = node.getBoundingClientRect();

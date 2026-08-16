@@ -300,7 +300,7 @@ func _label(node_name: String, text: String, position: Vector2, size: Vector2, f
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
-	label.set_meta("gdweb_dom_text", true)
+	label.set_meta("yuruttoweb_dom_text", true)
 	(parent if parent else ui).add_child(label)
 	return label
 
@@ -316,7 +316,7 @@ func _button(node_name: String, text: String, position: Vector2, size: Vector2) 
 	button.add_theme_color_override("font_color", WHITE)
 	button.add_theme_stylebox_override("normal", _button_box(Color("182746")))
 	button.add_theme_stylebox_override("pressed", _button_box(Color("334c75")))
-	button.set_meta("gdweb_dom_text", true)
+	button.set_meta("yuruttoweb_dom_text", true)
 	ui.add_child(button)
 	return button
 

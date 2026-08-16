@@ -4,9 +4,9 @@
 
 set -eu
 
-repo=$(cd "$(dirname "$0")/.." && pwd) # gdweb project root。
+repo=$(cd "$(dirname "$0")/.." && pwd) # yuruttoweb project root。
 . "$repo/build/distribution.lock"
-image=gdweb-runtime-builder:$RUNTIME_PROFILE # local専用builder名。
+image=yuruttoweb-runtime-builder:$RUNTIME_PROFILE # local専用builder名。
 platform_name=$(printf '%s' "$BUILDER_PLATFORM" | tr '/' '-') # pathへ使える対象環境名。
 cache=/work/tmp/distribution-$platform_name # container専用toolchain cache。
 output=/work/tmp/distribution/runtime-proof # 配布前の展開成果物。
@@ -26,8 +26,8 @@ docker run --rm \
   --platform "$BUILDER_PLATFORM" \
   --user "$(id -u):$(id -g)" \
   -e "HOME=$home" \
-  -e "GDWEB_BUILD_ROOT=$cache" \
-  -e "GDWEB_RUNTIME_OUT=$output" \
+  -e "YURUTTOWEB_BUILD_ROOT=$cache" \
+  -e "YURUTTOWEB_RUNTIME_OUT=$output" \
   -e "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" \
   -e TZ=UTC \
   -v "$repo:/work" \

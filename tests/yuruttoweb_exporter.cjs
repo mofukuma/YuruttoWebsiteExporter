@@ -10,11 +10,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
 
-const root = path.resolve(__dirname, '..'); // gdweb project root。
+const root = path.resolve(__dirname, '..'); // yuruttoweb project root。
 const addon = path.join(root, 'addons/yurutto_website_exporter'); // 配布単位のaddon。
 const runtime = JSON.parse(fs.readFileSync(path.join(addon, 'templates/runtime.json'))); // 対応版とruntime由来。
 const template = path.join(addon, 'templates', runtime.template.file); // manifestが指す内蔵runtime。
-const work = path.join(root, 'tmp/yurutto-exporter'); // 検査専用directory。
+const work = path.join(root, 'tmp/yuruttoweb-exporter'); // 検査専用directory。
 const site = path.join(work, 'site'); // 実書き出し確認先。
 const project = path.join(work, 'project'); // addonを導入するproject copy。
 const fixture = path.join(root, 'tests/fixtures/site_runtime'); // 最小projectの正本。
@@ -30,7 +30,7 @@ assert.equal(platform.includes('find_export_template'), false, '公式template�
 assert.match(platform, /templates\/runtime\.json/, 'runtime manifest参照なし');
 assert.equal(platform.includes('Godot 4.7.1専用'), false, '対応版をcodeへ固定');
 assert.equal(platform.includes('OS.execute'), false, '外部processへ依存');
-assert.equal(platform.includes('gdweb/tools/node'), false, 'Node.js設定が残存');
+assert.equal(platform.includes('yuruttoweb/tools/node'), false, 'Node.js設定が残存');
 assert.equal(fs.readdirSync(addon).some((name) => name.endsWith('.cjs')), false, '実行時CJSが残存');
 assert.equal(crypto.createHash('sha256').update(fs.readFileSync(template)).digest('hex'), expectedHash, '内蔵runtime hash不一致');
 
@@ -58,7 +58,7 @@ child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 
 for (const name of ['index.html', 'index.js', 'index.wasm', 'index.pck', 'index.js.br', 'index.wasm.br', 'index.audio.worklet.js.br', 'index.audio.position.worklet.js.br', 'GODOT_LICENSE.txt', 'GODOT_COPYRIGHT.txt']) {
 	assert.ok(fs.existsSync(path.join(site, name)), `公開成果物なし: ${name}`);
 }
-const manifest = JSON.parse(fs.readFileSync(path.join(site, 'gdweb-compression.json')));
+const manifest = JSON.parse(fs.readFileSync(path.join(site, 'yuruttoweb-compression.json')));
 assert.equal(manifest.entries.length, 4, '固定runtimeのBrotli対応数不一致');
 for (const entry of manifest.entries) assert.ok(entry.brotliBytes < entry.originalBytes, `圧縮率不正: ${entry.file}`);
 for (const [name, source] of [['GODOT_LICENSE.txt', 'GODOT-MIT.txt'], ['GODOT_COPYRIGHT.txt', 'GODOT-COPYRIGHT.txt']]) {

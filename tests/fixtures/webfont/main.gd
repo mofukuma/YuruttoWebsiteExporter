@@ -14,5 +14,5 @@ func _ready() -> void:
 	label.text = "テーマの日本語 Web Font"
 	label.position = Vector2(40, 70)
 	label.size = Vector2(560, 80)
-	label.set_meta("gdweb_dom_text", true)
+	label.set_meta("yuruttoweb_dom_text", true)
 	add_child(label)

@@ -15,7 +15,7 @@ const repo = path.resolve(__dirname, '..'); // 配布定義を持つproject root
 const archive = path.resolve(process.argv[2] || ''); // Godotが生成したWeb template。
 const out = path.resolve(process.argv[3] || path.join(repo, 'tmp/minimum/runtime-proof')); // 展開確認先。
 const addon = path.join(repo, 'addons/yurutto_website_exporter/templates'); // addon配布物の配置先。
-const template = path.join(addon, 'yurutto_web.zip'); // 一つの対応版runtime。
+const template = path.join(addon, 'yuruttoweb.zip'); // 一つの対応版runtime。
 const runtimeManifest = path.join(addon, 'runtime.json'); // versionと由来の正本。
 const rawEntries = ['godot.js', 'godot.wasm', 'godot.audio.worklet.js', 'godot.audio.position.worklet.js', 'godot.html']; // Godot Web起動物。
 const compressedEntries = rawEntries.filter((name) => name.endsWith('.js') || name.endsWith('.wasm')); // Brotliを持つ転送対象。
@@ -100,11 +100,11 @@ function pack() {
 		fs.copyFileSync(path.join(repo, 'LICENSES/GODOT-COPYRIGHT.txt'), path.join(stage, licenseEntries[1]));
 		const brotli = compressSite(stage, quality);
 		const packed = [...rawEntries, ...licenseEntries, ...compressedEntries.map((name) => `${name}.br`)];
-		for (const name of [...packed, 'gdweb-compression.json']) fs.utimesSync(path.join(stage, name), epoch, epoch);
-		const built = path.join(out, 'gdweb-minimum-template.zip');
+		for (const name of [...packed, 'yuruttoweb-compression.json']) fs.utimesSync(path.join(stage, name), epoch, epoch);
+		const built = path.join(out, 'yuruttoweb-minimum-template.zip');
 		fs.rmSync(built, { force: true });
 		child.execFileSync('zip', ['-X', '-q', '-9', built, ...packed], { cwd: stage });
-		for (const name of [...packed, 'gdweb-compression.json']) fs.copyFileSync(path.join(stage, name), path.join(out, name));
+		for (const name of [...packed, 'yuruttoweb-compression.json']) fs.copyFileSync(path.join(stage, name), path.join(out, name));
 		for (const name of ['godot.font.woff2', 'FONT_LICENSE.txt']) fs.rmSync(path.join(out, name), { force: true });
 		fs.copyFileSync(built, template);
 		const manifest = {
@@ -129,7 +129,7 @@ function pack() {
 				sourceLockSha256: sha(path.join(repo, 'build/source.lock')),
 				distributionLockSha256: sha(path.join(repo, 'build/distribution.lock')),
 				runtimeOptionsSha256: sha(path.join(repo, 'build/runtime.options')),
-				patchSha256: sha(path.join(repo, 'build/patches/web_gdweb_text.patch')),
+				patchSha256: sha(path.join(repo, 'build/patches/web_yuruttoweb_text.patch')),
 				overlaySha256: treeHash(path.join(repo, 'build/overlay')),
 				buildSha256: filesHash([
 					'build/distribution/Dockerfile', 'build/build_distribution.sh',

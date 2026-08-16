@@ -6,7 +6,7 @@ const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const root = path.resolve(__dirname, '..'); // gdweb project root。
+const root = path.resolve(__dirname, '..'); // yuruttoweb project root。
 const runtime = JSON.parse(fs.readFileSync(path.join(root, 'addons/yurutto_website_exporter/templates/runtime.json'))); // 配布runtime情報。
 const template = path.join(root, 'addons/yurutto_website_exporter/templates', runtime.template.file); // 配布template。
 const files = [

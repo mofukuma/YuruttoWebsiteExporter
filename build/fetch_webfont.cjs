@@ -7,7 +7,7 @@ const child = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const repo = path.resolve(__dirname, '..'); // gdweb project root。
+const repo = path.resolve(__dirname, '..'); // yuruttoweb project root。
 const cache = path.join(repo, 'tmp/fonts'); // 取得物の保管先。
 const stem = 'LINESeedJP-Regular'; // 取得fontの共通basename。
 const css = 'https://fonts.googleapis.com/css2?family=LINE+Seed+JP:wght@400'; // 由来を固定するCDN入口。

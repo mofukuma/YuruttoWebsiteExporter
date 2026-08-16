@@ -10,7 +10,7 @@ const util = require('node:util');
 const { createServer } = require('../build/serve_web.cjs');
 
 const execFile = util.promisify(childProcess.execFile); // 公開gateを別processで実行する入口。
-const root = path.resolve(__dirname, '..'); // gdweb project root。
+const root = path.resolve(__dirname, '..'); // yuruttoweb project root。
 const out = path.join(root, 'tmp/compression'); // 圧縮検査専用出力。
 
 // 再現可能な成果物を圧縮し、同じURLからBrotli応答されることを確認する。
@@ -18,11 +18,11 @@ const out = path.join(root, 'tmp/compression'); // 圧縮検査専用出力。
 	fs.rmSync(out, { recursive: true, force: true });
 	fs.mkdirSync(out, { recursive: true });
 	fs.writeFileSync(path.join(out, 'index.html'), '<canvas></canvas>');
-	fs.writeFileSync(path.join(out, 'index.js'), 'const value = "gdweb";\n'.repeat(1000));
+	fs.writeFileSync(path.join(out, 'index.js'), 'const value = "yuruttoweb";\n'.repeat(1000));
 	fs.writeFileSync(path.join(out, 'index.wasm'), Buffer.alloc(1024 * 1024, 7));
 	childProcess.execFileSync(process.execPath, [path.join(root, 'build/compress_web.cjs'), out]);
 
-	const manifest = JSON.parse(fs.readFileSync(path.join(out, 'gdweb-compression.json')));
+	const manifest = JSON.parse(fs.readFileSync(path.join(out, 'yuruttoweb-compression.json')));
 	assert.equal(manifest.encoding, 'br');
 	assert.equal(manifest.entries.length, 2);
 	assert.ok(manifest.entries.every((entry) => entry.brotliBytes < entry.originalBytes));

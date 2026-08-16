@@ -1,41 +1,41 @@
 --- a/platform/web/detect.py
 +++ b/platform/web/detect.py
 @@ -54,0 +55 @@
-+        BoolVariable("gdweb_text_dom", "Render supported Control text and input in the DOM", False),
++        BoolVariable("yuruttoweb_text_dom", "Render supported Control text and input in the DOM", False),
 @@ -256,0 +258,3 @@
 +
-+    if env["gdweb_text_dom"]:
-+        env.Append(CPPDEFINES=["GDWEB_TEXT_DOM_ENABLED"])
++    if env["yuruttoweb_text_dom"]:
++        env.Append(CPPDEFINES=["YURUTTOWEB_TEXT_DOM_ENABLED"])
 --- a/platform/web/SCsub
 +++ b/platform/web/SCsub
 @@ -32,0 +33,3 @@
-+if env["gdweb_text_dom"]:
-+    web_files.append("gdweb_text_sync.cpp")
++if env["yuruttoweb_text_dom"]:
++    web_files.append("yuruttoweb_text_sync.cpp")
 +
 @@ -47,0 +51,3 @@
 +
-+if env["gdweb_text_dom"]:
-+    sys_env.AddJSLibraries(["js/libs/library_gdweb_text.js"])
++if env["yuruttoweb_text_dom"]:
++    sys_env.AddJSLibraries(["js/libs/library_yuruttoweb_text.js"])
 --- a/platform/web/display_server_web.cpp
 +++ b/platform/web/display_server_web.cpp
 @@ -32,0 +33,4 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+#include "gdweb_text_sync.h"
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++#include "yuruttoweb_text_sync.h"
 +#endif
 +
 @@ -1469,0 +1474,3 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+	gdweb_text_sync_process();
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++	yuruttoweb_text_sync_process();
 +#endif
 --- a/scene/gui/control.cpp
 +++ b/scene/gui/control.cpp
 @@ -53,0 +54,4 @@
 +
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+#include "gdweb_text_sync.h"
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++#include "yuruttoweb_text_sync.h"
 +#endif
 @@ -4406,0 +4411,2 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +	// 文字の見た目へ影響する通知だけを次の同期単位へ積む。
 @@ -4407,0 +4414,21 @@
 +		case NOTIFICATION_POSTINITIALIZE:
@@ -49,12 +49,12 @@
 +		case NOTIFICATION_VISIBILITY_CHANGED:
 +		case NOTIFICATION_TRANSLATION_CHANGED:
 +		case NOTIFICATION_LAYOUT_DIRECTION_CHANGED:
-+			gdweb_text_sync_queue(get_instance_id());
++			yuruttoweb_text_sync_queue(get_instance_id());
 +			break;
 +		case NOTIFICATION_DRAW:
 +			// 複数項目Controlの文字収集を一回の描画単位で初期化する。
-+			gdweb_text_parts_begin(this);
-+			gdweb_text_sync_queue(get_instance_id());
++			yuruttoweb_text_parts_begin(this);
++			yuruttoweb_text_sync_queue(get_instance_id());
 +			break;
 +	}
 +#endif
@@ -62,14 +62,14 @@
 --- a/scene/gui/label.cpp
 +++ b/scene/gui/label.cpp
 @@ -32,0 +33,4 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+#include "gdweb_text_sync.h"
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++#include "yuruttoweb_text_sync.h"
 +#endif
 +
 @@ -794,0 +799,7 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +			// DOM所有Labelは背景をCanvasへ残し、glyphだけを重複描画しない。
-+			if (gdweb_text_dom_owns(this)) {
++			if (yuruttoweb_text_dom_owns(this)) {
 +				break;
 +			}
 +#endif
@@ -77,9 +77,9 @@
 --- a/scene/gui/base_button.cpp
 +++ b/scene/gui/base_button.cpp
 @@ -136,0 +137,9 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +// DOMのnative clickを標準アクセシビリティ操作と同じ状態遷移へ渡す。
-+void BaseButton::gdweb_click() {
++void BaseButton::yuruttoweb_click() {
 +	if (!status.disabled) {
 +		_accessibility_action_click(Variant());
 +	}
@@ -89,63 +89,63 @@
 --- a/scene/gui/base_button.h
 +++ b/scene/gui/base_button.h
 @@ -95,0 +96,4 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +	// DOMの意味要素から一回のButton操作を受ける。
-+	void gdweb_click();
++	void yuruttoweb_click();
 +#endif
 --- a/scene/gui/button.cpp
 +++ b/scene/gui/button.cpp
 @@ -31,0 +32,4 @@
 +
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+#include "gdweb_text_sync.h"
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++#include "yuruttoweb_text_sync.h"
 +#endif
 @@ -467,0 +472,8 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +				// DOM所有Buttonは背景とiconをCanvasへ残し、確定した文字矩形だけを同期する。
-+				if (gdweb_text_dom_owns(this)) {
++				if (yuruttoweb_text_dom_owns(this)) {
 +					const int flags = (is_clipped ? 4 : 0) | (has_focus() ? 64 : 0) | (is_disabled() ? 256 : 0) | (get_focus_mode_with_override() == FOCUS_ALL ? 1024 : 0);
-+					gdweb_text_sync_control(this, xl_text, Rect2(text_ofs, Size2(text_buf_width, text_buf->get_size().height)), 1, flags, align_rtl_checked, VERTICAL_ALIGNMENT_TOP, font_color, theme_cache.font_size, theme_cache.line_spacing, font_outline_color, outline_size);
++					yuruttoweb_text_sync_control(this, xl_text, Rect2(text_ofs, Size2(text_buf_width, text_buf->get_size().height)), 1, flags, align_rtl_checked, VERTICAL_ALIGNMENT_TOP, font_color, theme_cache.font_size, theme_cache.line_spacing, font_outline_color, outline_size);
 +					break;
 +				}
 +#endif
 --- a/scene/gui/link_button.cpp
 +++ b/scene/gui/link_button.cpp
 @@ -32,0 +33,4 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+#include "gdweb_text_sync.h"
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++#include "yuruttoweb_text_sync.h"
 +#endif
 +
 @@ -303,0 +308,11 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +			// DOM所有LinkButtonはfocus枠をCanvasへ残し、文字とunderlineだけを同期する。
-+			if (gdweb_text_dom_owns(this)) {
++			if (yuruttoweb_text_dom_owns(this)) {
 +				const Vector2 text_offset = is_layout_rtl() ? Vector2(size.width - width, 0) : Vector2();
 +				const int flags = (do_underline ? 16 : 0) | (has_focus() ? 64 : 0) | (is_disabled() ? 256 : 0) | (get_focus_mode_with_override() == FOCUS_ALL ? 1024 : 0);
 +				const float underline_offset = theme_cache.underline_spacing + text_buf->get_line_underline_position();
 +				const float underline_thickness = MAX(1, text_buf->get_line_underline_thickness());
-+				gdweb_text_sync_control(this, xl_text, Rect2(text_offset, Size2(width, text_buf->get_size().height)), 2, flags, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_TOP, color, theme_cache.font_size, 0, font_outline_color, outline_size, Color(), Vector2(), underline_offset, underline_thickness, get_uri());
++				yuruttoweb_text_sync_control(this, xl_text, Rect2(text_offset, Size2(width, text_buf->get_size().height)), 2, flags, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_TOP, color, theme_cache.font_size, 0, font_outline_color, outline_size, Color(), Vector2(), underline_offset, underline_thickness, get_uri());
 +				break;
 +			}
 +#endif
 --- a/scene/gui/line_edit.cpp
 +++ b/scene/gui/line_edit.cpp
 @@ -33,0 +34,4 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+#include "platform/web/gdweb_text_sync.h"
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++#include "platform/web/yuruttoweb_text_sync.h"
 +#endif
 +
 @@ -133,0 +138,6 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +	// DOM inputがIME候補とfocusを所有する場合はWeb標準の隠しIMEを起動しない。
-+	if (gdweb_text_dom_owns(this)) {
++	if (yuruttoweb_text_dom_owns(this)) {
 +		return;
 +	}
 +#endif
 @@ -1497,0 +1508,7 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +			// DOM所有LineEditは背景、focus枠、右iconをCanvasへ残す。
-+			if (gdweb_text_dom_owns(this)) {
++			if (yuruttoweb_text_dom_owns(this)) {
 +				break;
 +			}
 +#endif
@@ -157,16 +157,16 @@
 --- a/scene/gui/text_edit.cpp
 +++ b/scene/gui/text_edit.cpp
 @@ -33,0 +34,4 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+#include "platform/web/gdweb_text_sync.h"
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++#include "platform/web/yuruttoweb_text_sync.h"
 +#endif
 +
 @@ -965,0 +970,9 @@
 +			}
 +
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +			// DOM所有TextEditは背景とfocus枠だけをCanvasへ残す。
-+			if (gdweb_text_dom_owns(this)) {
++			if (yuruttoweb_text_dom_owns(this)) {
 +				h_scroll->hide();
 +				v_scroll->hide();
 +				RS::get_singleton()->canvas_item_clear(text_ci);
@@ -174,20 +174,20 @@
 @@ -966,0 +980 @@
 +#endif
 @@ -3452,0 +3467,6 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +	// DOM textareaがIME候補とfocusを所有する場合はWeb標準の隠しIMEを起動しない。
-+	if (gdweb_text_dom_owns(this)) {
++	if (yuruttoweb_text_dom_owns(this)) {
 +		return;
 +	}
 +#endif
 --- a/scene/gui/text_edit.h
 +++ b/scene/gui/text_edit.h
 @@ -860,0 +861,10 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +	// DOM確定入力を標準のtext_changed通知付きで反映する。
-+	void gdweb_set_text(const String &p_text) { _set_text(p_text, true); }
++	void yuruttoweb_set_text(const String &p_text) { _set_text(p_text, true); }
 +	// 非表示Canvas scrollbarへDOMの縦横scroll位置を保持する。
-+	void gdweb_set_scroll(double p_vertical, int p_horizontal) {
++	void yuruttoweb_set_scroll(double p_vertical, int p_horizontal) {
 +		first_visible_col = p_horizontal;
 +		set_v_scroll(p_vertical);
 +		set_h_scroll(p_horizontal);
@@ -197,117 +197,117 @@
 +++ b/scene/gui/tree.cpp
 @@ -52,0 +53,4 @@
 +
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+#include "platform/web/gdweb_text_sync.h"
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++#include "platform/web/yuruttoweb_text_sync.h"
 +#endif
 @@ -5211,0 +5216,5 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +			// Tree専用CanvasItemへ描く見出しと項目文字を収集する。
-+			gdweb_text_capture_canvas(this, content_ci);
-+			gdweb_text_capture_canvas(this, header_ci);
++			yuruttoweb_text_capture_canvas(this, content_ci);
++			yuruttoweb_text_capture_canvas(this, header_ci);
 +#endif
 --- a/scene/resources/text_line.h
 +++ b/scene/resources/text_line.h
 @@ -53,0 +54,6 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+	String gdweb_text; // DOMへ渡す整形前の文字列。
-+	Ref<Font> gdweb_font; // DOM Web font対応へ渡す元font。
-+	int gdweb_font_size = 16; // DOMへ渡す文字寸法。
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++	String yuruttoweb_text; // DOMへ渡す整形前の文字列。
++	Ref<Font> yuruttoweb_font; // DOM Web font対応へ渡す元font。
++	int yuruttoweb_font_size = 16; // DOMへ渡す文字寸法。
 +#endif
 +
 --- a/scene/resources/text_line.cpp
 +++ b/scene/resources/text_line.cpp
 @@ -35,0 +36,4 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+#include "platform/web/gdweb_text_sync.h"
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++#include "platform/web/yuruttoweb_text_sync.h"
 +#endif
 +
 @@ -153,0 +158,4 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+	gdweb_text.clear();
-+	gdweb_font.unref();
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++	yuruttoweb_text.clear();
++	yuruttoweb_font.unref();
 +#endif
 @@ -169,0 +178,5 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+	copy->gdweb_text = gdweb_text;
-+	copy->gdweb_font = gdweb_font;
-+	copy->gdweb_font_size = gdweb_font_size;
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++	copy->yuruttoweb_text = yuruttoweb_text;
++	copy->yuruttoweb_font = yuruttoweb_font;
++	copy->yuruttoweb_font_size = yuruttoweb_font_size;
 +#endif
 @@ -221,0 +235,7 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+	gdweb_text += p_text;
-+	if (gdweb_font.is_null()) {
-+		gdweb_font = p_font;
-+		gdweb_font_size = p_font_size;
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++	yuruttoweb_text += p_text;
++	if (yuruttoweb_font.is_null()) {
++		yuruttoweb_font = p_font;
++		yuruttoweb_font_size = p_font_size;
 +	}
 +#endif
 @@ -429,0 +450,6 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +	// 登録済み標準Controlでは文字だけをDOMへ渡し、Canvas描画を続行しない。
 +	const float draw_width = width > 0 ? width : get_size().x;
-+	if (gdweb_text_capture_line(p_canvas, get_instance_id(), gdweb_text, gdweb_font.is_valid() ? gdweb_font->get_path() : String(), Rect2(ofs, Size2(draw_width, get_size().y)), gdweb_font_size, alignment, p_color, false)) return;
++	if (yuruttoweb_text_capture_line(p_canvas, get_instance_id(), yuruttoweb_text, yuruttoweb_font.is_valid() ? yuruttoweb_font->get_path() : String(), Rect2(ofs, Size2(draw_width, get_size().y)), yuruttoweb_font_size, alignment, p_color, false)) return;
 +#endif
 +
 @@ -443,0 +470,5 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +	// 通常文字と同じDOM項目へoutline情報だけを先に渡す。
-+	if (gdweb_text_capture_outline(p_canvas, get_instance_id(), p_outline_size, p_color)) return;
++	if (yuruttoweb_text_capture_outline(p_canvas, get_instance_id(), p_outline_size, p_color)) return;
 +#endif
 +
 @@ -498,0 +530,5 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+	gdweb_text = p_text;
-+	gdweb_font = p_font;
-+	gdweb_font_size = p_font_size;
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++	yuruttoweb_text = p_text;
++	yuruttoweb_font = p_font;
++	yuruttoweb_font_size = p_font_size;
 +#endif
 --- a/scene/resources/text_paragraph.h
 +++ b/scene/resources/text_paragraph.h
 @@ -66,0 +67,6 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+	String gdweb_text; // DOMへ渡す整形前の段落文字列。
-+	Ref<Font> gdweb_font; // DOM Web font対応へ渡す元font。
-+	int gdweb_font_size = 16; // DOMへ渡す文字寸法。
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++	String yuruttoweb_text; // DOMへ渡す整形前の段落文字列。
++	Ref<Font> yuruttoweb_font; // DOM Web font対応へ渡す元font。
++	int yuruttoweb_font_size = 16; // DOMへ渡す文字寸法。
 +#endif
 +
 --- a/scene/resources/text_paragraph.cpp
 +++ b/scene/resources/text_paragraph.cpp
 @@ -34,0 +35,4 @@
 +
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+#include "platform/web/gdweb_text_sync.h"
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++#include "platform/web/yuruttoweb_text_sync.h"
 +#endif
 @@ -326,0 +331,4 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+	gdweb_text.clear();
-+	gdweb_font.unref();
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++	yuruttoweb_text.clear();
++	yuruttoweb_font.unref();
 +#endif
 @@ -351,0 +360,5 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+	copy->gdweb_text = gdweb_text;
-+	copy->gdweb_font = gdweb_font;
-+	copy->gdweb_font_size = gdweb_font_size;
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++	copy->yuruttoweb_text = yuruttoweb_text;
++	copy->yuruttoweb_font = yuruttoweb_font;
++	copy->yuruttoweb_font_size = yuruttoweb_font_size;
 +#endif
 @@ -454,0 +468,7 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+	gdweb_text += p_text;
-+	if (gdweb_font.is_null()) {
-+		gdweb_font = p_font;
-+		gdweb_font_size = p_font_size;
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++	yuruttoweb_text += p_text;
++	if (yuruttoweb_font.is_null()) {
++		yuruttoweb_font = p_font;
++		yuruttoweb_font_size = p_font_size;
 +	}
 +#endif
 @@ -844,0 +865,4 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +	// 登録済み標準Controlでは段落文字だけをDOMへ渡す。
-+	if (gdweb_text_capture_line(p_canvas, get_instance_id(), gdweb_text, gdweb_font.is_valid() ? gdweb_font->get_path() : String(), Rect2(p_pos, get_size()), gdweb_font_size, alignment, p_color, false)) return;
++	if (yuruttoweb_text_capture_line(p_canvas, get_instance_id(), yuruttoweb_text, yuruttoweb_font.is_valid() ? yuruttoweb_font->get_path() : String(), Rect2(p_pos, get_size()), yuruttoweb_font_size, alignment, p_color, false)) return;
 +#endif
 @@ -948,0 +973,4 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
 +	// 通常段落と同じDOM項目へoutline情報だけを先に渡す。
-+	if (gdweb_text_capture_outline(p_canvas, get_instance_id(), p_outline_size, p_color)) return;
++	if (yuruttoweb_text_capture_outline(p_canvas, get_instance_id(), p_outline_size, p_color)) return;
 +#endif
 @@ -1167,0 +1196,5 @@
-+#ifdef GDWEB_TEXT_DOM_ENABLED
-+	gdweb_text = p_text;
-+	gdweb_font = p_font;
-+	gdweb_font_size = p_font_size;
++#ifdef YURUTTOWEB_TEXT_DOM_ENABLED
++	yuruttoweb_text = p_text;
++	yuruttoweb_font = p_font;
++	yuruttoweb_font_size = p_font_size;
 +#endif

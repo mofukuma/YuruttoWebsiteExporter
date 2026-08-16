@@ -14,7 +14,7 @@ dirty通知だけでは、親Node2DやRigidBody2Dの移動を子Controlが必ず
 
 DOM化対象は文字glyphのみ。Label、Button、LinkButtonの背景、枠、icon、入力判定、物理、ShaderはCanvas所有。ButtonのiconはCanvasへ残したまま文字矩形だけを同期。autowrap、文字省略など正確に再現できない設定はCanvasへ戻す。独自fontに対応Web fontがない場合はBrowser標準fontでDOMを維持。
 
-DOM IDは`ObjectID`から`gdweb-text-<id>`を生成。連番対応表を廃止し、Browser検査と解放確認を直接行う。
+DOM IDは`ObjectID`から`yuruttoweb-text-<id>`を生成。連番対応表を廃止し、Browser検査と解放確認を直接行う。
 
 ## 試験群
 

@@ -2,7 +2,7 @@
 
 ## 目的
 
-Godot 4.7.1と`addons/gdweb_site`だけで、検査、PCK、runtime、SEO、route、Web font、Brotli配信物まで生成するExportプラットフォーム。
+Godot 4.7.1と`addons/yuruttoweb_site`だけで、検査、PCK、runtime、SEO、route、Web font、Brotli配信物まで生成するExportプラットフォーム。
 
 ## 構成
 
@@ -10,9 +10,9 @@ Godot 4.7.1と`addons/gdweb_site`だけで、検査、PCK、runtime、SEO、rout
 - `project_check.gd`：文字scene、script、binary resourceの2D境界検査。
 - `site_builder.gd`：設定、SEO HTML、route、asset、Web font、manifest生成。
 - `site_runtime.js`：scene resource pathとBrowser URL・headの同期。
-- `nginx-gdweb.conf`：History fallback、MIME、Brotli選択。
-- `nginx-gdweb-proxy.conf`：既存origin向けHistory fallback例。
-- `templates/yurutto_web.zip`：manifest対応runtimeと事前圧縮`.br`。
+- `nginx-yuruttoweb.conf`：History fallback、MIME、Brotli選択。
+- `nginx-yuruttoweb-proxy.conf`：既存origin向けHistory fallback例。
+- `templates/yuruttoweb.zip`：manifest対応runtimeと事前圧縮`.br`。
 
 ## Export設定
 
@@ -27,7 +27,7 @@ Node.jsのpath設定なし。Site、route、font、OGPの各設定だけを表�
 
 ## Site生成
 
-- `gdweb-site.json`のscene key、scene path、URI、title、概要を検証。
+- `yuruttoweb-site.json`のscene key、scene path、URI、title、概要を検証。
 - Hashを既定、Historyを選択可能。
 - base URLの公開pathをnginx内部rewriteへ反映。
 - canonical、description、robots、OGP、Twitter、JSON-LD、favicon、sitemapを生成。
@@ -39,7 +39,7 @@ Node.jsのpath設定なし。Site、route、font、OGPの各設定だけを表�
 ## 圧縮
 
 - JavaScriptとWebAssemblyの固定runtimeへ事前生成Brotliを同梱。
-- rawと`.br`のbyte数・SHA-256を`gdweb-compression.json`へ記録。
+- rawと`.br`のbyte数・SHA-256を`yuruttoweb-compression.json`へ記録。
 - nginxは`Accept-Encoding: br`のときだけ`.br`を配信。
 - project固有JavaScriptはraw配信を許可し、隣接`.br`を任意利用。
 

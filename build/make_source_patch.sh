@@ -4,10 +4,10 @@
 
 set -eu
 
-repo=$(cd "$(dirname "$0")/.." && pwd) # gdweb project root。
+repo=$(cd "$(dirname "$0")/.." && pwd) # yuruttoweb project root。
 source_root=${1:-$repo/tmp/godot-minimum-source} # 文字同期を適用したGodot source。
 archive=$repo/tmp/godot-4.7.1-stable.tar.xz # 固定本家source。
-output=$repo/build/patches/web_gdweb_text.patch # 再現buildへ使う差分。
+output=$repo/build/patches/web_yuruttoweb_text.patch # 再現buildへ使う差分。
 work=$(mktemp -d "$repo/tmp/patchgen.XXXXXX") # 比較専用の一時展開先。
 trap 'rm -rf "$work"' EXIT
 

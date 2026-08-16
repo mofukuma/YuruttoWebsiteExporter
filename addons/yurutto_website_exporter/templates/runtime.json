@@ -19,10 +19,10 @@
   "inputs": {
     "sourceLockSha256": "5224af5d7afa0ddffda7a0ae9eb012bbd10492c918a1221f34df6dd4980a09ac",
     "distributionLockSha256": "4043facbd3f096584ed6ee63c3cb8f6e2237095df084b4934ea55a7b13853896",
-    "runtimeOptionsSha256": "0e4c77361e8a6d15f3d53e0ea6049e4b59c291a264a4ea5d43866e05b21cecf9",
-    "patchSha256": "d62fdb3041c97f6b5ab0e1d322fbccaa8946844dd05a29a200581562cdd0f86d",
-    "overlaySha256": "47568efd093a1b29ccc163ebe1da26de191def7d072af5e0a5bacaa3d865ac53",
-    "buildSha256": "fba3ff53516c0216280362093b8c1400d552f043d62ad12580c17957a26b4b17"
+    "runtimeOptionsSha256": "7300447afff4c183be0988a8d0d74bc650e698b87111890d49cbfcfcbf884f65",
+    "patchSha256": "7b271e6f5422914e575f8c68a772c376cf0d813d618ff11d84cfdba962fb62f0",
+    "overlaySha256": "751fee478ac4f8e0a6b9b50d2796954c129a576119a325432540dd22a4bba9c1",
+    "buildSha256": "f2e618d7f641314cbf7256b77fc7f032f37ea84d483036727c0dd1805c981342"
   },
   "features": {
     "domText": true,
@@ -34,8 +34,8 @@
   "options": [
     "platform=web",
     "target=template_release",
-    "extra_suffix=gdwebminimum",
-    "gdweb_text_dom=yes",
+    "extra_suffix=yuruttowebminimum",
+    "yuruttoweb_text_dom=yes",
     "optimize=size_extra",
     "lto=none",
     "debug_symbols=no",
@@ -57,19 +57,19 @@
     "progress=no"
   ],
   "template": {
-    "file": "yurutto_web.zip",
-    "bytes": 13854253,
-    "sha256": "cdc4262f15a8dc7a93ff9d4bd8cf6dfcb14ac966d779cc13ffe74007c18e0d25",
+    "file": "yuruttoweb.zip",
+    "bytes": 13854814,
+    "sha256": "d4dafd5410ca5f4a2726b6a0029489a4ebe44c5ba52985319ce347cea8702d5f",
     "entries": [
       {
         "file": "godot.js",
-        "bytes": 262015,
-        "sha256": "dafc924badde2fa308bc0e8faf9b1fe8297e3692127650498cef07803e37149a"
+        "bytes": 262685,
+        "sha256": "dcac0f809c2a05717c8c03588d23a84be0cb16db99c2090b88a22d0d8ac2a334"
       },
       {
         "file": "godot.wasm",
-        "bytes": 23942056,
-        "sha256": "2db27e067ba97f2dc0c1eb979389897b5b8565d4d36a8da4b25807cb3c747169"
+        "bytes": 23942052,
+        "sha256": "4e5a1acc88d6676a830920289d9fb70f4942621a4781bf961725f8243aa8b502"
       },
       {
         "file": "godot.audio.worklet.js",
@@ -98,13 +98,13 @@
       },
       {
         "file": "godot.js.br",
-        "bytes": 62891,
-        "sha256": "548b6b93e8ce53731592fc586a78752794a43c84f68192d2c5f76ea5c5071660"
+        "bytes": 62895,
+        "sha256": "8aec71f345e34d0c82ac93f65c40f772f7f5f8f9b84430783519f7825986f405"
       },
       {
         "file": "godot.wasm.br",
-        "bytes": 6208126,
-        "sha256": "6dc831c85f25f34641858c16bda087a2e96c881660e9aee9a595ac35ee6f99b2"
+        "bytes": 6207485,
+        "sha256": "ebbde3d9044442adedd6e62af386a43b19681d7e6f2737fdda6717dabcb5ac0a"
       },
       {
         "file": "godot.audio.worklet.js.br",
@@ -140,19 +140,19 @@
       },
       {
         "file": "godot.js",
-        "originalBytes": 262015,
-        "brotliBytes": 62891,
-        "ratio": 0.24,
-        "sha256": "dafc924badde2fa308bc0e8faf9b1fe8297e3692127650498cef07803e37149a",
-        "brotliSha256": "548b6b93e8ce53731592fc586a78752794a43c84f68192d2c5f76ea5c5071660"
+        "originalBytes": 262685,
+        "brotliBytes": 62895,
+        "ratio": 0.2394,
+        "sha256": "dcac0f809c2a05717c8c03588d23a84be0cb16db99c2090b88a22d0d8ac2a334",
+        "brotliSha256": "8aec71f345e34d0c82ac93f65c40f772f7f5f8f9b84430783519f7825986f405"
       },
       {
         "file": "godot.wasm",
-        "originalBytes": 23942056,
-        "brotliBytes": 6208126,
+        "originalBytes": 23942052,
+        "brotliBytes": 6207485,
         "ratio": 0.2593,
-        "sha256": "2db27e067ba97f2dc0c1eb979389897b5b8565d4d36a8da4b25807cb3c747169",
-        "brotliSha256": "6dc831c85f25f34641858c16bda087a2e96c881660e9aee9a595ac35ee6f99b2"
+        "sha256": "4e5a1acc88d6676a830920289d9fb70f4942621a4781bf961725f8243aa8b502",
+        "brotliSha256": "ebbde3d9044442adedd6e62af386a43b19681d7e6f2737fdda6717dabcb5ac0a"
       }
     ]
   }

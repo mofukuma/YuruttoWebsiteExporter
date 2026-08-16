@@ -21,19 +21,19 @@ Godot sceneをpageとして扱い、Web exportだけで検索、共有、直リ�
 
 | 設定 | 型 | 内容 |
 |---|---|---|
-| `gdweb/site/enabled` | bool | site書き出し。既定ON |
-| `gdweb/site/config` | file | scene情報JSON |
-| `gdweb/site/base_url` | string | canonical、OGP、sitemapのorigin |
-| `gdweb/site/title` | string | site既定title |
-| `gdweb/site/description` | string | site既定概要 |
-| `gdweb/site/locale` | string | HTMLとOGPの言語 |
-| `gdweb/site/favicon` | file | site icon |
-| `gdweb/routing/mode` | enum | Hash、History。Hash既定 |
-| `gdweb/font/matching_webfont` | bool | Theme fontと同じpathのwoff2使用。既定ON |
-| `gdweb/ogp/image` | file | 全pageで共有する一枚のOGP画像 |
-| `gdweb/ogp/alt` | string | 共有画像の代替説明 |
-| `gdweb/ogp/frame` | int | Autoで撮影する描画frame。既定2 |
-| `gdweb/ogp/auto` | tool button | 現在Sceneを指定frameまで動かし1200×630で保存 |
+| `yuruttoweb/site/enabled` | bool | site書き出し。既定ON |
+| `yuruttoweb/site/config` | file | scene情報JSON |
+| `yuruttoweb/site/base_url` | string | canonical、OGP、sitemapのorigin |
+| `yuruttoweb/site/title` | string | site既定title |
+| `yuruttoweb/site/description` | string | site既定概要 |
+| `yuruttoweb/site/locale` | string | HTMLとOGPの言語 |
+| `yuruttoweb/site/favicon` | file | site icon |
+| `yuruttoweb/routing/mode` | enum | Hash、History。Hash既定 |
+| `yuruttoweb/font/matching_webfont` | bool | Theme fontと同じpathのwoff2使用。既定ON |
+| `yuruttoweb/ogp/image` | file | 全pageで共有する一枚のOGP画像 |
+| `yuruttoweb/ogp/alt` | string | 共有画像の代替説明 |
+| `yuruttoweb/ogp/frame` | int | Autoで撮影する描画frame。既定2 |
+| `yuruttoweb/ogp/auto` | tool button | 現在Sceneを指定frameまで動かし1200×630で保存 |
 
 設定警告へJSON parse error、scene不足、URI重複、base URL不正を表示。OGP Autoは保存済み現在Sceneを独立processで実行し、Editor実行状態を変えない。
 
@@ -105,12 +105,12 @@ Theme fontが`res://path/name.otf`または`.ttf`の場合、同じ`res://path/n
 index.html
 about/index.html
 404.html
-gdweb-site.json
-gdweb-site.js
+yuruttoweb-site.json
+yuruttoweb-site.js
 sitemap.xml
 robots.txt
 favicon.svg
-nginx-gdweb.conf.example
+nginx-yuruttoweb.conf.example
 ```
 
 route HTMLは同じ`.wasm`、`.pck`、JavaScriptを参照。相対path差をなくすためasset URLをsite root基準へ統一。`summary`は起動前の`main`と`noscript`へ配置し、Godot開始後に除去。画面内容と異なるcrawler専用文面は禁止。
@@ -125,7 +125,7 @@ Minimum runtimeの毎frame同期へScene専用callbackを追加。`javascript_ev
 2. 初回は`history.replaceState`、通常遷移は`history.pushState`。
 3. `document.title`、description、canonical、OGP、Twitter、JSON-LDを差分更新。
 4. scene styleを交換。scriptはIDまたはURLごとに一回だけ読み込み。
-5. `gdweb:scene-leave`と`gdweb:scene-enter`を通知し、script側の後処理を可能にする。
+5. `yuruttoweb:scene-leave`と`yuruttoweb:scene-enter`を通知し、script側の後処理を可能にする。
 
 ### BrowserからGodot
 

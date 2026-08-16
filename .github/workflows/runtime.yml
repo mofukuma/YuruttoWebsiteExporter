@@ -21,6 +21,6 @@ jobs:
       - name: Upload addon
         uses: actions/upload-artifact@v4
         with:
-          name: gdweb-site-${{ github.sha }}
+          name: yuruttoweb-site-${{ github.sha }}
           path: addons/yurutto_website_exporter
           if-no-files-found: error

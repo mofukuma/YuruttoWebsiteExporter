@@ -49,24 +49,24 @@ sh build/build_distribution.sh
 
 Godot版を上げる場合は`build/source.lock`、patch、overlayを更新し、この一括buildと全回帰の合格後にtemplateと`runtime.json`を配布。GitHub Actionsの`Build distribution runtime`からも同じ入口を実行可能。
 
-Site情報は`res://gdweb-site.json`へ記述。Sceneを表すkeyへscene resource、URI、title、descriptionを対応付け。実行時は一意なscene resource pathで照合するため、root Node名の変更に影響されない構成。Export設定側にはbase URL、locale、favicon、OGP画像、routing、Web fontを用意。
+Site情報は`res://yuruttoweb-site.json`へ記述。Sceneを表すkeyへscene resource、URI、title、descriptionを対応付け。実行時は一意なscene resource pathで照合するため、root Node名の変更に影響されない構成。Export設定側にはbase URL、locale、favicon、OGP画像、routing、Web fontを用意。
 
 OGP画像は一枚の指定からOpen GraphとTwitter Cardへ展開。`OGP Frame`で撮影frameを指定し、`OGP Auto`でEditor上の保存済みSceneを実行。元画面の縦横比を保って中央切り抜きし、`res://web/ogp.png`へ1200×630 PNGとして保存。
 
-Themeで`res://fonts/Title.otf`を使う場合、`res://fonts/Title.woff2`があれば同じfontとしてDOMへ適用。`GDWeb > Font > Matching Webfont`は既定ON。対応するWeb fontがない場合もDOM表示を維持し、Browser標準`sans-serif`を使用。Web fontはproject由来の外部assetであり、ON、OFF、fileなしのいずれもJS、WASM、各Brotliは同一。WOFF2は内部圧縮済みのため追加の`.woff2.br`は生成しない。
+Themeで`res://fonts/Title.otf`を使う場合、`res://fonts/Title.woff2`があれば同じfontとしてDOMへ適用。`YuruttoWeb > Font > Matching Webfont`は既定ON。対応するWeb fontがない場合もDOM表示を維持し、Browser標準`sans-serif`を使用。Web fontはproject由来の外部assetであり、ON、OFF、fileなしのいずれもJS、WASM、各Brotliは同一。WOFF2は内部圧縮済みのため追加の`.woff2.br`は生成しない。
 
-`GDWeb > Font > Avoid Canvas Theme Font`は既定ON。再現できない文字装飾をwarning後にBrowser標準表示へ置換。OFFでは該当文字だけをGodot標準Canvas表示へ退避。背景、icon、focus枠、pointer処理は設定に関係なくCanvasへ維持。
+`YuruttoWeb > Font > Avoid Canvas Theme Font`は既定ON。再現できない文字装飾をwarning後にBrowser標準表示へ置換。OFFでは該当文字だけをGodot標準Canvas表示へ退避。背景、icon、focus枠、pointer処理は設定に関係なくCanvasへ維持。
 
-Routing既定はserver設定不要のHash。SEOと`/about/`直リンクにはHistoryを選び、成果物の`nginx-gdweb.conf.example`を使用。base URLに`/site/`のような公開pathがある場合も、同設定へ内部rewriteを自動生成。
+Routing既定はserver設定不要のHash。SEOと`/about/`直リンクにはHistoryを選び、成果物の`nginx-yuruttoweb.conf.example`を使用。base URLに`/site/`のような公開pathがある場合も、同設定へ内部rewriteを自動生成。
 
 ```sh
 docker run --rm -p 8080:8080 \
   -v "$PWD/tmp/omochi-game/site:/usr/share/nginx/html:ro" \
-  -v "$PWD/tmp/omochi-game/site/nginx-gdweb.conf.example:/etc/nginx/conf.d/default.conf:ro" \
+  -v "$PWD/tmp/omochi-game/site/nginx-yuruttoweb.conf.example:/etc/nginx/conf.d/default.conf:ro" \
   nginx:alpine
 ```
 
-別のstatic originを前段nginxから配信する場合は`nginx-gdweb-proxy.conf.example`を使用。History APIのfallbackだけでなく、既知routeごとの静的metadataを生成する構成。
+別のstatic originを前段nginxから配信する場合は`nginx-yuruttoweb-proxy.conf.example`を使用。History APIのfallbackだけでなく、既知routeごとの静的metadataを生成する構成。
 
 ## 対象範囲
 
