@@ -19,7 +19,8 @@ const template = path.join(addon, 'yuruttoweb.zip'); // 一つの対応版runtim
 const runtimeManifest = path.join(addon, 'runtime.json'); // versionと由来の正本。
 const rawEntries = ['godot.js', 'godot.wasm', 'godot.audio.worklet.js', 'godot.audio.position.worklet.js', 'godot.html']; // Godot Web起動物。
 const compressedEntries = rawEntries.filter((name) => name.endsWith('.js') || name.endsWith('.wasm')); // Brotliを持つ転送対象。
-const licenseEntries = ['GODOT_LICENSE.txt', 'GODOT_COPYRIGHT.txt']; // Godotと組込依存の通知。
+const licenseEntries = ['GODOT_LICENSE.txt']; // Godot本体と組込依存の通知を一つへまとめた成果物。
+const licenseSources = ['LICENSES/GODOT-MIT.txt', 'LICENSES/GODOT-COPYRIGHT.txt']; // 通知の追跡元。
 
 // fileまたはBufferのSHA-256を返す。
 function sha(value) {
@@ -96,8 +97,8 @@ function pack() {
 	const stage = fs.mkdtempSync(path.join(out, 'runtime-package.'));
 	try {
 		child.execFileSync('unzip', ['-oq', archive, ...rawEntries, '-d', stage]);
-		fs.copyFileSync(path.join(repo, 'LICENSES/GODOT-MIT.txt'), path.join(stage, licenseEntries[0]));
-		fs.copyFileSync(path.join(repo, 'LICENSES/GODOT-COPYRIGHT.txt'), path.join(stage, licenseEntries[1]));
+		const notice = licenseSources.map((file) => fs.readFileSync(path.join(repo, file), 'utf8').replace(/\n*$/, '\n')).join('\n');
+		fs.writeFileSync(path.join(stage, licenseEntries[0]), notice);
 		const brotli = compressSite(stage, quality);
 		const packed = [...rawEntries, ...licenseEntries, ...compressedEntries.map((name) => `${name}.br`)];
 		for (const name of [...packed, 'yuruttoweb-compression.json']) fs.utimesSync(path.join(stage, name), epoch, epoch);

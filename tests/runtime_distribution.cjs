@@ -124,9 +124,8 @@ for (const item of manifest.brotli.entries) {
 	const encoded = child.execFileSync('unzip', ['-p', template, `${item.file}.br`], buffer);
 	assert.deepEqual(zlib.brotliDecompressSync(encoded), raw, `Brotli不一致: ${item.file}`);
 }
-for (const [name, sourceFile] of [['GODOT_LICENSE.txt', 'GODOT-MIT.txt'], ['GODOT_COPYRIGHT.txt', 'GODOT-COPYRIGHT.txt']]) {
-	assert.deepEqual(child.execFileSync('unzip', ['-p', template, name], buffer), fs.readFileSync(path.join(root, 'LICENSES', sourceFile)));
-}
+const notice = ['GODOT-MIT.txt', 'GODOT-COPYRIGHT.txt'].map((file) => fs.readFileSync(path.join(root, 'LICENSES', file), 'utf8').replace(/\n*$/, '\n')).join('\n');
+assert.equal(child.execFileSync('unzip', ['-p', template, 'GODOT_LICENSE.txt'], { ...buffer, encoding: 'utf8' }), notice);
 
 fs.rmSync(work, { recursive: true, force: true });
 fs.mkdirSync(work, { recursive: true });

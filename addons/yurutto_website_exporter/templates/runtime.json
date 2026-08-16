@@ -22,7 +22,7 @@
     "runtimeOptionsSha256": "7300447afff4c183be0988a8d0d74bc650e698b87111890d49cbfcfcbf884f65",
     "patchSha256": "7b271e6f5422914e575f8c68a772c376cf0d813d618ff11d84cfdba962fb62f0",
     "overlaySha256": "751fee478ac4f8e0a6b9b50d2796954c129a576119a325432540dd22a4bba9c1",
-    "buildSha256": "f2e618d7f641314cbf7256b77fc7f032f37ea84d483036727c0dd1805c981342"
+    "buildSha256": "1ce491bb631fabe81f81f38b8eef7012e32cfa90fc8a241d2e99434cc4e639a3"
   },
   "features": {
     "domText": true,
@@ -58,8 +58,8 @@
   ],
   "template": {
     "file": "yuruttoweb.zip",
-    "bytes": 13854814,
-    "sha256": "d4dafd5410ca5f4a2726b6a0029489a4ebe44c5ba52985319ce347cea8702d5f",
+    "bytes": 13854422,
+    "sha256": "90ee9d738b9592dbad7d69bd4b34ce62d3af99e0a2e4549f8ec11af2ae8bdf7d",
     "entries": [
       {
         "file": "godot.js",
@@ -88,13 +88,8 @@
       },
       {
         "file": "GODOT_LICENSE.txt",
-        "bytes": 1149,
-        "sha256": "b0435e3b3e4e55238f05f4b306f30524a1b2e20147810d436eaa554fa6855c80"
-      },
-      {
-        "file": "GODOT_COPYRIGHT.txt",
-        "bytes": 100108,
-        "sha256": "cb1980c88089573bcacd7221d777c689bb8bbd778799f24c27fca0fe5f774d6d"
+        "bytes": 101258,
+        "sha256": "5f25536760d1055ad3fc037c5c92499ce0fced0427a7a241f1bbab092f66889a"
       },
       {
         "file": "godot.js.br",
