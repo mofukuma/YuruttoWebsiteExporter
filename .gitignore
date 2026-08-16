@@ -1,28 +1,62 @@
-# 秘密情報と再生成可能な中間物をGit管理から除外する。
+# 秘密情報、環境固有file、再生成できる中間物をGit管理から除外する。
+
+# 秘密情報と署名鍵
 .env
 .env.*
 !.env.example
+*.pem
+*.p12
+*.keystore
+
+# OS生成file
 .DS_Store
-tmp/
-**/.godot/
-**/*.import
-node_modules/
-.npm/
-.scons_cache/
-coverage/
-*.log
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+
+# Editorと開発tool
 .idea/
 .vscode/
 *.swp
+*.swo
+*~
+.claude/settings.local.json
+.claude/worktrees/
+
+# Godotが再生成するimport cache
+**/.godot/
+**/*.import
+
+# 利用者projectへ複製した配布addon
 examples/*/addons/gdweb_site/
-# 検査用Web fontはbuild/fetch_webfont.cjsで取得する。
+
+# Node
+node_modules/
+.npm/
+npm-debug.log*
+
+# Build中間物とtoolchain cache
+tmp/
+.scons_cache/
+.sconsign.dblite
+__pycache__/
+*.pyc
+*.o
+*.os
+*.obj
+
+# 検査成果物
+coverage/
+*.log
+
+# Web fontはbuild/fetch_webfont.cjsで取得し、repositoryへ含めない
 *.ttf
 *.otf
+*.woff
 *.woff2
-# 外部sourceの取得素材を含む個人用exampleとその検査。
-examples/progsha_site/
-tests/progsha_site.cjs
-tests/progsha_assets.cjs
-tests/progsha_site_scene.gd
-ログ/実装計画_progsha白テーマ再現.md
-ログ/調査メモ_progsha再現の件.md
+*.eot
+
+# 外部sourceの取得素材など、公開しない個人用の資材と検査
+private/

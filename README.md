@@ -91,5 +91,6 @@ node tmp/playwright/node_modules/playwright-core/cli.js install chromium
 
 ## ライセンス
 
-project codeは権利留保。[LICENSE](LICENSE)を参照。同梱する第三者componentは[Third-party notices](THIRD_PARTY_NOTICES.md)を参照。
+project codeは権利留保。
+内蔵runtimeはGodot Engine (MIT) 由来。license本文は`LICENSES/`を正本とし、配布templateと書き出した成果物へ`GODOT_LICENSE.txt`と`GODOT_COPYRIGHT.txt`として同梱。
 project内の`.woff2`を公開する場合、そのfontに対応するlicense通知はproject側で同梱。
