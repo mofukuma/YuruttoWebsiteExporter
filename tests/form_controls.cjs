@@ -173,10 +173,14 @@ async function compose(page, selector, value) {
 		const controlRects = await page.evaluate(() => [...document.querySelectorAll('[data-gdweb-kind="ControlText"]')].map((node) => {
 			const box = node.getBoundingClientRect();
 			const style = getComputedStyle(node);
-			return { text: node.textContent, box: { x: box.x, y: box.y, width: box.width, height: box.height }, local: { width: Number.parseFloat(node.style.width), height: Number.parseFloat(node.style.height) }, scroll: { width: node.scrollWidth, height: node.scrollHeight }, whiteSpace: style.whiteSpace, fontSize: style.fontSize, transform: style.transform };
+			const measure = document.createElement('canvas').getContext('2d');
+			measure.font = `${style.fontSize} ${style.fontFamily}`;
+			const glyph = measure.measureText(node.textContent); // Browserが実際に描く文字の上下端。
+			return { text: node.textContent, box: { x: box.x, y: box.y, width: box.width, height: box.height }, local: { width: Number.parseFloat(node.style.width), height: Number.parseFloat(node.style.height) }, scroll: { width: node.scrollWidth, height: node.scrollHeight }, lineHeight: Number.parseFloat(style.lineHeight), ink: Number((glyph.actualBoundingBoxAscent + glyph.actualBoundingBoxDescent).toFixed(2)), whiteSpace: style.whiteSpace, fontSize: style.fontSize, transform: style.transform };
 		}));
 		assert.ok(controlRects.every((item) => item.whiteSpace === 'pre'), '標準Control文字が折返された');
-		assert.ok(controlRects.every((item) => item.scroll.height <= item.local.height + 1), '標準Control文字が縦にはみ出した');
+		assert.ok(controlRects.every((item) => item.lineHeight === item.local.height), `DOM行ボックスがGodot確定高さと不一致: ${JSON.stringify(controlRects.filter((item) => item.lineHeight !== item.local.height))}`);
+		assert.ok(controlRects.every((item) => item.ink <= item.local.height), `標準Control文字が縦にはみ出した: ${JSON.stringify(controlRects.filter((item) => item.ink > item.local.height))}`);
 		await page.screenshot({ path: path.join(out, 'form-controls.png') });
 
 		// option無効時だけ再現不能な文字をCanvas標準fontへ戻す。

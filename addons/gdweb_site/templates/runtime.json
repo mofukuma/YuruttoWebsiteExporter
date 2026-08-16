@@ -21,7 +21,7 @@
     "distributionLockSha256": "4043facbd3f096584ed6ee63c3cb8f6e2237095df084b4934ea55a7b13853896",
     "runtimeOptionsSha256": "0e4c77361e8a6d15f3d53e0ea6049e4b59c291a264a4ea5d43866e05b21cecf9",
     "patchSha256": "d62fdb3041c97f6b5ab0e1d322fbccaa8946844dd05a29a200581562cdd0f86d",
-    "overlaySha256": "7fb89a6bd6731f4e2347d4706e92ed94127f0d39d5e2c60ef99103c563f57e6d",
+    "overlaySha256": "47568efd093a1b29ccc163ebe1da26de191def7d072af5e0a5bacaa3d865ac53",
     "buildSha256": "b8e515d6901fec0a972618c5b46b9818ec3677720e94855b9db461647e67b752"
   },
   "features": {
@@ -58,13 +58,13 @@
   ],
   "template": {
     "file": "yurutto_web.zip",
-    "bytes": 13854228,
-    "sha256": "0f052ce05e8b68803fb66318b13cbd1853ba310bf0250b4c3d0d04f8f144a8f6",
+    "bytes": 13854253,
+    "sha256": "cdc4262f15a8dc7a93ff9d4bd8cf6dfcb14ac966d779cc13ffe74007c18e0d25",
     "entries": [
       {
         "file": "godot.js",
-        "bytes": 261999,
-        "sha256": "8435608331d694c844062ff04c7f65ae50333af3087710bc5a59e83e3ec63ad9"
+        "bytes": 262015,
+        "sha256": "dafc924badde2fa308bc0e8faf9b1fe8297e3692127650498cef07803e37149a"
       },
       {
         "file": "godot.wasm",
@@ -98,8 +98,8 @@
       },
       {
         "file": "godot.js.br",
-        "bytes": 62871,
-        "sha256": "650e3faa160d3f2ab2046b7acc9aa286b5f32a8a758cade1b88d951d0e5c8999"
+        "bytes": 62891,
+        "sha256": "548b6b93e8ce53731592fc586a78752794a43c84f68192d2c5f76ea5c5071660"
       },
       {
         "file": "godot.wasm.br",
@@ -140,11 +140,11 @@
       },
       {
         "file": "godot.js",
-        "originalBytes": 261999,
-        "brotliBytes": 62871,
+        "originalBytes": 262015,
+        "brotliBytes": 62891,
         "ratio": 0.24,
-        "sha256": "8435608331d694c844062ff04c7f65ae50333af3087710bc5a59e83e3ec63ad9",
-        "brotliSha256": "650e3faa160d3f2ab2046b7acc9aa286b5f32a8a758cade1b88d951d0e5c8999"
+        "sha256": "dafc924badde2fa308bc0e8faf9b1fe8297e3692127650498cef07803e37149a",
+        "brotliSha256": "548b6b93e8ce53731592fc586a78752794a43c84f68192d2c5f76ea5c5071660"
       },
       {
         "file": "godot.wasm",
