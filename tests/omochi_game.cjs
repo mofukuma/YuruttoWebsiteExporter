@@ -10,7 +10,7 @@ const { createServer } = require('../build/serve_web.cjs');
 
 const root = path.resolve(__dirname, '..'); // gdweb project root。
 const project = path.join(root, 'examples/omochi_game'); // 検査対象Godot project。
-const site = path.join(root, 'tmp/omochi-game/site'); // Brotli済みWeb成果物。
+const site = require('./site.cjs').ensure(path.join(root, 'examples/omochi_game'), path.join(root, 'tmp/omochi-game/site')); // Brotli済みWeb成果物。
 const output = path.join(root, 'tmp/omochi-game'); // 数値結果と確認画像の保存先。
 const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot 4.7.1。
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。

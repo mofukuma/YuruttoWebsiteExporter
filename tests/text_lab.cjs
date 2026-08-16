@@ -8,7 +8,8 @@ const http = require('node:http');
 const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 
-const root = path.resolve(__dirname, '../tmp/text-lab/site'); // 全機能ラボのWeb成果物。
+const { ensure } = require('./site.cjs'); // 検査対象成果物の書き出し。
+const root = ensure(path.resolve(__dirname, '../examples/text_lab'), path.resolve(__dirname, '../tmp/text-lab/site')); // 全機能ラボのWeb成果物。
 const out = path.resolve(__dirname, '../tmp/text-lab'); // 数値結果と確認画像の保存先。
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.woff2': 'font/woff2' }; // 配信に必要な応答型。
