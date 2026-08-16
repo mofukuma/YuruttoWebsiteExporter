@@ -11,7 +11,7 @@ const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 const { ensure, stem } = require('../build/fetch_webfont.cjs');
 
-const repo = path.resolve(__dirname, '..'); // yuruttoweb project root。
+const repo = path.resolve(__dirname, '..'); // yweb project root。
 const root = path.join(repo, 'tmp/site-export'); // 全中間成果物。
 const project = path.join(root, 'project'); // exporter fixture project。
 const hashOut = path.join(root, 'hash'); // 無設定配信用Hash成果物。
@@ -35,8 +35,8 @@ function fixture(mode, target) {
 	fs.writeFileSync(path.join(project, 'main.tscn'), '[gd_scene format=3]\n[node name="Main" type="Node"]\n');
 	fs.writeFileSync(path.join(project, 'about.tscn'), '[gd_scene format=3]\n[node name="About" type="Node"]\n');
 	const basePath = mode === 1 ? '/sub/' : '/';
-	fs.writeFileSync(path.join(project, 'export_presets.cfg'), `[preset.0]\nname="Web"\nplatform="ゆるっとWebサイト"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\nhtml/focus_canvas_on_start=true\nyuruttoweb/site/enabled=true\nyuruttoweb/site/config="res://yuruttoweb-site.json"\nyuruttoweb/site/base_url="http://127.0.0.1:${sitePort}${basePath}"\nyuruttoweb/site/title="Site Test"\nyuruttoweb/site/description="既定概要"\nyuruttoweb/site/locale="ja_JP"\nyuruttoweb/site/favicon=""\nyuruttoweb/routing/mode=${mode}\nyuruttoweb/font/matching_webfont=true\nyuruttoweb/font/avoid_canvas_theme_font=true\nyuruttoweb/ogp/image="res://web/ogp.png"\nyuruttoweb/ogp/alt="自動生成OGP"\nvram_texture_compression/for_desktop=true\n`);
-	fs.writeFileSync(path.join(project, 'yuruttoweb-site.json'), JSON.stringify({ version: 1, scenes: {
+	fs.writeFileSync(path.join(project, 'export_presets.cfg'), `[preset.0]\nname="Web"\nplatform="ゆるっとWebサイト"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\nhtml/focus_canvas_on_start=true\nyweb/site/enabled=true\nyweb/site/config="res://yweb-site.json"\nyweb/site/base_url="http://127.0.0.1:${sitePort}${basePath}"\nyweb/site/title="Site Test"\nyweb/site/description="既定概要"\nyweb/site/locale="ja_JP"\nyweb/site/favicon=""\nyweb/routing/mode=${mode}\nyweb/font/matching_webfont=true\nyweb/font/avoid_canvas_theme_font=true\nyweb/ogp/image="res://web/ogp.png"\nyweb/ogp/alt="自動生成OGP"\nvram_texture_compression/for_desktop=true\n`);
+	fs.writeFileSync(path.join(project, 'yweb-site.json'), JSON.stringify({ version: 1, scenes: {
 		Main: { scene: 'res://main.tscn', uri: '/', title: 'メイン', description: 'メイン概要', scripts: [{ src: 'res://web/main.js', defer: true }], meta: [{ name: 'theme-color', content: '#111111' }], json_ld: { '@context': 'https://schema.org', '@type': 'WebPage', name: 'Main' } },
 		About: { scene: 'res://about.tscn', uri: '/about/', title: '概要ページ', description: '概要の説明', scripts: [{ src: 'res://web/about.js', defer: true }], meta: [{ name: 'theme-color', content: '#222222' }], json_ld: { '@context': 'https://schema.org', '@type': 'AboutPage', name: 'About' } },
 	} }));
@@ -86,21 +86,21 @@ async function ready(port) {
 async function main() {
 	fixture(0, hashOut);
 	const hashHtml = fs.readFileSync(path.join(hashOut, 'index.html'), 'utf8');
-	const hashData = JSON.parse(fs.readFileSync(path.join(hashOut, 'yuruttoweb-site.json')));
+	const hashData = JSON.parse(fs.readFileSync(path.join(hashOut, 'yweb-site.json')));
 	assert.match(hashHtml, /og:image:width" content="1200"/);
 	assert.match(hashHtml, /og:image:height" content="630"/);
 	assert.equal(hashData.mode, 'Hash');
 	assert.equal(Object.keys(hashData.webfonts).length, 1);
-	assert.equal(hashHtml.includes('yuruttoweb-site.js'), false, 'site runtimeが外部file化');
-	assert.match(hashHtml, /id="yuruttoweb-site-runtime"/, '埋込site runtimeなし');
+	assert.equal(hashHtml.includes('yweb-site.js'), false, 'site runtimeが外部file化');
+	assert.match(hashHtml, /id="yweb-site-runtime"/, '埋込site runtimeなし');
 	assert.ok(!fs.existsSync(path.join(hashOut, 'about/index.html')));
 
 	fixture(1, historyOut);
 	assert.ok(fs.existsSync(path.join(historyOut, 'about/index.html')));
 	assert.match(fs.readFileSync(path.join(historyOut, 'about/index.html'), 'utf8'), /<title>概要ページ<\/title>/);
-	assert.ok(fs.existsSync(path.join(historyOut, 'nginx-yuruttoweb-proxy.conf.example')));
-	assert.match(fs.readFileSync(path.join(historyOut, 'nginx-yuruttoweb.conf.example'), 'utf8'), /location \^~ \/sub\//);
-	assert.equal(JSON.parse(fs.readFileSync(path.join(historyOut, 'yuruttoweb-compression.json'))).encoding, 'br');
+	assert.ok(fs.existsSync(path.join(historyOut, 'nginx-yweb-proxy.conf.example')));
+	assert.match(fs.readFileSync(path.join(historyOut, 'nginx-yweb.conf.example'), 'utf8'), /location \^~ \/sub\//);
+	assert.equal(JSON.parse(fs.readFileSync(path.join(historyOut, 'yweb-compression.json'))).encoding, 'br');
 
 	const browser = await chromium.launch({ executablePath: browserPath, headless: true });
 	let wasm;
@@ -114,9 +114,9 @@ async function main() {
 		assert.equal(new URL(hashPage.url()).hash, '#/about/');
 		await hashPage.evaluate(() => {
 			window.routeFiles = [];
-			YuruttoWebSite.bind((file) => routeFiles.push(file));
-			YuruttoWebSite.scene('res://about.tscn');
-			YuruttoWebSite.scene('res://main.tscn');
+			YWebSite.bind((file) => routeFiles.push(file));
+			YWebSite.scene('res://about.tscn');
+			YWebSite.scene('res://main.tscn');
 			history.back();
 		});
 		await hashPage.waitForFunction(() => location.hash === '#/about/' && routeFiles.length >= 2);
@@ -126,7 +126,7 @@ async function main() {
 		child.execFileSync('docker', ['stop', raw]);
 		containers.splice(containers.indexOf(raw), 1);
 
-		start(sitePort, historyOut, path.join(historyOut, 'nginx-yuruttoweb.conf.example'));
+		start(sitePort, historyOut, path.join(historyOut, 'nginx-yweb.conf.example'));
 		await ready(sitePort);
 		assert.equal((await request(sitePort, '/unknown/')).status, 200);
 		wasm = await request(sitePort, '/index.wasm', { 'accept-encoding': 'br' });
@@ -145,15 +145,15 @@ async function main() {
 		assert.equal(await page.evaluate(() => window.aboutLoads), 1);
 		assert.equal(await page.locator('script[src="/sub/web/about.js"]').count(), 1);
 		assert.equal(await page.locator('meta[name="theme-color"]').getAttribute('content'), '#222222');
-		assert.equal(JSON.parse(await page.locator('#yuruttoweb-json-ld').textContent())['@type'], 'AboutPage');
+		assert.equal(JSON.parse(await page.locator('#yweb-json-ld').textContent())['@type'], 'AboutPage');
 		await page.evaluate(() => {
 			window.routeFiles = [];
-			YuruttoWebSite.bind((file) => routeFiles.push(file));
-			YuruttoWebSite.scene('res://about.tscn');
+			YWebSite.bind((file) => routeFiles.push(file));
+			YWebSite.scene('res://about.tscn');
 			window.routeEvents = [];
-			document.addEventListener('yuruttoweb:scene-leave', (event) => routeEvents.push(`leave:${event.detail.name}`));
-			document.addEventListener('yuruttoweb:scene-enter', (event) => routeEvents.push(`enter:${event.detail.name}`));
-			YuruttoWebSite.scene('res://main.tscn');
+			document.addEventListener('yweb:scene-leave', (event) => routeEvents.push(`leave:${event.detail.name}`));
+			document.addEventListener('yweb:scene-enter', (event) => routeEvents.push(`enter:${event.detail.name}`));
+			YWebSite.scene('res://main.tscn');
 		});
 		await page.waitForFunction(() => window.mainLoads === 1);
 		assert.equal(new URL(page.url()).pathname, '/sub/');

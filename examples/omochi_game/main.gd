@@ -136,7 +136,7 @@ func _build_catcher() -> void:
 	godou.position = Vector2(-56, 39)
 	godou.size = Vector2(112, 28)
 	godou.theme = text_theme
-	godou.set_meta("yuruttoweb_dom_text", true)
+	godou.set_meta("yweb_dom_text", true)
 	godou.pressed.connect(_godou_pressed)
 	catcher.add_child(godou)
 
@@ -171,7 +171,7 @@ func _spawn_omochi() -> void:
 	button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.theme = text_theme
 	button.add_theme_stylebox_override("normal", _round_box(PINK))
-	button.set_meta("yuruttoweb_dom_text", true)
+	button.set_meta("yweb_dom_text", true)
 	omochi.add_child(button)
 	add_child(omochi)
 	spawn_x = 320.0 + fmod(drops * 173.0, 320.0)
@@ -264,7 +264,7 @@ func _label(node_name: String, text: String, position: Vector2, size: Vector2, f
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
-	label.set_meta("yuruttoweb_dom_text", true)
+	label.set_meta("yweb_dom_text", true)
 	ui.add_child(label)
 	return label
 

@@ -26,7 +26,7 @@ func _supports_platform(platform: EditorExportPlatform) -> bool:
 func _get_export_options(_platform: EditorExportPlatform) -> Array[Dictionary]:
 	return [{
 		"option": {
-			"name": "yuruttoweb/ogp/auto",
+			"name": "yweb/ogp/auto",
 			"type": TYPE_CALLABLE,
 			"hint": PROPERTY_HINT_TOOL_BUTTON,
 			"hint_string": "OGP Auto,Image",
@@ -38,7 +38,7 @@ func _get_export_options(_platform: EditorExportPlatform) -> Array[Dictionary]:
 # Site無効時は撮影ボタンを隠す。
 func _get_export_option_visibility(_platform: EditorExportPlatform, _option: String) -> bool:
 	var preset := get_export_preset()
-	return preset == null or bool(preset.get("yuruttoweb/site/enabled"))
+	return preset == null or bool(preset.get("yweb/site/enabled"))
 
 # 現在Sceneを指定frameまで描画し、縦横比を保った1200x630画像へ保存する。
 func _capture_ogp() -> void:
@@ -47,12 +47,12 @@ func _capture_ogp() -> void:
 		push_error("OGP Autoには保存済みsceneが必要です。")
 		return
 	var preset := get_export_preset()
-	var target := String(preset.get("yuruttoweb/ogp/image")) if preset else OGP_PATH
+	var target := String(preset.get("yweb/ogp/image")) if preset else OGP_PATH
 	if target.is_empty():
 		target = OGP_PATH
 		if preset:
-			preset.set("yuruttoweb/ogp/image", target)
-	var frame := clampi(int(preset.get("yuruttoweb/ogp/frame")), 1, 3600) if preset else 2
+			preset.set("yweb/ogp/image", target)
+	var frame := clampi(int(preset.get("yweb/ogp/frame")), 1, 3600) if preset else 2
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(target.get_base_dir()))
 	var args := PackedStringArray([
 		"--path", ProjectSettings.globalize_path("res://"),

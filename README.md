@@ -32,11 +32,11 @@ Lightweight, SEO-ready godot web export.
 - `404.html`: 知らないアドレスを開かれたとき用
 - `.br`付き: 同じ中身の軽い版。対応しているサーバーなら勝手に選ばれて速い
 - `GODOT_LICENSE.txt`: Godotの表記。一緒に置いたままに
-- `nginx-yuruttoweb.conf*.example`: 自分でサーバーを立てるときだけ使う
+- `nginx-yweb.conf*.example`: 自分でサーバーを立てるときだけ使う
 
 ## ページを増やす
 
-ページを増やしたくなったら`res://yuruttoweb-site.json`を書こう。どのシーンをどのアドレスで見せるか、タイトルと説明を並べるだけ。
+ページを増やしたくなったら`res://yweb-site.json`を書こう。どのシーンをどのアドレスで見せるか、タイトルと説明を並べるだけ。
 シーンはファイルの場所で見分けるから、ルートノードの名前を変えても壊れないよ。
 公開URL、言語、favicon、SNS用の画像、URLの見せかた、Webフォントみたいなサイト全体の話は、エクスポート画面のほうにあるよ。
 
@@ -56,14 +56,14 @@ Lightweight, SEO-ready godot web export.
 
 テーマで`res://fonts/Title.otf`を使っているなら、隣に`res://fonts/Title.woff2`を置けば、Webフォントを使ってくれる。
 
-書体を優先したいときは`YuruttoWeb > Font > Avoid Canvas Theme Font`をオフに。その文字だけGodotの絵で出る。
+書体を優先したいときは`YWeb > Font > Avoid Canvas Theme Font`をオフに。その文字だけGodotの絵で出る。
 
 ## 公開のしかた
 
 URLの見せかたを選べるよ。最初は`/#about`みたいな感じになっている。これはサーバーの設定がいらないので、置くだけで動く。
 `/about/`みたいな普通のアドレスにしたいときはHistoryを選ぼう。ページごとに`/about/index.html`が本物のファイルとして書き出されるから、GitHub Pagesみたいな置き場ならそのままで直リンクも開くよ。
 
-自分でnginxを立てる人は、一緒に出てくる`nginx-yuruttoweb.conf.example`を読ませると楽。軽い`.br`版を選んで配ったり、知らないURLをサイトで受け止めたりしてくれる。
+自分でnginxを立てる人は、一緒に出てくる`nginx-yweb.conf.example`を読ませると楽。軽い`.br`版を選んで配ったり、知らないURLをサイトで受け止めたりしてくれる。
 
 ## SNSに貼ったときサムネイルを出す
 

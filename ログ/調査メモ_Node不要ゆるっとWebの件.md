@@ -9,7 +9,7 @@ Brotli圧縮だけはGodot 4.7.1で生成不可。`FileAccess.COMPRESSION_BROTLI
 ## Export時の処理境界
 
 - project検査：GDScriptの文字検索と`ResourceLoader`によるbinary resource走査。
-- site生成：`EditorExportPreset`の値、`ProjectSettings`、`yuruttoweb-site.json`からGDScriptで生成。
+- site生成：`EditorExportPreset`の値、`ProjectSettings`、`yweb-site.json`からGDScriptで生成。
 - Browser同期：小さなJavaScriptをHTMLへ直接埋込。
 - Brotli：固定runtimeの`.br`を内蔵ZIPから展開。project assetは隣接`.br`がある場合だけ同時配置し、ない場合は通常fileを配信。
 - 配信：`Accept-Encoding`に応じて`.br`または通常fileを選ぶnginx設定。
@@ -32,4 +32,4 @@ Web runtimeはアドオン内で固定されるため、同じhashのJavaScript�
 
 ## 配布物
 
-利用者に必要なものはGodot 4.7.1と`addons/yuruttoweb_site`だけ。Node.js、公式Export template、repository内build scriptを利用時の前提にしない構成。
+利用者に必要なものはGodot 4.7.1と`addons/yweb_site`だけ。Node.js、公式Export template、repository内build scriptを利用時の前提にしない構成。

@@ -126,7 +126,7 @@ func _build_controls() -> void:
 	link.uri = "https://docs.godotengine.org/"
 	link.underline = LinkButton.UNDERLINE_MODE_ALWAYS
 	link.focus_mode = Control.FOCUS_ALL
-	link.set_meta("yuruttoweb_dom_text", true)
+	link.set_meta("yweb_dom_text", true)
 	link.pressed.connect(_link_pressed)
 	ui.add_child(link)
 
@@ -137,7 +137,7 @@ func _build_controls() -> void:
 	line_input.placeholder_text = "日本語 IME"
 	line_input.max_length = 24
 	line_input.text_submitted.connect(_line_submitted)
-	line_input.set_meta("yuruttoweb_dom_text", true)
+	line_input.set_meta("yweb_dom_text", true)
 	ui.add_child(line_input)
 
 	text_area = TextEdit.new()
@@ -145,7 +145,7 @@ func _build_controls() -> void:
 	text_area.position = Vector2(760, 300)
 	text_area.size = Vector2(220, 56)
 	text_area.placeholder_text = "複数行 IME"
-	text_area.set_meta("yuruttoweb_dom_text", true)
+	text_area.set_meta("yweb_dom_text", true)
 	ui.add_child(text_area)
 
 	line_state = _label(ui, "LineModelState", "LINE MODEL::0:0", Vector2.ZERO, Vector2(1, 1), 1, WHITE)
@@ -189,14 +189,14 @@ func _build_controls() -> void:
 	inherited_label.text = "INHERITED THEME"
 	inherited_label.position = Vector2(300, 310)
 	inherited_label.size = Vector2(180, 34)
-	inherited_label.set_meta("yuruttoweb_dom_text", true)
+	inherited_label.set_meta("yweb_dom_text", true)
 	ui.add_child(inherited_label)
 	inherited_button = Button.new()
 	inherited_button.name = "InheritedThemeButton"
 	inherited_button.text = "INHERITED BUTTON"
 	inherited_button.position = Vector2(500, 302)
 	inherited_button.size = Vector2(220, 46)
-	inherited_button.set_meta("yuruttoweb_dom_text", true)
+	inherited_button.set_meta("yweb_dom_text", true)
 	inherited_button.add_theme_stylebox_override("normal", _box(Color("111827"), LINE))
 	ui.add_child(inherited_button)
 
@@ -220,7 +220,7 @@ func _build_fallbacks() -> void:
 	var ellipsis := _label(ui, "EllipsisFallback", "ELLIPSIS FALLBACK LONG", Vector2(1010, 177), Vector2(150, 30), 14, WHITE)
 	ellipsis.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	var canvas_only := _label(ui, "CanvasOnly", "CANVAS ONLY", Vector2(1010, 219), Vector2(180, 30), 14, MUTED)
-	canvas_only.set_meta("yuruttoweb_dom_text", false)
+	canvas_only.set_meta("yweb_dom_text", false)
 	var font_parent := Control.new()
 	font_parent.name = "CustomFontParent"
 	font_parent.position = Vector2(1010, 261)
@@ -345,7 +345,7 @@ func _label(parent: Node, node_name: String, text: String, position: Vector2, si
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
-	label.set_meta("yuruttoweb_dom_text", true)
+	label.set_meta("yweb_dom_text", true)
 	parent.add_child(label)
 	return label
 
@@ -356,7 +356,7 @@ func _button(parent: Node, node_name: String, text: String, position: Vector2, s
 	button.text = text
 	button.position = position
 	button.size = size
-	button.set_meta("yuruttoweb_dom_text", true)
+	button.set_meta("yweb_dom_text", true)
 	button.add_theme_stylebox_override("normal", _box(Color("111827"), LINE))
 	button.add_theme_stylebox_override("hover", _box(Color("172033"), CYAN))
 	button.add_theme_stylebox_override("pressed", _box(Color("25152a"), PINK))

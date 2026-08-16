@@ -19,7 +19,7 @@ Godot 4.7.1 Web exportでCanvasへの文字glyph描画を0件にし、文字表�
 
 ## 現在の所有範囲
 
-`yuruttoweb_text_sync.cpp`とBrowser bridgeが扱う種類。
+`yweb_text_sync.cpp`とBrowser bridgeが扱う種類。
 
 - Label
 - Button派生
@@ -40,7 +40,7 @@ Godot 4.7.1 Web exportでCanvasへの文字glyph描画を0件にし、文字表�
 - CodeEdit、RichTextLabel、BBCodeも後続段階。現在のフォーム実装を塞がない境界。
 - Web font対応がないTheme fontはBrowser標準`sans-serif`へ代替。書き出し停止なし。
 
-複合装飾はwarning後にBrowser標準表示へ代替。`yuruttoweb/font/avoid_canvas_theme_font=false`なら再現不能な項目をCanvasへ退避。`yuruttoweb_dom_text=false`は個別の明示Canvas指定。
+複合装飾はwarning後にBrowser標準表示へ代替。`yweb/font/avoid_canvas_theme_font=false`なら再現不能な項目をCanvasへ退避。`yweb_dom_text=false`は個別の明示Canvas指定。
 
 ## 残存描画
 

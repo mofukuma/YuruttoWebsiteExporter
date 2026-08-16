@@ -41,7 +41,7 @@ TabBar、MenuBar、FoldableContainer、ProgressBarはTextLine、TreeとItemList�
 
 ## 判断
 
-`yuruttoweb_text_capture_line`が渡す矩形は、Godotが確定した一行分の文字の箱そのもの。DOM側は`line-height`にその高さを使い、Browserが選んだfontの行送りを持ち込まない。
+`yweb_text_capture_line`が渡す矩形は、Godotが確定した一行分の文字の箱そのもの。DOM側は`line-height`にその高さを使い、Browserが選んだfontの行送りを持ち込まない。
 
 版差の有無に関わらず必要な修正。`sans-serif`がHelveticaやArialへ解決する環境では、Chromium 141でも同じ余白のはみ出しが起きていた。
 

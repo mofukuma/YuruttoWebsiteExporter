@@ -1,4 +1,4 @@
-# yuruttoweb minimum 実装計画
+# yweb minimum 実装計画
 
 ## 1. 目的
 
@@ -20,7 +20,7 @@ Godotを配置と状態の正本とする。CSS flow、Flexbox、Gridで画面�
 
 ## 3. 文字DOM条件
 
-- `yuruttoweb_dom_text`を指定した五種のControlだけを検出
+- `yweb_dom_text`を指定した五種のControlだけを検出
 - ObjectIDの十進値をDOM IDと同期表のkeyへ使用
 - `get_screen_transform()`と描画直前に確定した文字矩形を毎frame反映
 - 継承ThemeとControl単体overrideのfont size、色、縁、影、行間を反映

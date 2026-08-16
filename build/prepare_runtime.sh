@@ -4,10 +4,10 @@
 
 set -eu
 
-repo=$(cd "$(dirname "$0")/.." && pwd) # yuruttoweb project root。
+repo=$(cd "$(dirname "$0")/.." && pwd) # yweb project root。
 . "$repo/build/source.lock"
-build_root=${YURUTTOWEB_BUILD_ROOT:-$repo/tmp} # Hostとcontainerを分離するtoolchain領域。
-runtime_out=${YURUTTOWEB_RUNTIME_OUT:-$repo/tmp/minimum/runtime-proof} # 配布前の展開成果物。
+build_root=${YWEB_BUILD_ROOT:-$repo/tmp} # Hostとcontainerを分離するtoolchain領域。
+runtime_out=${YWEB_RUNTIME_OUT:-$repo/tmp/minimum/runtime-proof} # 配布前の展開成果物。
 archive=$build_root/godot-$GODOT_VERSION.tar.xz # Godot公式source archive。
 source_root=$build_root/godot-minimum-source # overlay適用済みsource。
 emsdk=$build_root/emsdk # 固定Emscripten SDK。
@@ -17,7 +17,7 @@ trap 'rm -rf "$work"' EXIT
 
 # lock、patch、overlayを一つのsource識別値へまとめる。
 stamp=$(cd "$repo" && {
-	shasum -a 256 build/source.lock build/patches/web_yuruttoweb_text.patch
+	shasum -a 256 build/source.lock build/patches/web_yweb_text.patch
 	shasum -a 256 build/distribution.lock build/runtime.options
 	find build/overlay -type f | LC_ALL=C sort | xargs shasum -a 256
 } | shasum -a 256 | awk '{print $1}')
@@ -32,7 +32,7 @@ printf '%s  %s\n' "$GODOT_ARCHIVE_SHA256" "$archive" | shasum -a 256 -c -
 
 # 不完全sourceまたは識別値が異なるsourceを一律退避する。
 if test -e "$source_root"; then
-	current=$(cat "$source_root/.yuruttoweb-source-stamp" 2>/dev/null || true)
+	current=$(cat "$source_root/.yweb-source-stamp" 2>/dev/null || true)
 	if test ! -f "$source_root/version.py" || test "$current" != "$stamp"; then
 		mv "$source_root" "$work/stale-source"
 	fi
@@ -52,7 +52,7 @@ git -C "$emsdk" checkout --detach "$EMSDK_COMMIT"
 "$emsdk/emsdk" activate "$EMSDK_VERSION"
 
 sh "$repo/build/apply_overlay.sh" "$source_root"
-printf '%s\n' "$stamp" > "$source_root/.yuruttoweb-source-stamp"
+printf '%s\n' "$stamp" > "$source_root/.yweb-source-stamp"
 cmp "$repo/LICENSES/GODOT-MIT.txt" "$source_root/LICENSE.txt"
 cmp "$repo/LICENSES/GODOT-COPYRIGHT.txt" "$source_root/COPYRIGHT.txt"
 sh "$repo/build/build_runtime.sh" "$source_root" "$emsdk" "$runtime_out"

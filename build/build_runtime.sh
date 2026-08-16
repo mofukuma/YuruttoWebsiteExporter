@@ -31,5 +31,5 @@ mkdir -p "$out"
 suffix=$(sed -n 's/^extra_suffix=//p' "$repo/build/runtime.options") # build成果物の一意suffix。
 archive=$(find "$src/bin" -maxdepth 1 -type f -name "*.$suffix.zip" | LC_ALL=C sort | tail -1)
 test -n "$archive"
-export YURUTTOWEB_BROTLI_QUALITY=$BROTLI_QUALITY
+export YWEB_BROTLI_QUALITY=$BROTLI_QUALITY
 node "$repo/build/package_runtime.cjs" "$archive" "$out"

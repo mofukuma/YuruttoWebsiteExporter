@@ -50,14 +50,14 @@ function compressSite(target, quality = 6) {
 	assert.ok(entries.some((entry) => entry.file.endsWith('.wasm')), 'WebAssembly成果物なし');
 	assert.ok(entries.some((entry) => entry.file.endsWith('.js')), 'JavaScript成果物なし');
 	const manifest = { encoding: 'br', quality, entries };
-	fs.writeFileSync(path.join(site, 'yuruttoweb-compression.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+	fs.writeFileSync(path.join(site, 'yweb-compression.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 	return manifest;
 }
 
 // CLI利用時だけ指定directoryを圧縮する。
 if (require.main === module) {
 	const site = path.resolve(process.argv[2] || '.');
-	const quality = Number(process.env.YURUTTOWEB_BROTLI_QUALITY || 6);
+	const quality = Number(process.env.YWEB_BROTLI_QUALITY || 6);
 	console.log(JSON.stringify(compressSite(site, quality)));
 }
 

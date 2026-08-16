@@ -103,11 +103,11 @@ embedded Window titleは`div role="dialog"`とtitle `span`へ対応。CodeEdit�
 
 現在の一要素一関数を次の三系統へ整理。
 
-- `yuruttoweb_dom_tree_begin(ObjectID, generation)`
-- `yuruttoweb_dom_node(parent, item, kind, text, attributes, style)`
-- `yuruttoweb_dom_tree_end(ObjectID)`
+- `yweb_dom_tree_begin(ObjectID, generation)`
+- `yweb_dom_node(parent, item, kind, text, attributes, style)`
+- `yweb_dom_tree_end(ObjectID)`
 
-RichTextLabel内部Item木を走査し、文字、構造、style、event用metaを型付き命令へ変換。`text`、BBCode、`push_*()`の入口差を消す。Item indexを`yuruttoweb-text-<ObjectID>-<index>`へ対応。
+RichTextLabel内部Item木を走査し、文字、構造、style、event用metaを型付き命令へ変換。`text`、BBCode、`push_*()`の入口差を消す。Item indexを`yweb-text-<ObjectID>-<index>`へ対応。
 
 配置は全Control共通の固定長bufferへ詰め、一回のJavaScript callで送信。内容世代が同じ場合はtree命令を送らない。Theme世代だけが変わった場合はstyle差分だけを送る。
 
@@ -135,7 +135,7 @@ Fontがない場合はBrowser標準`sans-serif`。同path Web fontがある場�
 
 ## Canvas font停止
 
-`yuruttoweb_dom_only=yes`をminimum runtimeの必須build optionにする。
+`yweb_dom_only=yes`をminimum runtimeの必須build optionにする。
 
 - Web用`font_draw_glyph()`と`font_draw_glyph_outline()`を描画しないguardへ変更。
 - guard到達時はObjectIDまたはcanvas RID、呼出回数、最初のstack分類を保存。
@@ -302,7 +302,7 @@ Godot 4.7公式BBCode表の全tagを一sceneへ配置。同じ内容をBBCodeと
 ## 成果物
 
 - `build/overlay`のDOM tree、event、Canvas guard
-- `addons/yuruttoweb_site/project_check.gd`とGodot型走査の文字描画gate
+- `addons/yweb_site/project_check.gd`とGodot型走査の文字描画gate
 - `examples/rich_text_lab`
 - `tests/rich_text_lab.cjs`
 - `tests/input_dom_full.cjs`

@@ -8,7 +8,7 @@ const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 const { createServer } = require('../build/serve_web.cjs');
 
-const root = path.resolve(__dirname, '..'); // yuruttoweb project root。
+const root = path.resolve(__dirname, '..'); // yweb project root。
 const project = path.join(root, 'examples/omochi_game'); // 検査対象Godot project。
 const site = require('./site.cjs').ensure(path.join(root, 'examples/omochi_game'), path.join(root, 'tmp/omochi-game/site')); // Brotli済みWeb成果物。
 const output = path.join(root, 'tmp/omochi-game'); // 数値結果と確認画像の保存先。
@@ -18,13 +18,13 @@ const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-core
 // 表示文字を指定して現在の矩形とtransformを返す。
 async function item(page, text) {
 	return page.evaluate((value) => {
-		const node = [...document.querySelectorAll('[data-yuruttoweb-text]')].find((entry) => entry.textContent === value);
+		const node = [...document.querySelectorAll('[data-yweb-text]')].find((entry) => entry.textContent === value);
 		if (!node) return null;
 		const box = node.getBoundingClientRect();
 		return {
 			id: node.id,
 			tag: node.tagName,
-			kind: node.dataset.yuruttowebKind,
+			kind: node.dataset.ywebKind,
 			transform: getComputedStyle(node).transform,
 			color: getComputedStyle(node).color,
 			fontSize: getComputedStyle(node).fontSize,
@@ -50,9 +50,9 @@ async function item(page, text) {
 		page.on('pageerror', (error) => errors.push(error.stack || error.message));
 		await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
 		try {
-			await page.waitForFunction(() => document.querySelector('[data-yuruttoweb-kind="LinkButton"]') && document.querySelector('[data-yuruttoweb-kind="Button"]'), null, { timeout: 12000 });
+			await page.waitForFunction(() => document.querySelector('[data-yweb-kind="LinkButton"]') && document.querySelector('[data-yweb-kind="Button"]'), null, { timeout: 12000 });
 		} catch {
-			const state = await page.evaluate(() => ({ url: location.href, title: document.title, text: document.body?.innerText || '', status: document.querySelector('#status-notice')?.textContent, labels: [...document.querySelectorAll('[data-yuruttoweb-text]')].map((node) => node.textContent) }));
+			const state = await page.evaluate(() => ({ url: location.href, title: document.title, text: document.body?.innerText || '', status: document.querySelector('#status-notice')?.textContent, labels: [...document.querySelectorAll('[data-yweb-text]')].map((node) => node.textContent) }));
 			throw new Error(`Omochi起動失敗: ${JSON.stringify({ state, errors })}`);
 		}
 		await page.evaluate(() => document.fonts.ready);
@@ -64,10 +64,10 @@ async function item(page, text) {
 		assert.equal(godouStart.kind, 'LinkButton');
 		assert.equal(omochiStart.tag, 'BUTTON');
 		assert.equal(omochiStart.kind, 'Button');
-		assert.match(godouStart.id, /^yuruttoweb-text-\d+$/);
-		assert.match(omochiStart.id, /^yuruttoweb-text-\d+$/);
-		assert.equal(await page.locator('[data-yuruttoweb-kind="LinkButton"]').getAttribute('href'), 'https://godotengine.org/');
-		assert.equal(await page.locator('[data-yuruttoweb-kind="LinkButton"]').evaluate((node) => getComputedStyle(node).pointerEvents), 'none', 'LinkButtonがCanvas mouseを遮断');
+		assert.match(godouStart.id, /^yweb-text-\d+$/);
+		assert.match(omochiStart.id, /^yweb-text-\d+$/);
+		assert.equal(await page.locator('[data-yweb-kind="LinkButton"]').getAttribute('href'), 'https://godotengine.org/');
+		assert.equal(await page.locator('[data-yweb-kind="LinkButton"]').evaluate((node) => getComputedStyle(node).pointerEvents), 'none', 'LinkButtonがCanvas mouseを遮断');
 
 		// 100物理frameでThemeと日本語を同じDOM IDへ反映する。
 		await page.getByText('ゴドウさん', { exact: true }).waitFor();
@@ -101,7 +101,7 @@ async function item(page, text) {
 		const deadline = Date.now() + 7000;
 		let caught = false;
 		while (Date.now() < deadline) {
-			const falling = await page.locator('[data-yuruttoweb-kind="Button"]').evaluateAll((nodes) => nodes.map((node) => {
+			const falling = await page.locator('[data-yweb-kind="Button"]').evaluateAll((nodes) => nodes.map((node) => {
 				const box = node.getBoundingClientRect();
 				return { x: box.x, y: box.y, width: box.width, transform: getComputedStyle(node).transform };
 			}));
@@ -125,13 +125,13 @@ async function item(page, text) {
 
 		// 1200物理frameまで進め、30 frameにつき1個の投下を確認する。
 		await page.waitForFunction(() => {
-			const text = [...document.querySelectorAll('[data-yuruttoweb-text]')].find((node) => /^投下 \d+ \/ フレーム \d+$/.test(node.textContent))?.textContent;
+			const text = [...document.querySelectorAll('[data-yweb-text]')].find((node) => /^投下 \d+ \/ フレーム \d+$/.test(node.textContent))?.textContent;
 			return text && Number(text.match(/フレーム (\d+)/)[1]) >= 1200;
 		});
 		const image = await page.screenshot({ path: path.join(output, 'omochi-japanese-theme.png') });
 		const state = await page.evaluate(() => {
-			const frameText = [...document.querySelectorAll('[data-yuruttoweb-text]')].find((node) => /^投下 \d+ \/ フレーム \d+$/.test(node.textContent)).textContent;
-			const ids = [...document.querySelectorAll('[data-yuruttoweb-kind="Button"]')].map((node) => node.id);
+			const frameText = [...document.querySelectorAll('[data-yweb-text]')].find((node) => /^投下 \d+ \/ フレーム \d+$/.test(node.textContent)).textContent;
+			const ids = [...document.querySelectorAll('[data-yweb-kind="Button"]')].map((node) => node.id);
 			return { frameText, ids };
 		});
 		const [, dropText, frameValue] = state.frameText.match(/^投下 (\d+) \/ フレーム (\d+)$/);

@@ -31,13 +31,13 @@ func _run() -> void:
 	if not omochi.contact_monitor or omochi.max_contacts_reported < 8 or machine_count != 8:
 		_fail("坂とピンの接触監視構成なし")
 		return
-	if not button or button.text != "Omochi" or not button.get_meta("yuruttoweb_dom_text", false):
+	if not button or button.text != "Omochi" or not button.get_meta("yweb_dom_text", false):
 		_fail("Omochi Buttonの意味DOM指定なし")
 		return
 	if not catcher or not sensor or wall_count != 3:
 		_fail("Godou捕獲機の三面衝突またはsensorなし")
 		return
-	if not link or link.text != "Godou-san" or link.mouse_filter == Control.MOUSE_FILTER_IGNORE or not link.get_meta("yuruttoweb_dom_text", false):
+	if not link or link.text != "Godou-san" or link.mouse_filter == Control.MOUSE_FILTER_IGNORE or not link.get_meta("yweb_dom_text", false):
 		_fail("Godou-san LinkButtonの意味DOM指定なし")
 		return
 	print(JSON.stringify({ "ok": true, "circle_radius": 31, "machine_parts": machine_count, "catcher_walls": 3, "button": true, "link": true }))

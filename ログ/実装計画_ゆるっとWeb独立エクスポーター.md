@@ -47,11 +47,11 @@ Godot 4.7.1のExport画面へ「ゆるっとWeb」を追加し、専用runtime�
 
 ## ファイル構成
 
-- `addons/yuruttoweb_site/platform.gd`：独立Exportプラットフォーム。
-- `addons/yuruttoweb_site/templates/yuruttoweb.zip`：専用runtime。
-- `addons/yuruttoweb_site/site_builder.gd`：site生成と圧縮manifest。
-- `addons/yuruttoweb_site/project_check.gd`：文字形式とbinary resourceの3D検査。
-- `addons/yuruttoweb_site/icon.svg`：Export一覧用ロゴ。
+- `addons/yweb_site/platform.gd`：独立Exportプラットフォーム。
+- `addons/yweb_site/templates/yweb.zip`：専用runtime。
+- `addons/yweb_site/site_builder.gd`：site生成と圧縮manifest。
+- `addons/yweb_site/project_check.gd`：文字形式とbinary resourceの3D検査。
+- `addons/yweb_site/icon.svg`：Export一覧用ロゴ。
 
 ## CLI連携
 

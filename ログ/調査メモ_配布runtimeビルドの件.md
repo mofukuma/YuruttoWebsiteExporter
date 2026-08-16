@@ -11,7 +11,7 @@
 ## runtimeを変化させる入力
 
 - Godot release、commit、source archive。
-- yuruttoweb patchとoverlay source。
+- yweb patchとoverlay source。
 - SCons option。thread、3D、GDExtension、JavaScriptBridge、最適化など。
 - Emscripten SDKとSCons。
 - Brotli実装、品質、package順、timestamp。

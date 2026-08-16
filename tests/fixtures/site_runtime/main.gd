@@ -9,7 +9,7 @@ func _ready() -> void:
 	label.text = "MAIN SCENE"
 	label.position = Vector2(160, 80)
 	label.add_theme_font_size_override("font_size", 42)
-	label.set_meta("yuruttoweb_dom_text", true)
+	label.set_meta("yweb_dom_text", true)
 	add_child(label)
 
 # Keyboard操作をscene変更へ結び、Browser URL更新を発生させる。

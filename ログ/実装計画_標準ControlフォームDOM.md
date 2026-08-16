@@ -17,10 +17,10 @@ LineEditとTextEditをBrowser native formへ変換し、IME入力を常用可能
 ## 方針
 
 - metadataなしの標準文字Controlを既定DOM対象。
-- `yuruttoweb/font/avoid_canvas_theme_font`を既定有効。
+- `yweb/font/avoid_canvas_theme_font`を既定有効。
 - 対応しない装飾は一度だけwarningし、Browser標準表示へ代替。
 - option無効時は再現不能な装飾だけGodot Canvas Theme fontへ退避。
-- `yuruttoweb_dom_text=false`を明示Canvas指定として使用。
+- `yweb_dom_text=false`を明示Canvas指定として使用。
 - export errorとCanvas全体停止は不採用。
 - CodeEdit、RichTextLabel、BBCode、PopupMenu意味要素化は後続範囲。
 

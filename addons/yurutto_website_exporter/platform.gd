@@ -50,41 +50,41 @@ func _get_export_options() -> Array[Dictionary]:
 	return [
 		_option("vram_texture_compression/for_desktop", TYPE_BOOL, true),
 		_option("html/focus_canvas_on_start", TYPE_BOOL, true),
-		_option("yuruttoweb/site/enabled", TYPE_BOOL, true, PROPERTY_HINT_NONE, "", true),
-		_option("yuruttoweb/site/config", TYPE_STRING, "res://yuruttoweb-site.json", PROPERTY_HINT_FILE, "*.json"),
-		_option("yuruttoweb/site/base_url", TYPE_STRING, "https://example.com"),
-		_option("yuruttoweb/site/title", TYPE_STRING, ProjectSettings.get_setting("application/config/name", "Godot Web Site")),
-		_option("yuruttoweb/site/description", TYPE_STRING, "Godotで作成したWebサイトです。"),
-		_option("yuruttoweb/site/locale", TYPE_STRING, "ja_JP"),
-		_option("yuruttoweb/site/favicon", TYPE_STRING, "", PROPERTY_HINT_FILE, "*.png,*.svg,*.ico"),
-		_option("yuruttoweb/routing/mode", TYPE_INT, 0, PROPERTY_HINT_ENUM, "Hash,History"),
-		_option("yuruttoweb/font/matching_webfont", TYPE_BOOL, true),
-		_option("yuruttoweb/font/avoid_canvas_theme_font", TYPE_BOOL, true),
-		_option("yuruttoweb/ogp/image", TYPE_STRING, OGP_PATH, PROPERTY_HINT_FILE, "*.png,*.jpg,*.jpeg,*.webp"),
-		_option("yuruttoweb/ogp/alt", TYPE_STRING, "サイトのプレビュー画像"),
-		_option("yuruttoweb/ogp/frame", TYPE_INT, 2, PROPERTY_HINT_RANGE, "1,3600,1"),
+		_option("yweb/site/enabled", TYPE_BOOL, true, PROPERTY_HINT_NONE, "", true),
+		_option("yweb/site/config", TYPE_STRING, "res://yweb-site.json", PROPERTY_HINT_FILE, "*.json"),
+		_option("yweb/site/base_url", TYPE_STRING, "https://example.com"),
+		_option("yweb/site/title", TYPE_STRING, ProjectSettings.get_setting("application/config/name", "Godot Web Site")),
+		_option("yweb/site/description", TYPE_STRING, "Godotで作成したWebサイトです。"),
+		_option("yweb/site/locale", TYPE_STRING, "ja_JP"),
+		_option("yweb/site/favicon", TYPE_STRING, "", PROPERTY_HINT_FILE, "*.png,*.svg,*.ico"),
+		_option("yweb/routing/mode", TYPE_INT, 0, PROPERTY_HINT_ENUM, "Hash,History"),
+		_option("yweb/font/matching_webfont", TYPE_BOOL, true),
+		_option("yweb/font/avoid_canvas_theme_font", TYPE_BOOL, true),
+		_option("yweb/ogp/image", TYPE_STRING, OGP_PATH, PROPERTY_HINT_FILE, "*.png,*.jpg,*.jpeg,*.webp"),
+		_option("yweb/ogp/alt", TYPE_STRING, "サイトのプレビュー画像"),
+		_option("yweb/ogp/frame", TYPE_INT, 2, PROPERTY_HINT_RANGE, "1,3600,1"),
 	]
 
 # Site無効時もDOM文字設定だけを表示する。
 func _get_export_option_visibility(preset: EditorExportPreset, option: String) -> bool:
-	if option == "yuruttoweb/site/enabled" or option.begins_with("yuruttoweb/font/"):
+	if option == "yweb/site/enabled" or option.begins_with("yweb/font/"):
 		return true
-	return not option.begins_with("yuruttoweb/") or bool(preset.get("yuruttoweb/site/enabled"))
+	return not option.begins_with("yweb/") or bool(preset.get("yweb/site/enabled"))
 
 # 設定画面で直せる不足を対象項目へ表示する。
 func _get_export_option_warning(preset: EditorExportPreset, option: StringName) -> String:
 	var name := String(option)
-	if not bool(preset.get("yuruttoweb/site/enabled")):
+	if not bool(preset.get("yweb/site/enabled")):
 		return ""
-	if name == "yuruttoweb/site/config":
+	if name == "yweb/site/config":
 		var config := String(preset.get(name))
 		if config.is_empty() or not FileAccess.file_exists(config):
 			return "Scene情報JSONがありません。main sceneの既定値で書き出します。"
-	if name == "yuruttoweb/site/base_url":
+	if name == "yweb/site/base_url":
 		var base := String(preset.get(name))
 		if not base.begins_with("https://") and not base.begins_with("http://localhost") and not base.begins_with("http://127.0.0.1"):
 			return "公開用base URLにはHTTPS URLを指定してください。"
-	if name == "yuruttoweb/ogp/image":
+	if name == "yweb/ogp/image":
 		var image := String(preset.get(name))
 		if image.is_empty() or not FileAccess.file_exists(image):
 			return "OGP画像がありません。OGP Autoで現在Sceneから生成できます。"
