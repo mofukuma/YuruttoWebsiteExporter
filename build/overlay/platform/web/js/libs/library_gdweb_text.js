@@ -319,7 +319,8 @@ const GDWebText = {
 		element.style.setProperty('--gdweb-placeholder', GDWebText.color(placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha));
 		element.style.fontFamily = globalThis.GDWEB_FONT_MAP?.[font]?.family || 'sans-serif';
 		element.style.fontSize = `${fontSize}px`;
-		element.style.lineHeight = `${fontSize + lineSpacing}px`;
+		// 標準Controlの文字はGodotが確定した行の高さを行ボックスへそのまま使い、Browser fontの行送りではみ出させない。
+		element.style.lineHeight = `${kind === 5 ? height : fontSize + lineSpacing}px`;
 		element.style.webkitTextStroke = outlineSize > 0 && outlineAlpha > 0 ? `${outlineSize}px ${GDWebText.color(outlineRed, outlineGreen, outlineBlue, outlineAlpha)}` : '0 transparent';
 		element.style.textShadow = shadowAlpha > 0 ? `${shadowX}px ${shadowY}px 0 ${GDWebText.color(shadowRed, shadowGreen, shadowBlue, shadowAlpha)}` : 'none';
 		element.style.textDecorationLine = flags & 16 ? 'underline' : 'none';
