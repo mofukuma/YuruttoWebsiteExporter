@@ -12,7 +12,7 @@ const zlib = require('node:zlib');
 
 const root = path.resolve(__dirname, '..'); // gdweb project root。
 const build = path.join(root, 'build'); // 配布build定義。
-const templateDir = path.join(root, 'addons/gdweb_site/templates'); // addon内runtime。
+const templateDir = path.join(root, 'addons/yurutto_website_exporter/templates'); // addon内runtime。
 const manifest = JSON.parse(fs.readFileSync(path.join(templateDir, 'runtime.json'))); // 配布物の由来正本。
 const template = path.join(templateDir, manifest.template.file); // 検査対象ZIP。
 const work = path.join(root, 'tmp/runtime-distribution'); // 検査結果保存先。

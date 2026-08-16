@@ -5,9 +5,9 @@ extends RefCounted
 
 const BEGIN := "<!-- GDWEB_SITE_BEGIN -->" # 再生成headの開始印。
 const END := "<!-- GDWEB_SITE_END -->" # 再生成headの終了印。
-const RUNTIME := "res://addons/gdweb_site/site_runtime.js" # Browser scene同期処理。
-const NGINX := "res://addons/gdweb_site/nginx-gdweb.conf" # 直接配信用設定。
-const NGINX_PROXY := "res://addons/gdweb_site/nginx-gdweb-proxy.conf" # reverse proxy設定。
+const RUNTIME := "res://addons/yurutto_website_exporter/site_runtime.js" # Browser scene同期処理。
+const NGINX := "res://addons/yurutto_website_exporter/nginx-gdweb.conf" # 直接配信用設定。
+const NGINX_PROXY := "res://addons/yurutto_website_exporter/nginx-gdweb-proxy.conf" # reverse proxy設定。
 const OPTIONS := [
 	"gdweb/site/enabled", "gdweb/site/config", "gdweb/site/base_url", "gdweb/site/title",
 	"gdweb/site/description", "gdweb/site/locale", "gdweb/site/favicon", "gdweb/routing/mode",

@@ -30,7 +30,7 @@ desktop.ini
 **/*.import
 
 # 利用者projectへ複製した配布addon
-examples/*/addons/gdweb_site/
+examples/*/addons/yurutto_website_exporter/
 
 # Node
 node_modules/

@@ -2,7 +2,7 @@
 
 Godot 4.7.1-stable固定commit用の独立Webエクスポーター。
 
-1. このdirectoryをprojectの`addons/gdweb_site`へ配置。
+1. このdirectoryをprojectの`addons/yurutto_website_exporter`へ配置。
 2. `プロジェクト > プロジェクト設定 > プラグイン`で「ゆるっとWeb」を有効化。
 3. `プロジェクト > エクスポート > 追加 > ゆるっとWeb`を選択。
 4. 出力先を`.html`にしてエクスポート。

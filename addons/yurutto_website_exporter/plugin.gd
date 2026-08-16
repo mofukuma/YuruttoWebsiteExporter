@@ -4,8 +4,8 @@
 @tool
 extends EditorPlugin
 
-const PLATFORM := preload("res://addons/gdweb_site/platform.gd") # 独立Export処理。
-const OGP := preload("res://addons/gdweb_site/ogp_plugin.gd") # OGP Autoボタン。
+const PLATFORM := preload("res://addons/yurutto_website_exporter/platform.gd") # 独立Export処理。
+const OGP := preload("res://addons/yurutto_website_exporter/ogp_plugin.gd") # OGP Autoボタン。
 
 var platform: EditorExportPlatform # 登録中の独立プラットフォーム。
 var ogp: EditorExportPlugin # 登録中の撮影ボタン。

@@ -4,9 +4,9 @@
 @tool
 extends EditorExportPlugin
 
-const CAPTURE_SCRIPT := "res://addons/gdweb_site/ogp_capture.gd" # OGP撮影処理。
+const CAPTURE_SCRIPT := "res://addons/yurutto_website_exporter/ogp_capture.gd" # OGP撮影処理。
 const OGP_PATH := "res://web/ogp.png" # 未指定時の保存先。
-const PLATFORM := preload("res://addons/gdweb_site/platform.gd") # 対象platformの識別子。
+const PLATFORM := preload("res://addons/yurutto_website_exporter/platform.gd") # 対象platformの識別子。
 
 var editor: EditorPlugin # 現在Sceneとfilesystemへの接続元。
 
@@ -16,7 +16,7 @@ func _init(owner: EditorPlugin) -> void:
 
 # pluginを安定した識別名で登録する。
 func _get_name() -> String:
-	return "GDWebOGP"
+	return "YuruttoWebsiteExporterOGP"
 
 # ゆるっとWebだけへ撮影ボタンを追加する。
 func _supports_platform(platform: EditorExportPlatform) -> bool:

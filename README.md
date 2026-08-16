@@ -1,4 +1,4 @@
-# gdweb
+# YuruttoWebsiteExporter
 
 固定したGodot Web描画を保ちながら、文字と入力だけを意味のあるHTMLへ重ねるWeb exporter実験実装。
 GodotだけでWebサイトを完結。軽量に書き出し、文字は実HTMLなので検索結果にも出ます。
@@ -34,7 +34,7 @@ Godot 4.7.1を使用。アドオンをprojectへ入れて有効化後、`プロ�
 
 ```sh
 mkdir -p /path/to/project/addons
-cp -R addons/gdweb_site /path/to/project/addons/
+cp -R addons/yurutto_website_exporter /path/to/project/addons/
 ```
 
 `ゆるっとWebサイト`は対応Godotから生成済みのruntimeをアドオンへ内蔵。Godot公式Webテンプレートの導入、標準Web preset、custom template指定は不要。現行配布物はGodot 4.7.1-stableの固定commit専用。

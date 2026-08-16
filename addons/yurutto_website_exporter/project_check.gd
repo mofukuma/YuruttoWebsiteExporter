@@ -35,7 +35,7 @@ func inspect(root: String) -> Array[String]:
 	for file in _files(root):
 		var extension := file.get_extension().to_lower()
 		var relative := file.trim_prefix(root.trim_suffix("/") + "/")
-		if relative.begins_with("addons/gdweb_site/"):
+		if relative.begins_with("addons/yurutto_website_exporter/"):
 			continue
 		if extension == "gdextension":
 			blocked.append("%s: GDExtension非対応" % relative)

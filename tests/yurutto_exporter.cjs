@@ -11,7 +11,7 @@ const path = require('node:path');
 const zlib = require('node:zlib');
 
 const root = path.resolve(__dirname, '..'); // gdweb project root。
-const addon = path.join(root, 'addons/gdweb_site'); // 配布単位のaddon。
+const addon = path.join(root, 'addons/yurutto_website_exporter'); // 配布単位のaddon。
 const runtime = JSON.parse(fs.readFileSync(path.join(addon, 'templates/runtime.json'))); // 対応版とruntime由来。
 const template = path.join(addon, 'templates', runtime.template.file); // manifestが指す内蔵runtime。
 const work = path.join(root, 'tmp/yurutto-exporter'); // 検査専用directory。
@@ -47,8 +47,8 @@ for (const name of ['godot.js.br', 'godot.wasm.br', 'godot.audio.worklet.js.br',
 }
 fs.rmSync(work, { recursive: true, force: true });
 fs.cpSync(fixture, project, { recursive: true });
-fs.cpSync(addon, path.join(project, 'addons/gdweb_site'), { recursive: true });
-fs.appendFileSync(path.join(project, 'project.godot'), '\n[editor_plugins]\n\nenabled=PackedStringArray("res://addons/gdweb_site/plugin.cfg")\n');
+fs.cpSync(addon, path.join(project, 'addons/yurutto_website_exporter'), { recursive: true });
+fs.appendFileSync(path.join(project, 'project.godot'), '\n[editor_plugins]\n\nenabled=PackedStringArray("res://addons/yurutto_website_exporter/plugin.cfg")\n');
 const emptyPath = path.join(work, 'empty-path');
 fs.mkdirSync(emptyPath, { recursive: true });
 fs.mkdirSync(site, { recursive: true });

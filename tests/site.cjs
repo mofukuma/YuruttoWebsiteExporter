@@ -9,7 +9,7 @@ const path = require('node:path');
 
 const repo = path.resolve(__dirname, '..'); // 書き出しscriptを持つproject root。
 const godot = process.env.GODOT_BIN || '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot editor。
-const template = path.join(repo, 'addons/gdweb_site/templates/yurutto_web.zip'); // 成果物へ入る配布runtime。
+const template = path.join(repo, 'addons/yurutto_website_exporter/templates/yurutto_web.zip'); // 成果物へ入る配布runtime。
 const generated = new Set(['.godot', 'addons', 'export_presets.cfg']); // 書き出し手順が生成するproject内領域。
 const standardPreset = `[preset.0]
 

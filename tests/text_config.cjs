@@ -16,8 +16,8 @@ const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定God
 // false指定とscriptの一意性を確認する。
 fs.rmSync(root, { recursive: true, force: true });
 fs.mkdirSync(project, { recursive: true });
-fs.cpSync(path.join(repo, 'addons/gdweb_site'), path.join(project, 'addons/gdweb_site'), { recursive: true });
-fs.writeFileSync(path.join(project, 'project.godot'), '[application]\nconfig/name="Text Config"\nrun/main_scene="res://main.tscn"\n[editor_plugins]\nenabled=PackedStringArray("res://addons/gdweb_site/plugin.cfg")\n');
+fs.cpSync(path.join(repo, 'addons/yurutto_website_exporter'), path.join(project, 'addons/yurutto_website_exporter'), { recursive: true });
+fs.writeFileSync(path.join(project, 'project.godot'), '[application]\nconfig/name="Text Config"\nrun/main_scene="res://main.tscn"\n[editor_plugins]\nenabled=PackedStringArray("res://addons/yurutto_website_exporter/plugin.cfg")\n');
 fs.writeFileSync(path.join(project, 'main.tscn'), '[gd_scene format=3]\n[node name="Main" type="Node"]\n');
 fs.writeFileSync(path.join(project, 'export_presets.cfg'), '[preset.0]\nname="Web"\nplatform="ゆるっとWebサイト"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\nhtml/focus_canvas_on_start=true\ngdweb/site/enabled=false\ngdweb/font/matching_webfont=true\ngdweb/font/avoid_canvas_theme_font=false\nvram_texture_compression/for_desktop=true\n');
 const emptyPath = path.join(root, 'empty-path');

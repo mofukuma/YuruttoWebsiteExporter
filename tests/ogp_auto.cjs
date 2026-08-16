@@ -19,7 +19,7 @@ fs.cpSync(path.join(repo, 'tests/fixtures/ogp_aspect'), project, { recursive: tr
 child.execFileSync('node', [path.join(repo, 'build/install_site_addon.cjs'), project], { stdio: 'ignore' });
 const output = child.execFileSync(godot, [
 	'--path', project, '--resolution', '600x600', '--position', '10000,10000',
-	'--script', path.join(project, 'addons/gdweb_site/ogp_capture.gd'), '--',
+	'--script', path.join(project, 'addons/yurutto_website_exporter/ogp_capture.gd'), '--',
 	'--scene=res://main.tscn', '--output=res://web/ogp.png', '--frame=7',
 ], { encoding: 'utf8', timeout: 5000 });
 const image = fs.readFileSync(path.join(project, 'web/ogp.png'));

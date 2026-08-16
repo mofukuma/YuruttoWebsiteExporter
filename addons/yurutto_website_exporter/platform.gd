@@ -5,7 +5,7 @@
 extends EditorExportPlatformExtension
 
 const NAME := "ゆるっとWebサイト" # Export画面へ表示する名称。
-const RUNTIME := "res://addons/gdweb_site/templates/runtime.json" # 対応版と配布runtimeの由来。
+const RUNTIME := "res://addons/yurutto_website_exporter/templates/runtime.json" # 対応版と配布runtimeの由来。
 const SiteBuilder := preload("site_builder.gd") # SEOと配信物の生成処理。
 const ProjectCheck := preload("project_check.gd") # 3D境界検査。
 const OGP_PATH := "res://web/ogp.png" # OGP画像の既定位置。
@@ -182,7 +182,7 @@ func _template() -> String:
 	var name := String(runtime.get("template", {}).get("file", ""))
 	if name.is_empty() or name != name.get_file() or name.get_extension() != "zip":
 		return ""
-	return "res://addons/gdweb_site/templates/%s" % name
+	return "res://addons/yurutto_website_exporter/templates/%s" % name
 
 # EditorとruntimeのGodot版・commitが同じか判断する。
 func _version_matches(version: Dictionary, godot: Dictionary) -> bool:

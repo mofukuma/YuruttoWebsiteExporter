@@ -22,7 +22,7 @@
     "runtimeOptionsSha256": "0e4c77361e8a6d15f3d53e0ea6049e4b59c291a264a4ea5d43866e05b21cecf9",
     "patchSha256": "d62fdb3041c97f6b5ab0e1d322fbccaa8946844dd05a29a200581562cdd0f86d",
     "overlaySha256": "47568efd093a1b29ccc163ebe1da26de191def7d072af5e0a5bacaa3d865ac53",
-    "buildSha256": "b8e515d6901fec0a972618c5b46b9818ec3677720e94855b9db461647e67b752"
+    "buildSha256": "fba3ff53516c0216280362093b8c1400d552f043d62ad12580c17957a26b4b17"
   },
   "features": {
     "domText": true,

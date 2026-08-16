@@ -30,8 +30,8 @@ function fixture(mode, target) {
 	fs.mkdirSync(path.join(project, 'fonts'), { recursive: true });
 	fs.mkdirSync(path.join(project, 'web'), { recursive: true });
 	fs.mkdirSync(target, { recursive: true });
-	fs.cpSync(path.join(repo, 'addons/gdweb_site'), path.join(project, 'addons/gdweb_site'), { recursive: true });
-	fs.writeFileSync(path.join(project, 'project.godot'), '[application]\nconfig/name="Site Test"\nrun/main_scene="res://main.tscn"\n[editor_plugins]\nenabled=PackedStringArray("res://addons/gdweb_site/plugin.cfg")\n');
+	fs.cpSync(path.join(repo, 'addons/yurutto_website_exporter'), path.join(project, 'addons/yurutto_website_exporter'), { recursive: true });
+	fs.writeFileSync(path.join(project, 'project.godot'), '[application]\nconfig/name="Site Test"\nrun/main_scene="res://main.tscn"\n[editor_plugins]\nenabled=PackedStringArray("res://addons/yurutto_website_exporter/plugin.cfg")\n');
 	fs.writeFileSync(path.join(project, 'main.tscn'), '[gd_scene format=3]\n[node name="Main" type="Node"]\n');
 	fs.writeFileSync(path.join(project, 'about.tscn'), '[gd_scene format=3]\n[node name="About" type="Node"]\n');
 	const basePath = mode === 1 ? '/sub/' : '/';
