@@ -1,4 +1,4 @@
-// 配布runtimeのGodot版、toolchain、build option、ZIP内容を一括検査する。
+// 配布テンプレートのGodot版、toolchain、build option、ZIP内容を一括検査する。
 // addon manifestを正本とし、version更新時の入力漏れと成果物混在を防ぐ。
 
 'use strict';
@@ -12,10 +12,10 @@ const zlib = require('node:zlib');
 
 const root = path.resolve(__dirname, '..'); // yweb project root。
 const build = path.join(root, 'build'); // 配布build定義。
-const templateDir = path.join(root, 'addons/yurutto_website_exporter/templates'); // addon内runtime。
-const manifest = JSON.parse(fs.readFileSync(path.join(templateDir, 'runtime.json'))); // 配布物の由来正本。
+const templateDir = path.join(root, 'addons/yurutto_website_exporter/templates'); // addon内テンプレート。
+const manifest = JSON.parse(fs.readFileSync(path.join(templateDir, 'manifest.json'))); // 配布物の由来正本。
 const template = path.join(templateDir, manifest.template.file); // 検査対象ZIP。
-const work = path.join(root, 'tmp/runtime-distribution'); // 検査結果保存先。
+const work = path.join(root, 'tmp/template-distribution'); // 検査結果保存先。
 const buffer = { maxBuffer: 32 * 1024 * 1024 }; // WASM展開に必要な上限。
 
 // fileまたはBufferのSHA-256を返す。
@@ -69,7 +69,7 @@ function filesHash(files) {
 
 const source = lock(path.join(build, 'source.lock'));
 const distribution = lock(path.join(build, 'distribution.lock'));
-const options = fs.readFileSync(path.join(build, 'runtime.options'), 'utf8').split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
+const options = fs.readFileSync(path.join(build, 'template.options'), 'utf8').split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
 const dockerfile = fs.readFileSync(path.join(build, 'distribution/Dockerfile'), 'utf8');
 const distributionScript = fs.readFileSync(path.join(build, 'build_distribution.sh'), 'utf8');
 
@@ -95,19 +95,19 @@ assert.ok(options.includes('disable_3d=yes'));
 assert.match(dockerfile, new RegExp(distribution.BUILDER_IMAGE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 assert.match(dockerfile, new RegExp(`SCONS_VERSION=${distribution.SCONS_VERSION.replaceAll('.', '\\.')}`));
 assert.match(distributionScript, /--platform "\$BUILDER_PLATFORM"/);
-assert.match(distributionScript, /tests\/runtime_distribution\.cjs/);
+assert.match(distributionScript, /tests\/template_distribution\.cjs/);
 
 assert.equal(manifest.inputs.sourceLockSha256, sha(path.join(build, 'source.lock')));
 assert.equal(manifest.inputs.distributionLockSha256, sha(path.join(build, 'distribution.lock')));
-assert.equal(manifest.inputs.runtimeOptionsSha256, sha(path.join(build, 'runtime.options')));
+assert.equal(manifest.inputs.templateOptionsSha256, sha(path.join(build, 'template.options')));
 assert.equal(manifest.inputs.patchSha256, sha(path.join(build, 'patches/web_yweb_text.patch')));
 assert.equal(manifest.inputs.overlaySha256, treeHash(path.join(build, 'overlay')));
 assert.equal(manifest.inputs.buildSha256, filesHash([
-	'distribution/Dockerfile', 'build_distribution.sh', 'prepare_runtime.sh',
-	'build_runtime.sh', 'apply_overlay.sh', 'package_runtime.cjs', 'compress_web.cjs',
+	'distribution/Dockerfile', 'build_distribution.sh', 'prepare_template.sh',
+	'build_template.sh', 'apply_overlay.sh', 'package_template.cjs', 'compress_web.cjs',
 ].map((file) => path.join(build, file))));
 
-assert.equal(fs.readdirSync(templateDir).filter((name) => name.endsWith('.zip')).length, 1, 'runtime ZIPが複数');
+assert.equal(fs.readdirSync(templateDir).filter((name) => name.endsWith('.zip')).length, 1, 'テンプレートZIPが複数');
 assert.equal(manifest.template.sha256, sha(template));
 assert.equal(manifest.template.bytes, fs.statSync(template).size);
 const names = child.execFileSync('unzip', ['-Z1', template], { encoding: 'utf8' }).trim().split('\n');

@@ -21,19 +21,23 @@ fs.cpSync(source, target, { recursive: true, force: true });
 
 let text = fs.readFileSync(file, 'utf8');
 
-// Scene同期はminimum runtimeが所有し、旧Autoload指定を残さない。
+// Scene同期はminimumテンプレートが所有し、旧Autoload指定を残さない。
 text = text.replace(/^YWebSite=.*\n?/m, '');
 text = text.replace(/\n\[autoload\]\n(?=\n\[|$)/, '\n');
 
-// Export設定画面へpluginを一度だけ登録する。
-if (!/^\[editor_plugins\]$/m.test(text)) text += '\n[editor_plugins]\n\nenabled=PackedStringArray("res://addons/yurutto_website_exporter/plugin.cfg")\n';
-else if (!/res:\/\/addons\/yweb_site\/plugin\.cfg/.test(text)) {
-	if (/^enabled=PackedStringArray\((.*)\)$/m.test(text)) {
-		text = text.replace(/^enabled=PackedStringArray\((.*)\)$/m, (_line, values) => `enabled=PackedStringArray(${values}${values.trim() ? ', ' : ''}"res://addons/yurutto_website_exporter/plugin.cfg")`);
-	} else {
-		text = text.replace(/^\[editor_plugins\]$/m, '[editor_plugins]\n\nenabled=PackedStringArray("res://addons/yurutto_website_exporter/plugin.cfg")');
-	}
+const entry = '"res://addons/yurutto_website_exporter/plugin.cfg"'; // 有効化するplugin指定。
+
+// Export設定画面へpluginを一度だけ登録する。作り直しても重複させない。
+if (!/^\[editor_plugins\]$/m.test(text)) {
+	text += `\n[editor_plugins]\n\nenabled=PackedStringArray(${entry})\n`;
+} else if (/^enabled=PackedStringArray\((.*)\)$/m.test(text)) {
+	text = text.replace(/^enabled=PackedStringArray\((.*)\)$/m, (_line, values) => {
+		const kept = values.split(',').map((value) => value.trim()).filter((value) => value && value !== entry);
+		return `enabled=PackedStringArray(${[...kept, entry].join(', ')})`;
+	});
+} else {
+	text = text.replace(/^\[editor_plugins\]$/m, `[editor_plugins]\n\nenabled=PackedStringArray(${entry})`);
 }
 
 fs.writeFileSync(file, text.replace(/\n{3,}/g, '\n\n'));
-console.log(JSON.stringify({ project, addon: 'res://addons/yurutto_website_exporter', platform: 'ゆるっとWebサイト' }));
+console.log(JSON.stringify({ project, addon: 'res://addons/yurutto_website_exporter', platform: 'Yurutto Website' }));

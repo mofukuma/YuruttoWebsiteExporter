@@ -1,4 +1,4 @@
-# ゆるっとWeb配布runtimeをLinux amd64で再現する固定build環境。
+# ゆるっとWeb配布テンプレートをLinux amd64で再現する固定build環境。
 # GodotとEmscriptenはrepository内lockを正本とする設計。
 
 FROM node:24.1.0-bookworm-slim@sha256:4b7fd762424e57e5cb316bece2c33fa35263ab11edd406f1a49d228e223c29d1
@@ -13,4 +13,4 @@ RUN apt-get update \
 
 WORKDIR /work
 
-ENTRYPOINT ["sh", "build/prepare_runtime.sh"]
+ENTRYPOINT ["sh", "build/prepare_template.sh"]

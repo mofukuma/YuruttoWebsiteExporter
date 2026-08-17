@@ -7,18 +7,18 @@ set -eu
 repo=$(cd "$(dirname "$0")/.." && pwd) # yweb project root。
 . "$repo/build/source.lock"
 build_root=${YWEB_BUILD_ROOT:-$repo/tmp} # Hostとcontainerを分離するtoolchain領域。
-runtime_out=${YWEB_RUNTIME_OUT:-$repo/tmp/minimum/runtime-proof} # 配布前の展開成果物。
+template_out=${YWEB_TEMPLATE_OUT:-$repo/tmp/minimum/template-proof} # 配布前の展開成果物。
 archive=$build_root/godot-$GODOT_VERSION.tar.xz # Godot公式source archive。
 source_root=$build_root/godot-minimum-source # overlay適用済みsource。
 emsdk=$build_root/emsdk # 固定Emscripten SDK。
 mkdir -p "$build_root"
-work=$(mktemp -d "$build_root/runtime-source.XXXXXX") # source展開用一時領域。
+work=$(mktemp -d "$build_root/template-source.XXXXXX") # source展開用一時領域。
 trap 'rm -rf "$work"' EXIT
 
 # lock、patch、overlayを一つのsource識別値へまとめる。
 stamp=$(cd "$repo" && {
 	shasum -a 256 build/source.lock build/patches/web_yweb_text.patch
-	shasum -a 256 build/distribution.lock build/runtime.options
+	shasum -a 256 build/distribution.lock build/template.options
 	find build/overlay -type f | LC_ALL=C sort | xargs shasum -a 256
 } | shasum -a 256 | awk '{print $1}')
 
@@ -55,4 +55,4 @@ sh "$repo/build/apply_overlay.sh" "$source_root"
 printf '%s\n' "$stamp" > "$source_root/.yweb-source-stamp"
 cmp "$repo/LICENSES/GODOT-MIT.txt" "$source_root/LICENSE.txt"
 cmp "$repo/LICENSES/GODOT-COPYRIGHT.txt" "$source_root/COPYRIGHT.txt"
-sh "$repo/build/build_runtime.sh" "$source_root" "$emsdk" "$runtime_out"
+sh "$repo/build/build_template.sh" "$source_root" "$emsdk" "$template_out"

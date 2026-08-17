@@ -1,0 +1,53 @@
+# Godot stableへ対応したaddonを固定containerから作り、そのままrelease配布する手動workflow。
+# 対応Godot版ごとに、同じ入口からエクスポートテンプレートと由来manifestを揃える。
+
+name: Build export template
+
+on:
+  workflow_dispatch:
+    inputs:
+      godot_tag:
+        description: 固定するGodot tag。空なら現行のbuild/source.lockのまま。
+        required: false
+        default: ''
+      release_tag:
+        description: 公開するreleaseのtag。空ならartifactだけ。
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  template:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Pin Godot release
+        if: inputs.godot_tag != ''
+        run: sh build/update_godot.sh "${{ inputs.godot_tag }}"
+      - name: Build export template
+        run: sh build/build_distribution.sh
+      - name: Check license notice
+        run: node tests/licenses.cjs
+      - name: Package addon
+        run: |
+          cp LICENSE addons/yurutto_website_exporter/LICENSE.txt
+          zip -r -q -9 "$RUNNER_TEMP/YuruttoWebsiteExporter.zip" addons/yurutto_website_exporter
+      - name: Upload addon
+        uses: actions/upload-artifact@v4
+        with:
+          name: yweb-site-${{ github.sha }}
+          path: ${{ runner.temp }}/YuruttoWebsiteExporter.zip
+          if-no-files-found: error
+      - name: Publish release
+        if: inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          godot=$(node -p "require('./addons/yurutto_website_exporter/templates/manifest.json').godot.version")
+          gh release create "${{ inputs.release_tag }}" "$RUNNER_TEMP/YuruttoWebsiteExporter.zip" \
+            --title "${{ inputs.release_tag }}" \
+            --notes "Godot $godot 用のエクスポートテンプレート同梱。addonsごと展開してプロジェクトへ置く。"

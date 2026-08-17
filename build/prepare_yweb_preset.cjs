@@ -16,7 +16,7 @@ const removed = new Set([
 	'vram_texture_compression/for_mobile',
 	'html/export_icon', 'html/custom_html_shell', 'html/head_include',
 	'html/canvas_resize_policy', 'html/experimental_virtual_keyboard',
-]); // 独立runtimeが受け取らない個別設定。
+]); // 独立テンプレートが受け取らない個別設定。
 const defaults = {
 	'vram_texture_compression/for_desktop': 'true',
 	'html/focus_canvas_on_start': 'true',
@@ -47,8 +47,8 @@ let index = '';
 text = text.replace(preset, (section, head, number, body) => {
 	if (!new RegExp(`^name="${escaped}"$`, 'm').test(body)) return section;
 	index = number;
-	let meta = body.replace(/^platform=.*$/m, 'platform="ゆるっとWebサイト"');
-	if (!/^platform=/m.test(meta)) meta = `${meta.replace(/\s*$/, '')}\nplatform="ゆるっとWebサイト"\n`;
+	let meta = body.replace(/^platform=.*$/m, 'platform="Yurutto Website"');
+	if (!/^platform=/m.test(meta)) meta = `${meta.replace(/\s*$/, '')}\nplatform="Yurutto Website"\n`;
 	if (/^runnable=/m.test(meta)) meta = meta.replace(/^runnable=.*$/m, 'runnable=true');
 	else meta = `${meta.replace(/\s*$/, '')}\nrunnable=true\n`;
 	return head + meta;
@@ -70,4 +70,4 @@ for (const [key, value] of Object.entries(defaults)) if (!values.has(key)) value
 const options = `\n\n${[...values].map(([key, value]) => `${key}=${value}`).join('\n')}\n`;
 text = text.slice(0, bodyStart) + options + text.slice(end);
 fs.writeFileSync(file, text.replace(/\n{3,}/g, '\n\n'));
-console.log(JSON.stringify({ preset: name, platform: 'ゆるっとWebサイト', embeddedTemplate: true }));
+console.log(JSON.stringify({ preset: name, platform: 'Yurutto Website', embeddedTemplate: true }));

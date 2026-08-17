@@ -7,4 +7,4 @@ Godot 4.7.1-stable固定commit用の独立Webエクスポーター。
 3. `プロジェクト > エクスポート > 追加 > ゆるっとWeb`を選択。
 4. 出力先を`.html`にしてエクスポート。
 
-専用Web runtimeとBrotliを内蔵。利用時にGodot公式Webテンプレート、Node.js、Dockerは不要。異なるGodot版はExport前に拒否。
+専用WebテンプレートとBrotliを内蔵。利用時にGodot公式Webテンプレート、Node.js、Dockerは不要。異なるGodot版はExport前に拒否。

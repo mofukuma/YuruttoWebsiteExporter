@@ -6,6 +6,7 @@ extends RefCounted
 const BEGIN := "<!-- YWEB_SITE_BEGIN -->" # 再生成headの開始印。
 const END := "<!-- YWEB_SITE_END -->" # 再生成headの終了印。
 const RUNTIME := "res://addons/yurutto_website_exporter/site_runtime.js" # Browser scene同期処理。
+const I18n := preload("i18n.gd") # 画面文言の言語選び。
 const NGINX := "res://addons/yurutto_website_exporter/nginx-yweb.conf" # 直接配信用設定。
 const NGINX_PROXY := "res://addons/yurutto_website_exporter/nginx-yweb-proxy.conf" # reverse proxy設定。
 const OPTIONS := [
@@ -28,7 +29,7 @@ func build(options: Dictionary, target: String) -> Error:
 	output = target
 	out = target.get_base_dir()
 	if not FileAccess.file_exists(output):
-		return _fail("Export HTMLがありません: %s" % output)
+		return _fail(I18n.t("no_export_html", [output]))
 	var avoid := bool(options.get("yweb/font/avoid_canvas_theme_font", true))
 	if not bool(options.get("yweb/site/enabled", true)):
 		var error := _write_text_config(avoid)
@@ -57,11 +58,11 @@ func build(options: Dictionary, target: String) -> Error:
 	if not String(data.site.favicon).is_empty():
 		var icon := _resource(data.site.favicon)
 		if icon.is_empty() or not FileAccess.file_exists(icon):
-			return _fail("faviconがありません: %s" % data.site.favicon)
+			return _fail(I18n.t("favicon_missing", [data.site.favicon]))
 		var icon_name := "favicon.%s" % icon.get_extension().to_lower()
 		var copied := DirAccess.copy_absolute(icon, asset_dir.path_join(icon_name))
 		if copied != OK:
-			return _fail("faviconを配置できません。")
+			return _fail(I18n.t("favicon_copy"))
 	var base := FileAccess.get_file_as_string(output)
 	var scenes: Array = data.scenes.values()
 	var first: Dictionary = scenes[0]
@@ -77,9 +78,9 @@ func build(options: Dictionary, target: String) -> Error:
 		return error
 	var missing := first.duplicate(true)
 	missing.merge({
-		"title": "ページが見つかりません | %s" % data.site.name,
-		"description": "指定されたページは見つかりませんでした。",
-		"summary": "指定されたページは見つかりませんでした。",
+		"title": I18n.t("not_found_title", [data.site.name], data.site.locale),
+		"description": I18n.t("not_found_text", [], data.site.locale),
+		"summary": I18n.t("not_found_text", [], data.site.locale),
 		"robots": "noindex,nofollow", "uri": "/404/",
 	}, true)
 	error = _write(out.path_join("404.html"), _render(base, data, missing, image, url, font_map))
@@ -125,17 +126,17 @@ func _configuration(options: Dictionary) -> Dictionary:
 	if not file.is_empty() and FileAccess.file_exists(file):
 		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(file))
 		if not parsed is Dictionary:
-			_fail("yweb-site.jsonはJSON objectで指定してください。")
+			_fail(I18n.t("site_json_object"))
 			return {}
 		source = parsed
 	if int(source.get("version", 1)) != 1:
-		_fail("yweb-site.json versionは1だけ対応します。")
+		_fail(I18n.t("site_json_version"))
 		return {}
 	var source_site: Dictionary = source.get("site", {})
 	var site := {
 		"name": String(options.get("yweb/site/title", source_site.get("name", info.title))),
 		"base_url": String(options.get("yweb/site/base_url", source_site.get("base_url", "https://example.com"))),
-		"description": String(options.get("yweb/site/description", source_site.get("description", "Godotで作成したWebサイトです。"))),
+		"description": String(options.get("yweb/site/description", source_site.get("description", I18n.t("site_description")))),
 		"locale": String(options.get("yweb/site/locale", source_site.get("locale", "ja_JP"))),
 		"favicon": String(options.get("yweb/site/favicon", source_site.get("favicon", ""))),
 		"meta": source_site.get("meta", []), "styles": source_site.get("styles", []), "scripts": source_site.get("scripts", []),
@@ -153,16 +154,16 @@ func _configuration(options: Dictionary) -> Dictionary:
 	var seen := {}
 	for key in entries:
 		if not entries[key] is Dictionary:
-			_fail("scene設定はJSON objectで指定してください: %s" % key)
+			_fail(I18n.t("scene_json_object", [key]))
 			return {}
 		var value: Dictionary = entries[key]
 		var scene_file := _resource(String(value.get("scene", "")))
 		if scene_file.is_empty() or not FileAccess.file_exists(scene_file):
-			_fail("sceneがありません: %s" % key)
+			_fail(I18n.t("scene_missing", [key]))
 			return {}
 		var uri := _route(String(value.get("uri", "/")))
 		if uri.is_empty() or seen.has(uri):
-			_fail("URIが不正または重複しています: %s" % value.get("uri", ""))
+			_fail(I18n.t("uri_invalid", [value.get("uri", "")]))
 			return {}
 		seen[uri] = true
 		var title := String(value.get("title", site.name))
@@ -176,7 +177,7 @@ func _configuration(options: Dictionary) -> Dictionary:
 	return {
 		"site": site, "scenes": scenes,
 		"ogp": String(options.get("yweb/ogp/image", "res://web/ogp.png")),
-		"alt": String(options.get("yweb/ogp/alt", "サイトのプレビュー画像")),
+		"alt": String(options.get("yweb/ogp/alt", I18n.t("ogp_alt"))),
 	}
 
 # URIをsite rootから始まるdirectory形式へ正規化する。
@@ -191,21 +192,21 @@ func _route(value: String) -> String:
 # 公開URLをbase URL配下へ組み立てる関数群を返す。
 func _urls(base: String) -> Dictionary:
 	if base.contains("?") or base.contains("#"):
-		_fail("base URLにqueryとfragmentは使用できません: %s" % base)
+		_fail(I18n.t("url_query", [base]))
 		return {}
 	var marker := base.find("://")
 	if marker < 1:
-		_fail("HTTP URLではありません: %s" % base)
+		_fail(I18n.t("url_scheme", [base]))
 		return {}
 	var scheme := base.substr(0, marker).to_lower()
 	if scheme != "http" and scheme != "https":
-		_fail("HTTP URLではありません: %s" % base)
+		_fail(I18n.t("url_scheme", [base]))
 		return {}
 	var rest := base.substr(marker + 3)
 	var slash := rest.find("/")
 	var host := rest if slash < 0 else rest.substr(0, slash)
 	if host.is_empty():
-		_fail("base URLにhostがありません: %s" % base)
+		_fail(I18n.t("url_host", [base]))
 		return {}
 	var root := "/" if slash < 0 else rest.substr(slash)
 	root = "/" + root.trim_prefix("/").trim_suffix("/") + "/"
@@ -214,7 +215,7 @@ func _urls(base: String) -> Dictionary:
 	var safe := RegEx.new()
 	safe.compile("^/[a-zA-Z0-9._~/-]*$")
 	if not safe.search(root):
-		_fail("base URLのpathに使用できない文字があります: %s" % root)
+		_fail(I18n.t("url_path", [root]))
 		return {}
 	var origin := "%s://%s" % [scheme, host]
 	return {
@@ -264,7 +265,7 @@ func _webfonts(enabled: bool, public_path: Callable) -> Dictionary:
 			var name := "%s-%s.woff2" % [clean, digest]
 			var error := DirAccess.copy_absolute(font, target.path_join(name))
 			if error != OK:
-				_fail("Web fontを配置できません: %s" % font)
+				_fail(I18n.t("font_copy", [font]))
 				return {}
 			var relative := source.trim_prefix(project + "/").replace("\\", "/")
 			var key := "res://%s" % relative
@@ -305,15 +306,15 @@ func _copy_assets(data: Dictionary, url: Dictionary) -> void:
 				continue
 			var target := out.path_join(relative).simplify_path()
 			if not target.begins_with(out + "/"):
-				_fail("公開asset pathが不正です: %s" % value)
+				_fail(I18n.t("asset_path", [value]))
 				return
 			DirAccess.make_dir_recursive_absolute(target.get_base_dir())
 			if DirAccess.copy_absolute(source, target) != OK:
-				_fail("公開assetを配置できません: %s" % value)
+				_fail(I18n.t("asset_copy", [value]))
 				return
 			if FileAccess.file_exists(source + ".br"):
 				if DirAccess.copy_absolute(source + ".br", target + ".br") != OK:
-					_fail("Brotli assetを配置できません: %s" % value)
+					_fail(I18n.t("asset_brotli", [value]))
 					return
 			elif FileAccess.file_exists(target + ".br"):
 				DirAccess.remove_absolute(target + ".br")
@@ -327,13 +328,13 @@ func _ogp(value: String, asset_dir: String) -> Dictionary:
 		return {}
 	var image := Image.new()
 	if image.load(file) != OK:
-		_fail("OGP画像を読めません: %s" % value)
+		_fail(I18n.t("ogp_read", [value]))
 		return {}
 	var extension := file.get_extension().to_lower()
 	var types := {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}
 	var name := "ogp.%s" % extension
 	if DirAccess.copy_absolute(file, asset_dir.path_join(name)) != OK:
-		_fail("OGP画像を配置できません。")
+		_fail(I18n.t("ogp_copy"))
 		return {}
 	return {"file": name, "type": types.get(extension, "application/octet-stream"), "width": image.get_width(), "height": image.get_height()}
 
@@ -416,7 +417,7 @@ func _metas(items: Array, scene := false) -> String:
 	var tags: Array[String] = []
 	for item in items:
 		if not item is Dictionary or (not item.has("name") and not item.has("property")) or not item.has("content"):
-			_fail("metaにはnameまたはpropertyとcontentが必要です。")
+			_fail(I18n.t("meta_fields"))
 			return ""
 		var key := "name" if item.has("name") else "property"
 		tags.append("<meta %s=\"%s\" content=\"%s\"%s>" % [key, _html(item[key]), _html(item.content), " data-yweb-scene-meta=\"true\"" if scene else ""])
@@ -482,11 +483,11 @@ func _write_manifest() -> Error:
 		if extension != "js" and extension != "wasm":
 			continue
 		if not FileAccess.file_exists(raw):
-			return _fail("Brotli元fileがありません: %s" % encoded.get_file())
+			return _fail(I18n.t("brotli_source", [encoded.get_file()]))
 		var raw_size := _size(raw)
 		var encoded_size := _size(encoded)
 		if encoded_size >= raw_size:
-			return _fail("Brotli成果物が縮んでいません: %s" % encoded.get_file())
+			return _fail(I18n.t("brotli_size", [encoded.get_file()]))
 		var relative := raw.trim_prefix(out.trim_suffix("/") + "/").replace("\\", "/")
 		entries.append({
 			"file": relative, "originalBytes": raw_size, "brotliBytes": encoded_size,
@@ -495,7 +496,7 @@ func _write_manifest() -> Error:
 		has_js = has_js or extension == "js"
 		has_wasm = has_wasm or extension == "wasm"
 	if not has_js or not has_wasm:
-		return _fail("内蔵Brotli runtimeが不足しています。")
+		return _fail(I18n.t("brotli_template"))
 	return _write(out.path_join("yweb-compression.json"), JSON.stringify({"encoding": "br", "quality": 6, "entries": entries}, "\t") + "\n")
 
 # res:// pathをproject外へ出さず絶対pathへ変換する。
@@ -503,11 +504,11 @@ func _resource(value: String) -> String:
 	if value.is_empty():
 		return ""
 	if not value.begins_with("res://"):
-		_fail("res:// pathではありません: %s" % value)
+		_fail(I18n.t("not_res_path", [value]))
 		return ""
 	var file := project.path_join(value.trim_prefix("res://")).simplify_path()
 	if file != project and not file.begins_with(project + "/"):
-		_fail("project外pathです: %s" % value)
+		_fail(I18n.t("outside_project", [value]))
 		return ""
 	return file
 
@@ -533,7 +534,7 @@ func _write_nginx(source: String, target: String, root: String) -> Error:
 func _write(path: String, text: String) -> Error:
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
-		return _fail("fileを書けません: %s" % path)
+		return _fail(I18n.t("write_failed", [path]))
 	file.store_string(text)
 	return OK
 

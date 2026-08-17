@@ -3,6 +3,8 @@
 
 extends RefCounted
 
+const I18n := preload("i18n.gd") # 画面文言の言語選び。
+
 const TEXT_TYPES := ["tscn", "tres", "gd", "gdshader"] # 内容を検査する文字形式。
 const MODEL_TYPES := ["blend", "dae", "fbx", "glb", "gltf", "obj"] # 拒否する3D model形式。
 const BINARY_TYPES := ["scn", "res"] # 実体を型走査するbinary形式。
@@ -12,12 +14,12 @@ const THREE_D_CLASSES := [
 	"FogMaterial", "ProceduralSkyMaterial", "PanoramaSkyMaterial", "PhysicalSkyMaterial", "Compositor", "CompositorEffect",
 ] # 名前が3Dで終わらない3D専用class系統。
 const RULES := [
-	["\\btype\\s*=\\s*\"[^\"]*3D\"", "3D型"],
-	["\\btype\\s*=\\s*\"(?:ArrayMesh|BoxMesh|CapsuleMesh|CylinderMesh|PlaneMesh|PrismMesh|QuadMesh|SphereMesh|TextMesh|TubeTrailMesh|Environment|Sky|CameraAttributes\\w*)\"", "3D resource"],
-	["(?m)^\\s*extends\\s+\\w*3D\\b", "3D script"],
-	["\\b\\w*3D\\s*\\.\\s*new\\s*\\(", "動的3D型"],
-	["\\b(?:PhysicsServer3D|NavigationServer3D|RenderingServer\\s*\\.\\s*(?:camera|environment|scenario|instance|light|mesh)_)", "3D server"],
-	["(?m)^\\s*shader_type\\s+spatial\\b", "spatial shader"],
+	["\\btype\\s*=\\s*\"[^\"]*3D\"", "block_type_3d"],
+	["\\btype\\s*=\\s*\"(?:ArrayMesh|BoxMesh|CapsuleMesh|CylinderMesh|PlaneMesh|PrismMesh|QuadMesh|SphereMesh|TextMesh|TubeTrailMesh|Environment|Sky|CameraAttributes\\w*)\"", "block_resource_3d"],
+	["(?m)^\\s*extends\\s+\\w*3D\\b", "block_script_3d"],
+	["\\b\\w*3D\\s*\\.\\s*new\\s*\\(", "block_dynamic_3d"],
+	["\\b(?:PhysicsServer3D|NavigationServer3D|RenderingServer\\s*\\.\\s*(?:camera|environment|scenario|instance|light|mesh)_)", "block_server_3d"],
+	["(?m)^\\s*shader_type\\s+spatial\\b", "block_spatial_shader"],
 ] # 文字resource内で拒否する3D表現。
 
 var patterns: Array[RegEx] = [] # 一度だけcompileした検査式。
@@ -38,13 +40,13 @@ func inspect(root: String) -> Array[String]:
 		if relative.begins_with("addons/yurutto_website_exporter/"):
 			continue
 		if extension == "gdextension":
-			blocked.append("%s: GDExtension非対応" % relative)
+			blocked.append("%s: %s" % [relative, I18n.t("block_gdextension")])
 			continue
 		if extension == "mesh":
-			blocked.append("%s: 3D mesh resource" % relative)
+			blocked.append("%s: %s" % [relative, I18n.t("block_mesh")])
 			continue
 		if extension in MODEL_TYPES:
-			blocked.append("%s: 3D asset" % relative)
+			blocked.append("%s: %s" % [relative, I18n.t("block_model")])
 			continue
 		if extension in BINARY_TYPES:
 			_check_binary(file, relative, blocked)
@@ -81,17 +83,17 @@ func _check_text(file: String, relative: String, blocked: Array[String]) -> void
 	var source := FileAccess.get_file_as_string(file)
 	for index in RULES.size():
 		if patterns[index].search(source):
-			blocked.append("%s: %s" % [relative, RULES[index][1]])
+			blocked.append("%s: %s" % [relative, I18n.t(RULES[index][1])])
 
 # binary resourceを読込み、保存propertyまで再帰検査する。
 func _check_binary(file: String, relative: String, blocked: Array[String]) -> void:
 	var resource := ResourceLoader.load(file)
 	if resource == null:
-		blocked.append("%s: 検査不能binary resource" % relative)
+		blocked.append("%s: %s" % [relative, I18n.t("block_binary_unreadable")])
 		return
 	var value: Variant = resource.instantiate() if resource is PackedScene else resource
 	if _has_3d(value, {}):
-		blocked.append("%s: binary 3D型" % relative)
+		blocked.append("%s: %s" % [relative, I18n.t("block_binary_3d")])
 	if value is Node:
 		value.free()
 

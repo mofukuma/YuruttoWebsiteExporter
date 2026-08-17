@@ -1,5 +1,5 @@
 // testが検査するWeb成果物を、Godot projectから必要な時だけ書き出す。
-// 事前手順なしで各testを単体実行でき、projectとruntimeが変わらない再実行では書き出しを省く設計。
+// 事前手順なしで各testを単体実行でき、projectとテンプレートが変わらない再実行では書き出しを省く設計。
 
 'use strict';
 
@@ -9,7 +9,7 @@ const path = require('node:path');
 
 const repo = path.resolve(__dirname, '..'); // 書き出しscriptを持つproject root。
 const godot = process.env.GODOT_BIN || '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot editor。
-const template = path.join(repo, 'addons/yurutto_website_exporter/templates/yweb.zip'); // 成果物へ入る配布runtime。
+const template = path.join(repo, 'addons/yurutto_website_exporter/templates/yweb.zip'); // 成果物へ入る配布テンプレート。
 const generated = new Set(['.godot', 'addons', 'export_presets.cfg']); // 書き出し手順が生成するproject内領域。
 const standardPreset = `[preset.0]
 
@@ -43,7 +43,7 @@ function stale(site, source) {
 	return !fs.existsSync(index) || fs.statSync(index).mtimeMs < source;
 }
 
-// ゆるっとWeb runtimeの成果物を用意する。
+// ゆるっとWebテンプレートの成果物を用意する。
 function ensure(project, site) {
 	if (stale(site, Math.max(newest(project), fs.statSync(template).mtimeMs))) {
 		child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), project, path.join(site, 'index.html')], { stdio: 'pipe' });
@@ -51,7 +51,7 @@ function ensure(project, site) {
 	return site;
 }
 
-// 同じsceneをGodot標準Web runtimeで書き出し、比較の対照を用意する。
+// 同じsceneをGodot標準Webテンプレートで書き出し、比較の対照を用意する。
 function ensureStandard(project, site) {
 	if (!stale(site, newest(project))) return site;
 	const work = `${site}-project`; // addonを外した標準書き出し用の複製。

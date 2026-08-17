@@ -1,4 +1,4 @@
-// 固定runtimeの3DとGDExtension拒否境界を2D作品とfixtureで確認する。
+// 固定テンプレートの3DとGDExtension拒否境界を2D作品とfixtureで確認する。
 // 同じcheckerへ成功例と失敗例を渡し、書き出し前の終了値を固定する。
 
 const assert = require('node:assert/strict');
@@ -12,9 +12,9 @@ const runner = path.join(root, 'tests/project_check_runner.gd'); // Godot内で�
 const cases = path.join(root, 'tmp/minimum-3d-cases'); // 動的生成とbinary用の短命fixture。
 const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // binary fixture生成用Godot。
 
-// projectを検査し、終了値と説明を返す。
-function check(project) {
-	return spawnSync(godot, ['--headless', '--path', project, '--script', runner, '--', checker, project], { encoding: 'utf8' });
+// projectを検査し、終了値と説明を返す。言語を渡すと拒否理由の言語も固定する。
+function check(project, locale = 'en') {
+	return spawnSync(godot, ['--headless', '--language', locale, '--path', project, '--script', runner, '--', checker, project], { encoding: 'utf8' });
 }
 
 const allowed = check(path.join(root, 'examples/text_lab'));
@@ -36,16 +36,20 @@ const binaryCurve = check(path.join(cases, 'curve_3d'));
 const extension = check(path.join(cases, 'extension'));
 assert.equal(allowed.status, 0, allowed.stderr);
 assert.equal(blocked.status, 1, `3D sceneを許可: ${blocked.stderr}`);
-assert.match(blocked.stderr, /main\.tscn: 3D型/);
+assert.match(blocked.stderr, /main\.tscn: 3D type/);
 assert.equal(dynamic.status, 1, `動的3D生成を許可: ${dynamic.stderr}`);
-assert.match(dynamic.stderr, /main\.gd: 動的3D型/);
+assert.match(dynamic.stderr, /main\.gd: 3D type created at runtime/);
 assert.equal(allowedBinary.status, 0, `2D binaryを拒否: ${allowedBinary.stderr}`);
 assert.equal(binaryScene.status, 1, `binary 3D sceneを許可: ${binaryScene.stderr}`);
-assert.match(binaryScene.stderr, /scene\.scn: binary 3D型/);
+assert.match(binaryScene.stderr, /scene\.scn: 3D type in a binary resource/);
 assert.equal(binaryResource.status, 1, `binary 3D resourceを許可: ${binaryResource.stderr}`);
-assert.match(binaryResource.stderr, /mesh\.res: binary 3D型/);
+assert.match(binaryResource.stderr, /mesh\.res: 3D type in a binary resource/);
 assert.equal(binaryCurve.status, 1, `Curve3D resourceを許可: ${binaryCurve.stderr}`);
-assert.match(binaryCurve.stderr, /curve\.res: binary 3D型/);
+assert.match(binaryCurve.stderr, /curve\.res: 3D type in a binary resource/);
 assert.equal(extension.status, 1, `GDExtensionを許可: ${extension.stderr}`);
-assert.match(extension.stderr, /addon\.gdextension: GDExtension非対応/);
+assert.match(extension.stderr, /addon\.gdextension: GDExtension is not supported/);
+// 同じ拒否を日本語Editorでも読めることを確認する。
+const blockedJa = check(path.join(root, 'tests/fixtures/minimum_3d'), 'ja');
+assert.equal(blockedJa.status, 1, `3D sceneを許可: ${blockedJa.stderr}`);
+assert.match(blockedJa.stderr, /main\.tscn: 3D型/);
 console.log(JSON.stringify({ ok: true, allowed: 3, rejected: 6 }));

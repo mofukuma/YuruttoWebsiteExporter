@@ -1,4 +1,4 @@
-// Theme fontと同名同pathのwoff2選択とBrowser標準fontを実runtimeで検査する。
+// Theme fontと同名同pathのwoff2選択とBrowser標準fontを書き出したsiteで検査する。
 // Web fontの無効化やfile不足でも文字DOMを維持する所有境界を確認する。
 
 'use strict';
@@ -54,7 +54,7 @@ async function inspect(browser, enabled, output) {
 			return { map: window.YWEB_FONT_MAP, dom: !!node, family: node ? getComputedStyle(node).fontFamily : '' };
 		});
 		const names = ['index.js', 'index.wasm', 'index.js.br', 'index.wasm.br'];
-		state.runtime = Object.fromEntries(names.map((name) => [name, hash(path.join(output, name))]));
+		state.engine = Object.fromEntries(names.map((name) => [name, hash(path.join(output, name))]));
 		const fonts = path.join(output, 'yweb-fonts');
 		state.fontFiles = fs.existsSync(fonts) ? fs.readdirSync(fonts).filter((name) => name.endsWith('.woff2')).length : 0;
 		state.fontBrotli = fs.existsSync(fonts) ? fs.readdirSync(fonts).filter((name) => name.endsWith('.woff2.br')).length : 0;
@@ -85,8 +85,8 @@ async function main() {
 		assert.equal(missing.dom, true);
 		assert.equal(missing.family, 'sans-serif');
 		assert.deepEqual(missing.map, {});
-		assert.deepEqual(on.runtime, off.runtime, 'Web font OFFでruntimeが変化');
-		assert.deepEqual(on.runtime, missing.runtime, 'Web font不足でruntimeが変化');
+		assert.deepEqual(on.engine, off.engine, 'Web font OFFでengine fileが変化');
+		assert.deepEqual(on.engine, missing.engine, 'Web font不足でengine fileが変化');
 		assert.deepEqual([on.fontFiles, off.fontFiles, missing.fontFiles], [1, 0, 0]);
 		assert.deepEqual([on.fontBrotli, off.fontBrotli, missing.fontBrotli], [0, 0, 0]);
 		fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ on, off, missing }, null, 2)}\n`);

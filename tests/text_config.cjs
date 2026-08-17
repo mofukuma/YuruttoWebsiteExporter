@@ -19,7 +19,7 @@ fs.mkdirSync(project, { recursive: true });
 fs.cpSync(path.join(repo, 'addons/yurutto_website_exporter'), path.join(project, 'addons/yurutto_website_exporter'), { recursive: true });
 fs.writeFileSync(path.join(project, 'project.godot'), '[application]\nconfig/name="Text Config"\nrun/main_scene="res://main.tscn"\n[editor_plugins]\nenabled=PackedStringArray("res://addons/yurutto_website_exporter/plugin.cfg")\n');
 fs.writeFileSync(path.join(project, 'main.tscn'), '[gd_scene format=3]\n[node name="Main" type="Node"]\n');
-fs.writeFileSync(path.join(project, 'export_presets.cfg'), '[preset.0]\nname="Web"\nplatform="ゆるっとWebサイト"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\nhtml/focus_canvas_on_start=true\nyweb/site/enabled=false\nyweb/font/matching_webfont=true\nyweb/font/avoid_canvas_theme_font=false\nvram_texture_compression/for_desktop=true\n');
+fs.writeFileSync(path.join(project, 'export_presets.cfg'), '[preset.0]\nname="Web"\nplatform="Yurutto Website"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\nhtml/focus_canvas_on_start=true\nyweb/site/enabled=false\nyweb/font/matching_webfont=true\nyweb/font/avoid_canvas_theme_font=false\nvram_texture_compression/for_desktop=true\n');
 const emptyPath = path.join(root, 'empty-path');
 fs.mkdirSync(emptyPath, { recursive: true });
 child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', html], { stdio: 'pipe', env: { ...process.env, PATH: emptyPath } });

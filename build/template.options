@@ -1,4 +1,4 @@
-# ゆるっとWebの配布runtimeを決定するSCons option。
+# ゆるっとWebの配布テンプレートを決定するSCons option。
 platform=web
 target=template_release
 extra_suffix=ywebminimum

@@ -4,6 +4,8 @@
 @tool
 extends EditorExportPlugin
 
+const I18n := preload("i18n.gd") # 画面文言の言語選び。
+
 const CAPTURE_SCRIPT := "res://addons/yurutto_website_exporter/ogp_capture.gd" # OGP撮影処理。
 const OGP_PATH := "res://web/ogp.png" # 未指定時の保存先。
 const PLATFORM := preload("res://addons/yurutto_website_exporter/platform.gd") # 対象platformの識別子。
@@ -44,7 +46,7 @@ func _get_export_option_visibility(_platform: EditorExportPlatform, _option: Str
 func _capture_ogp() -> void:
 	var root := editor.get_editor_interface().get_edited_scene_root()
 	if root == null or root.scene_file_path.is_empty():
-		push_error("OGP Autoには保存済みsceneが必要です。")
+		push_error(I18n.t("ogp_need_saved_scene"))
 		return
 	var preset := get_export_preset()
 	var target := String(preset.get("yweb/ogp/image")) if preset else OGP_PATH
@@ -63,7 +65,7 @@ func _capture_ogp() -> void:
 	var output: Array = []
 	var code := OS.execute(OS.get_executable_path(), args, output, true)
 	if code != 0:
-		push_error("OGP Auto失敗: %s" % "\n".join(output))
+		push_error(I18n.t("ogp_failed", ["\n".join(output)]))
 		return
 	editor.get_editor_interface().get_resource_filesystem().scan()
 	print("OGP Auto: %s (1200x630 / %d frame)" % [target, frame])

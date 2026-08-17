@@ -1,4 +1,4 @@
-// History直リンク、Browser戻り、Godot scene変更を実runtimeとnginxで検査する。
+// History直リンク、Browser戻り、Godot scene変更を書き出したsiteとnginxで検査する。
 // URL、title、SceneTree.current_sceneを双方向に一回ずつ動かす。
 
 'use strict';

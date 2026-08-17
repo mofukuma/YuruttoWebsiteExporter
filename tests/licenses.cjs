@@ -7,8 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..'); // yweb project root。
-const runtime = JSON.parse(fs.readFileSync(path.join(root, 'addons/yurutto_website_exporter/templates/runtime.json'))); // 配布runtime情報。
-const template = path.join(root, 'addons/yurutto_website_exporter/templates', runtime.template.file); // 配布template。
+const distribution = JSON.parse(fs.readFileSync(path.join(root, 'addons/yurutto_website_exporter/templates/manifest.json'))); // 配布テンプレート情報。
+const template = path.join(root, 'addons/yurutto_website_exporter/templates', distribution.template.file); // 配布template。
 const notice = 'GODOT_LICENSE.txt'; // 公開する通知file。
 const sources = ['LICENSES/GODOT-MIT.txt', 'LICENSES/GODOT-COPYRIGHT.txt']; // 通知の追跡元。
 

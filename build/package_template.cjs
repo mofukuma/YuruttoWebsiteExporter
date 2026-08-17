@@ -13,10 +13,10 @@ const { compressSite } = require('./compress_web.cjs');
 
 const repo = path.resolve(__dirname, '..'); // 配布定義を持つproject root。
 const archive = path.resolve(process.argv[2] || ''); // Godotが生成したWeb template。
-const out = path.resolve(process.argv[3] || path.join(repo, 'tmp/minimum/runtime-proof')); // 展開確認先。
+const out = path.resolve(process.argv[3] || path.join(repo, 'tmp/minimum/template-proof')); // 展開確認先。
 const addon = path.join(repo, 'addons/yurutto_website_exporter/templates'); // addon配布物の配置先。
-const template = path.join(addon, 'yweb.zip'); // 一つの対応版runtime。
-const runtimeManifest = path.join(addon, 'runtime.json'); // versionと由来の正本。
+const template = path.join(addon, 'yweb.zip'); // 一つの対応版エクスポートテンプレート。
+const manifestFile = path.join(addon, 'manifest.json'); // versionと由来の正本。
 const rawEntries = ['godot.js', 'godot.wasm', 'godot.audio.worklet.js', 'godot.audio.position.worklet.js', 'godot.html']; // Godot Web起動物。
 const compressedEntries = rawEntries.filter((name) => name.endsWith('.js') || name.endsWith('.wasm')); // Brotliを持つ転送対象。
 const licenseEntries = ['GODOT_LICENSE.txt']; // Godot本体と組込依存の通知を一つへまとめた成果物。
@@ -87,14 +87,14 @@ function pack() {
 	assert.ok(fs.existsSync(archive), `Godot Web templateなし: ${archive}`);
 	const source = lock(path.join(repo, 'build/source.lock'));
 	const distribution = lock(path.join(repo, 'build/distribution.lock'));
-	const profile = options(path.join(repo, 'build/runtime.options'));
+	const profile = options(path.join(repo, 'build/template.options'));
 	const epoch = Number(process.env.SOURCE_DATE_EPOCH || distribution.SOURCE_DATE_EPOCH);
 	const quality = Number(distribution.BROTLI_QUALITY);
 	assert.ok(Number.isSafeInteger(epoch) && epoch > 0, '再現timestampが不正');
 	assert.ok(Number.isInteger(quality) && quality > 0, 'Brotli品質が不正');
 	fs.mkdirSync(out, { recursive: true });
 	fs.mkdirSync(addon, { recursive: true });
-	const stage = fs.mkdtempSync(path.join(out, 'runtime-package.'));
+	const stage = fs.mkdtempSync(path.join(out, 'template-package.'));
 	try {
 		child.execFileSync('unzip', ['-oq', archive, ...rawEntries, '-d', stage]);
 		const notice = licenseSources.map((file) => fs.readFileSync(path.join(repo, file), 'utf8').replace(/\n*$/, '\n')).join('\n');
@@ -110,7 +110,7 @@ function pack() {
 		fs.copyFileSync(built, template);
 		const manifest = {
 			schema: 1,
-			profile: distribution.RUNTIME_PROFILE,
+			profile: distribution.TEMPLATE_PROFILE,
 			godot: {
 				version: source.GODOT_VERSION,
 				commit: source.GODOT_COMMIT,
@@ -129,13 +129,13 @@ function pack() {
 			inputs: {
 				sourceLockSha256: sha(path.join(repo, 'build/source.lock')),
 				distributionLockSha256: sha(path.join(repo, 'build/distribution.lock')),
-				runtimeOptionsSha256: sha(path.join(repo, 'build/runtime.options')),
+				templateOptionsSha256: sha(path.join(repo, 'build/template.options')),
 				patchSha256: sha(path.join(repo, 'build/patches/web_yweb_text.patch')),
 				overlaySha256: treeHash(path.join(repo, 'build/overlay')),
 				buildSha256: filesHash([
 					'build/distribution/Dockerfile', 'build/build_distribution.sh',
-					'build/prepare_runtime.sh', 'build/build_runtime.sh',
-					'build/apply_overlay.sh', 'build/package_runtime.cjs',
+					'build/prepare_template.sh', 'build/build_template.sh',
+					'build/apply_overlay.sh', 'build/package_template.cjs',
 					'build/compress_web.cjs',
 				].map((file) => path.join(repo, file))),
 			},
@@ -150,7 +150,7 @@ function pack() {
 			},
 			brotli,
 		};
-		fs.writeFileSync(runtimeManifest, `${JSON.stringify(manifest, null, 2)}\n`);
+		fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
 		return manifest;
 	} finally {
 		fs.rmSync(stage, { recursive: true, force: true });

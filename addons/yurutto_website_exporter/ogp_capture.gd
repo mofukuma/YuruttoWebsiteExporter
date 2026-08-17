@@ -3,6 +3,8 @@
 
 extends SceneTree
 
+const I18n := preload("i18n.gd") # 画面文言の言語選び。
+
 const WIDTH := 1200 # OGP画像の横寸法。
 const HEIGHT := 630 # OGP画像の縦寸法。
 
@@ -35,7 +37,7 @@ func _cover(image: Image) -> Image:
 func _capture() -> void:
 	var packed := load(scene_path) as PackedScene
 	if packed == null or output_path.is_empty():
-		push_error("OGP撮影引数が不正です。")
+		push_error(I18n.t("ogp_bad_args"))
 		quit(1)
 		return
 	var scene := packed.instantiate()

@@ -18,11 +18,11 @@
   },
   "inputs": {
     "sourceLockSha256": "5224af5d7afa0ddffda7a0ae9eb012bbd10492c918a1221f34df6dd4980a09ac",
-    "distributionLockSha256": "4043facbd3f096584ed6ee63c3cb8f6e2237095df084b4934ea55a7b13853896",
-    "runtimeOptionsSha256": "63d69465e878f545685c034dae0264db0200acaf8c08299ed80a8ca35ba21372",
+    "distributionLockSha256": "d3f37a10424d63fca9e00fc9ed4a2af9c124da038be4736c45c1ea2e958131b7",
+    "templateOptionsSha256": "4fe06232430bb2b53911af5ee00a11972420fbf330e95bd793b96a2153d37674",
     "patchSha256": "71f1229d7177cc257ef7c9f00131ce2cb3a9aa5dcf42ce72b68e511cc3b66e7f",
     "overlaySha256": "fd01046cba3d2636e3a612f0c3f6163fcc7158d66043611f0902d9863397c2a8",
-    "buildSha256": "41efdf3651eb83a717ac128c1b42a012d50af157f2f9e435873c489c5c167890"
+    "buildSha256": "5eb3f6f1cf67c69feb6ed4dd9db0b451453514ccea7f4851f677d906ed1fe91b"
   },
   "features": {
     "domText": true,
