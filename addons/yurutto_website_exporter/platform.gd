@@ -7,6 +7,8 @@ extends EditorExportPlatformExtension
 const NAME := "Yurutto Website" # Export画面へ表示する名称。
 const MANIFEST := "res://addons/yurutto_website_exporter/templates/manifest.json" # 対応版と配布テンプレートの由来。
 const SiteBuilder := preload("site_builder.gd") # SEOと配信物の生成処理。
+const SiteConfig := preload("site_config.gd") # Scene情報JSONの用意と補完。
+const CONFIG_PATH := "res://yweb-site.json" # Scene情報JSONの既定位置。
 const I18n := preload("i18n.gd") # 画面文言の言語選び。
 const ProjectCheck := preload("project_check.gd") # 3D境界検査。
 const OGP_PATH := "res://web/ogp.png" # OGP画像の既定位置。
@@ -14,10 +16,11 @@ const OGP_PATH := "res://web/ogp.png" # OGP画像の既定位置。
 var editor: EditorPlugin # Editor機能への接続元。
 var manifest: Dictionary # 読込済み配布テンプレート情報。
 
-# Editorとの接続元を保持する。
+# Editorとの接続元を保持し、Scene情報JSONを使える状態にする。
 func _init(owner: EditorPlugin) -> void:
 	editor = owner
 	manifest = _manifest()
+	SiteConfig.ensure_all(CONFIG_PATH)
 
 # 独立プラットフォーム名を返す。
 func _get_name() -> String:
@@ -52,7 +55,7 @@ func _get_export_options() -> Array[Dictionary]:
 		_option("vram_texture_compression/for_desktop", TYPE_BOOL, true),
 		_option("html/focus_canvas_on_start", TYPE_BOOL, true),
 		_option("yweb/site/enabled", TYPE_BOOL, true, PROPERTY_HINT_NONE, "", true),
-		_option("yweb/site/config", TYPE_STRING, "res://yweb-site.json", PROPERTY_HINT_FILE, "*.json"),
+		_option("yweb/site/config", TYPE_STRING, CONFIG_PATH, PROPERTY_HINT_FILE, "*.json"),
 		_option("yweb/site/base_url", TYPE_STRING, "https://example.com"),
 		_option("yweb/site/title", TYPE_STRING, ProjectSettings.get_setting("application/config/name", "Godot Web Site")),
 		_option("yweb/site/description", TYPE_STRING, I18n.t("site_description")),

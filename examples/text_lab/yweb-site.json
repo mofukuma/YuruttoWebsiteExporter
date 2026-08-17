@@ -1,0 +1,9 @@
+{
+	"version": 1,
+	"scenes": {
+		"Main": {
+			"scene": "res://main.tscn",
+			"uri": "/"
+		}
+	}
+}
