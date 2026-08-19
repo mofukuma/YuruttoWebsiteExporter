@@ -1,4 +1,4 @@
-; 3D拒否境界だけを確認する最小project。
+; 受け入れ境界だけを確認する最小project。
 
 config_version=5
 

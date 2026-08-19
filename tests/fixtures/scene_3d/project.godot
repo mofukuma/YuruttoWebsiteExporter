@@ -1,0 +1,12 @@
+; 3D版テンプレートで3Dが動くことだけを確かめる最小project。
+
+config_version=5
+
+[application]
+
+config/name="Scene 3D"
+run/main_scene="res://main.tscn"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/yurutto_website_exporter/plugin.cfg")

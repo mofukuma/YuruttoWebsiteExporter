@@ -13,7 +13,10 @@ const zlib = require('node:zlib');
 const root = path.resolve(__dirname, '..'); // yweb project root。
 const build = path.join(root, 'build'); // 配布build定義。
 const templateDir = path.join(root, 'addons/yurutto_website_exporter/templates'); // addon内テンプレート。
-const manifest = JSON.parse(fs.readFileSync(path.join(templateDir, 'manifest.json'))); // 配布物の由来正本。
+const profileName = process.env.YWEB_PROFILE || ''; // 3Dのように別種を検査するときの識別名。
+const suffix = profileName ? `-${profileName}` : ''; // 種類ごとに成果物名を分ける。
+const optionsFile = path.join(build, `template${suffix}.options`); // この種類のSCons option正本。
+const manifest = JSON.parse(fs.readFileSync(path.join(templateDir, `manifest${suffix}.json`))); // 配布物の由来正本。
 const template = path.join(templateDir, manifest.template.file); // 検査対象ZIP。
 const work = path.join(root, 'tmp/template-distribution'); // 検査結果保存先。
 const buffer = { maxBuffer: 32 * 1024 * 1024 }; // WASM展開に必要な上限。
@@ -69,7 +72,7 @@ function filesHash(files) {
 
 const source = lock(path.join(build, 'source.lock'));
 const distribution = lock(path.join(build, 'distribution.lock'));
-const options = fs.readFileSync(path.join(build, 'template.options'), 'utf8').split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
+const options = fs.readFileSync(optionsFile, 'utf8').split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
 const dockerfile = fs.readFileSync(path.join(build, 'distribution/Dockerfile'), 'utf8');
 const distributionScript = fs.readFileSync(path.join(build, 'build_distribution.sh'), 'utf8');
 
@@ -85,12 +88,12 @@ assert.equal(manifest.toolchain.emscripten, source.EMSDK_VERSION);
 assert.equal(manifest.toolchain.sourceDateEpoch, Number(distribution.SOURCE_DATE_EPOCH));
 assert.equal(manifest.features.webfont, 'external-project-asset');
 assert.equal(manifest.features.domText, true);
-assert.equal(manifest.features.threeD, false);
+assert.equal(manifest.features.threeD, options.includes('disable_3d=no'));
 assert.deepEqual(manifest.options, options);
 assert.ok(options.includes('yweb_text_dom=yes'));
 assert.ok(options.includes('threads=no'));
 assert.ok(options.includes('dlink_enabled=no'));
-assert.ok(options.includes('disable_3d=yes'));
+assert.ok(options.includes('disable_3d=yes') || options.includes('disable_3d=no'));
 
 assert.match(dockerfile, new RegExp(distribution.BUILDER_IMAGE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 assert.match(dockerfile, new RegExp(`SCONS_VERSION=${distribution.SCONS_VERSION.replaceAll('.', '\\.')}`));
@@ -99,7 +102,7 @@ assert.match(distributionScript, /tests\/template_distribution\.cjs/);
 
 assert.equal(manifest.inputs.sourceLockSha256, sha(path.join(build, 'source.lock')));
 assert.equal(manifest.inputs.distributionLockSha256, sha(path.join(build, 'distribution.lock')));
-assert.equal(manifest.inputs.templateOptionsSha256, sha(path.join(build, 'template.options')));
+assert.equal(manifest.inputs.templateOptionsSha256, sha(optionsFile));
 assert.equal(manifest.inputs.patchSha256, sha(path.join(build, 'patches/web_yweb_text.patch')));
 assert.equal(manifest.inputs.overlaySha256, treeHash(path.join(build, 'overlay')));
 assert.equal(manifest.inputs.buildSha256, filesHash([
@@ -107,7 +110,8 @@ assert.equal(manifest.inputs.buildSha256, filesHash([
 	'build_template.sh', 'apply_overlay.sh', 'package_template.cjs', 'compress_web.cjs',
 ].map((file) => path.join(build, file))));
 
-assert.equal(fs.readdirSync(templateDir).filter((name) => name.endsWith('.zip')).length, 1, 'テンプレートZIPが複数');
+const profiles = fs.readdirSync(build).filter((name) => /^template.*\.options$/.test(name)).length; // 用意したテンプレートの種類数。
+assert.equal(fs.readdirSync(templateDir).filter((name) => name.endsWith('.zip')).length, profiles, 'テンプレートZIPの本数が種類数と違う');
 assert.equal(manifest.template.sha256, sha(template));
 assert.equal(manifest.template.bytes, fs.statSync(template).size);
 const names = child.execFileSync('unzip', ['-Z1', template], { encoding: 'utf8' }).trim().split('\n');

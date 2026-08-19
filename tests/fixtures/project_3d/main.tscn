@@ -1,4 +1,4 @@
-; minimum版が拒否するNode3D scene。
+; 3D版が受け入れるNode3D scene。
 
 [gd_scene format=3]
 

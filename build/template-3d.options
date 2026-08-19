@@ -1,0 +1,24 @@
+# ゆるっとWeb 3D版テンプレートを決定するSCons option。
+platform=web
+target=template_release
+extra_suffix=yweb3d
+yweb_text_dom=yes
+optimize=size_extra
+lto=none
+debug_symbols=no
+threads=no
+opengl3=yes
+vulkan=no
+javascript_eval=no
+dlink_enabled=no
+disable_3d=no
+disable_physics_2d=no
+disable_physics_3d=no
+disable_navigation_2d=no
+disable_navigation_3d=no
+disable_xr=yes
+disable_path_overrides=no
+modules_enabled_by_default=yes
+wasm_simd=no
+initial_memory=64
+progress=no

@@ -9,7 +9,8 @@ const path = require('node:path');
 
 const repo = path.resolve(__dirname, '..'); // 書き出しscriptを持つproject root。
 const godot = process.env.GODOT_BIN || '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot editor。
-const template = path.join(repo, 'addons/yurutto_website_exporter/templates/yweb.zip'); // 成果物へ入る配布テンプレート。
+const suffix = process.env.YWEB_PROFILE ? `-${process.env.YWEB_PROFILE}` : ''; // 検査するテンプレートの種類。
+const template = path.join(repo, `addons/yurutto_website_exporter/templates/yweb${suffix}.zip`); // 成果物へ入る配布テンプレート。
 const generated = new Set(['.godot', 'addons', 'export_presets.cfg']); // 書き出し手順が生成するproject内領域。
 const standardPreset = `[preset.0]
 

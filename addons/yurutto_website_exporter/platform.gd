@@ -5,12 +5,12 @@
 extends EditorExportPlatformExtension
 
 const NAME := "Yurutto Website" # Export画面へ表示する名称。
-const MANIFEST := "res://addons/yurutto_website_exporter/templates/manifest.json" # 対応版と配布テンプレートの由来。
+const MANIFEST := "res://addons/yurutto_website_exporter/templates/manifest-3d.json" # 対応版と配布テンプレートの由来。
 const SiteBuilder := preload("site_builder.gd") # SEOと配信物の生成処理。
 const SiteConfig := preload("site_config.gd") # Scene情報JSONの用意と補完。
 const CONFIG_PATH := "res://yweb-site.json" # Scene情報JSONの既定位置。
 const I18n := preload("i18n.gd") # 画面文言の言語選び。
-const ProjectCheck := preload("project_check.gd") # 3D境界検査。
+const ProjectCheck := preload("project_check.gd") # 受け入れ境界検査。
 const OGP_PATH := "res://web/ogp.png" # OGP画像の既定位置。
 
 var editor: EditorPlugin # Editor機能への接続元。

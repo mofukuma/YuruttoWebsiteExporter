@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "profile": "minimum-dom",
+  "profile": "3d",
   "godot": {
     "version": "4.7.1-stable",
     "commit": "a13da4feb8d8aefc283c3763d33a2f170a18d541",
@@ -19,7 +19,7 @@
   "inputs": {
     "sourceLockSha256": "5224af5d7afa0ddffda7a0ae9eb012bbd10492c918a1221f34df6dd4980a09ac",
     "distributionLockSha256": "d3f37a10424d63fca9e00fc9ed4a2af9c124da038be4736c45c1ea2e958131b7",
-    "templateOptionsSha256": "4fe06232430bb2b53911af5ee00a11972420fbf330e95bd793b96a2153d37674",
+    "templateOptionsSha256": "f4e390756c421d47d70778ab2fc389ec1a05bc3174273e5fbea9e95743049934",
     "patchSha256": "71f1229d7177cc257ef7c9f00131ce2cb3a9aa5dcf42ce72b68e511cc3b66e7f",
     "overlaySha256": "fd01046cba3d2636e3a612f0c3f6163fcc7158d66043611f0902d9863397c2a8",
     "buildSha256": "9d6307183d0aa996720ad81d0e4b6a94bcb54c944eea0f259d1755ba026be63d"
@@ -28,13 +28,13 @@
     "domText": true,
     "threads": false,
     "gdextension": false,
-    "threeD": false,
+    "threeD": true,
     "webfont": "external-project-asset"
   },
   "options": [
     "platform=web",
     "target=template_release",
-    "extra_suffix=ywebminimum",
+    "extra_suffix=yweb3d",
     "yweb_text_dom=yes",
     "optimize=size_extra",
     "lto=none",
@@ -44,32 +44,32 @@
     "vulkan=no",
     "javascript_eval=no",
     "dlink_enabled=no",
-    "disable_3d=yes",
+    "disable_3d=no",
     "disable_physics_2d=no",
-    "disable_physics_3d=yes",
+    "disable_physics_3d=no",
     "disable_navigation_2d=no",
-    "disable_navigation_3d=yes",
+    "disable_navigation_3d=no",
     "disable_xr=yes",
     "disable_path_overrides=no",
     "modules_enabled_by_default=yes",
     "wasm_simd=no",
-    "initial_memory=32",
+    "initial_memory=64",
     "progress=no"
   ],
   "template": {
-    "file": "yweb.zip",
-    "bytes": 13854500,
-    "sha256": "349897840717a990c945ab0fd07d7d37aae5e6f1f36789693edcc4f701b249e7",
+    "file": "yweb-3d.zip",
+    "bytes": 17136696,
+    "sha256": "eabab20c3aeab5b878feebc4e14fcdac2517e39fffa41e96e09e26c0862c6e94",
     "entries": [
       {
         "file": "godot.js",
-        "bytes": 261881,
-        "sha256": "da49526ef9b53e9c0574dad5b70d0ec714bc3308ef82e342988787b63a3e9225"
+        "bytes": 261876,
+        "sha256": "f1c7624cf16bdc53a0a77479e20e21adbc105867d6c91392327e6bc4c3d71ad3"
       },
       {
         "file": "godot.wasm",
-        "bytes": 23942052,
-        "sha256": "ada98d50e5c37bbda9ac5d5d6c1525520784a28ae8302208138ec459d8706c30"
+        "bytes": 29609073,
+        "sha256": "c12588533686e9656a90fc44f5659e486b503a7605cb099caccf3f9add01232a"
       },
       {
         "file": "godot.audio.worklet.js",
@@ -93,13 +93,13 @@
       },
       {
         "file": "godot.js.br",
-        "bytes": 62850,
-        "sha256": "a78de9101e8f435754a85d37fe98b5f5101a29e4672e6a2916af0cd1323418ed"
+        "bytes": 62847,
+        "sha256": "7e7742a904f441f704c60ab4003abd9e648d20b13880d0d055ff74fc546cc0df"
       },
       {
         "file": "godot.wasm.br",
-        "bytes": 6207911,
-        "sha256": "e5e720ba39840bef93fdec776e0b56c6b59519a2111c2c902c38a037b741e4ed"
+        "bytes": 7697933,
+        "sha256": "670288bd7e1992090a1a86afee1ec4f36de56a4e76c9822f0c844416f1ca5aa2"
       },
       {
         "file": "godot.audio.worklet.js.br",
@@ -135,19 +135,19 @@
       },
       {
         "file": "godot.js",
-        "originalBytes": 261881,
-        "brotliBytes": 62850,
+        "originalBytes": 261876,
+        "brotliBytes": 62847,
         "ratio": 0.24,
-        "sha256": "da49526ef9b53e9c0574dad5b70d0ec714bc3308ef82e342988787b63a3e9225",
-        "brotliSha256": "a78de9101e8f435754a85d37fe98b5f5101a29e4672e6a2916af0cd1323418ed"
+        "sha256": "f1c7624cf16bdc53a0a77479e20e21adbc105867d6c91392327e6bc4c3d71ad3",
+        "brotliSha256": "7e7742a904f441f704c60ab4003abd9e648d20b13880d0d055ff74fc546cc0df"
       },
       {
         "file": "godot.wasm",
-        "originalBytes": 23942052,
-        "brotliBytes": 6207911,
-        "ratio": 0.2593,
-        "sha256": "ada98d50e5c37bbda9ac5d5d6c1525520784a28ae8302208138ec459d8706c30",
-        "brotliSha256": "e5e720ba39840bef93fdec776e0b56c6b59519a2111c2c902c38a037b741e4ed"
+        "originalBytes": 29609073,
+        "brotliBytes": 7697933,
+        "ratio": 0.26,
+        "sha256": "c12588533686e9656a90fc44f5659e486b503a7605cb099caccf3f9add01232a",
+        "brotliSha256": "670288bd7e1992090a1a86afee1ec4f36de56a4e76c9822f0c844416f1ca5aa2"
       }
     ]
   }

@@ -89,6 +89,12 @@ Rebuilding the export template. It is assembled inside Docker so everyone ends u
 sh build/build_distribution.sh
 ```
 
+While working on the template itself, build it on your own Mac instead. It skips the Docker emulation and rebuilds only what you changed, so the second run takes seconds.
+
+```sh
+sh build/dev_template.sh
+```
+
 The browser tests need Chromium. Install it with this.
 
 ```sh
@@ -191,6 +197,12 @@ URLの見せかたを選べるよ。最初は`/#about`みたいな感じにな�
 
 ```sh
 sh build/build_distribution.sh
+```
+
+テンプレート自体をいじっている間は、手元のMacで組むほうが速いよ。Dockerの真似っこを通さず、変えたところだけ組み直すから、二回目からは数秒で終わる。
+
+```sh
+sh build/dev_template.sh
 ```
 
 ブラウザを見るテストにはChromiumが要る。入れるのはこれ。

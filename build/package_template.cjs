@@ -15,8 +15,11 @@ const repo = path.resolve(__dirname, '..'); // 配布定義を持つproject root
 const archive = path.resolve(process.argv[2] || ''); // Godotが生成したWeb template。
 const out = path.resolve(process.argv[3] || path.join(repo, 'tmp/minimum/template-proof')); // 展開確認先。
 const addon = path.join(repo, 'addons/yurutto_website_exporter/templates'); // addon配布物の配置先。
-const template = path.join(addon, 'yweb.zip'); // 一つの対応版エクスポートテンプレート。
-const manifestFile = path.join(addon, 'manifest.json'); // versionと由来の正本。
+const profileName = process.env.YWEB_PROFILE || ''; // 3Dのように別種を作るときの識別名。
+const suffix = profileName ? `-${profileName}` : ''; // 種類ごとに成果物名を分ける。
+const optionsFile = path.join(repo, `build/template${suffix}.options`); // この種類のSCons option正本。
+const template = path.join(addon, `yweb${suffix}.zip`); // この種類のエクスポートテンプレート。
+const manifestFile = path.join(addon, `manifest${suffix}.json`); // versionと由来の正本。
 const rawEntries = ['godot.js', 'godot.wasm', 'godot.audio.worklet.js', 'godot.audio.position.worklet.js', 'godot.html']; // Godot Web起動物。
 const compressedEntries = rawEntries.filter((name) => name.endsWith('.js') || name.endsWith('.wasm')); // Brotliを持つ転送対象。
 const licenseEntries = ['GODOT_LICENSE.txt']; // Godot本体と組込依存の通知を一つへまとめた成果物。
@@ -87,7 +90,7 @@ function pack() {
 	assert.ok(fs.existsSync(archive), `Godot Web templateなし: ${archive}`);
 	const source = lock(path.join(repo, 'build/source.lock'));
 	const distribution = lock(path.join(repo, 'build/distribution.lock'));
-	const profile = options(path.join(repo, 'build/template.options'));
+	const profile = options(optionsFile);
 	const epoch = Number(process.env.SOURCE_DATE_EPOCH || distribution.SOURCE_DATE_EPOCH);
 	const quality = Number(distribution.BROTLI_QUALITY);
 	assert.ok(Number.isSafeInteger(epoch) && epoch > 0, '再現timestampが不正');
@@ -102,7 +105,7 @@ function pack() {
 		const brotli = compressSite(stage, quality);
 		const packed = [...rawEntries, ...licenseEntries, ...compressedEntries.map((name) => `${name}.br`)];
 		for (const name of [...packed, 'yweb-compression.json']) fs.utimesSync(path.join(stage, name), epoch, epoch);
-		const built = path.join(out, 'yweb-minimum-template.zip');
+		const built = path.join(out, `yweb${suffix}-template.zip`);
 		fs.rmSync(built, { force: true });
 		child.execFileSync('zip', ['-X', '-q', '-9', built, ...packed], { cwd: stage });
 		for (const name of [...packed, 'yweb-compression.json']) fs.copyFileSync(path.join(stage, name), path.join(out, name));
@@ -110,7 +113,7 @@ function pack() {
 		fs.copyFileSync(built, template);
 		const manifest = {
 			schema: 1,
-			profile: distribution.TEMPLATE_PROFILE,
+			profile: profileName || distribution.TEMPLATE_PROFILE,
 			godot: {
 				version: source.GODOT_VERSION,
 				commit: source.GODOT_COMMIT,
@@ -129,7 +132,7 @@ function pack() {
 			inputs: {
 				sourceLockSha256: sha(path.join(repo, 'build/source.lock')),
 				distributionLockSha256: sha(path.join(repo, 'build/distribution.lock')),
-				templateOptionsSha256: sha(path.join(repo, 'build/template.options')),
+				templateOptionsSha256: sha(optionsFile),
 				patchSha256: sha(path.join(repo, 'build/patches/web_yweb_text.patch')),
 				overlaySha256: treeHash(path.join(repo, 'build/overlay')),
 				buildSha256: filesHash([
@@ -140,7 +143,8 @@ function pack() {
 				].map((file) => path.join(repo, file))),
 			},
 			features: {
-				domText: true, threads: false, gdextension: false, threeD: false,
+				domText: true, threads: false, gdextension: false,
+				threeD: profile.includes('disable_3d=no'),
 				webfont: 'external-project-asset',
 			},
 			options: profile,

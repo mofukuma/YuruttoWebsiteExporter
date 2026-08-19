@@ -12,7 +12,8 @@ const zlib = require('node:zlib');
 
 const root = path.resolve(__dirname, '..'); // yweb project root。
 const addon = path.join(root, 'addons/yurutto_website_exporter'); // 配布単位のaddon。
-const distribution = JSON.parse(fs.readFileSync(path.join(addon, 'templates/manifest.json'))); // 対応版とテンプレートの由来。
+const suffix = process.env.YWEB_PROFILE ? `-${process.env.YWEB_PROFILE}` : ''; // 検査するテンプレートの種類。
+const distribution = JSON.parse(fs.readFileSync(path.join(addon, `templates/manifest${suffix}.json`))); // 対応版とテンプレートの由来。
 const template = path.join(addon, 'templates', distribution.template.file); // manifestが指す内蔵テンプレート。
 const work = path.join(root, 'tmp/yweb-exporter'); // 検査専用directory。
 const site = path.join(work, 'site'); // 実書き出し確認先。
