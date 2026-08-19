@@ -51,7 +51,7 @@ function build(scene) {
 	const font = install(path.join(project, 'fonts'));
 	// 字の描きかたをBrowser側へ寄せる。格子への寄せを切り、位置を細かく取る。
 	fs.writeFileSync(`${font.ttf}.import`, IMPORT);
-	child.execFileSync(godot, ['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 180000 });
+	child.execFileSync(godot, ['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 600000 });
 	return { work, project, site: path.join(work, 'site') };
 }
 
@@ -59,13 +59,13 @@ function build(scene) {
 function reference(place) {
 	const out = path.join(place.work, 'godot.png');
 	child.execFileSync(godot, ['--path', place.project, '--resolution', `${width}x${height}`, '--position', '10000,10000',
-		'--script', capture, '--', '--scene=res://main.tscn', `--output=${out}`, `--frame=${frame}`], { stdio: 'pipe', timeout: 180000 });
+		'--script', capture, '--', '--scene=res://main.tscn', `--output=${out}`, `--frame=${frame}`], { stdio: 'pipe', timeout: 600000 });
 	return decode(fs.readFileSync(out));
 }
 
 // 書き出したsiteをBrowserで開き、同じ大きさでPNGへ写し取る。
 async function exported(scene, place) {
-	child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), place.project, path.join(place.site, 'index.html')], { stdio: 'pipe', timeout: 400000 });
+	child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), place.project, path.join(place.site, 'index.html')], { stdio: 'pipe', timeout: 600000 });
 	const server = createServer(place.site);
 	await new Promise((done) => server.listen(scene.port, '127.0.0.1', done));
 	// 画面の倍率と拡大を1へ固定し、Godotと同じ画素数で撮る。

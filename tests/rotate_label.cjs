@@ -30,8 +30,8 @@ function build() {
 	// 絵を比べるための固定をやめ、実際に回る状態にする。
 	const scene = path.join(project, 'main.gd');
 	fs.writeFileSync(scene, fs.readFileSync(scene, 'utf8').replace(/^const FROZEN := .*$/m, 'const FROZEN := -1.0 # 回したいので止めない。'));
-	child.execFileSync(godot, ['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 180000 });
-	child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), project, path.join(site, 'index.html')], { stdio: 'pipe', timeout: 400000 });
+	child.execFileSync(godot, ['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 600000 });
+	child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), project, path.join(site, 'index.html')], { stdio: 'pipe', timeout: 600000 });
 }
 
 // 回っている画面から、文字の状態を何度か読み取る。
