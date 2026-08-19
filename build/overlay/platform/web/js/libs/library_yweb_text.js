@@ -16,6 +16,8 @@ const YWebText = {
 		root: null,
 		rootSize: '',
 		mouseDown: false,
+		lineCache: {}, // 書体と寸法ごとの、本来の行送り。測り直しを避ける。
+		ruler: null, // 行送りを測るための、見えない物差し。
 		kinds: ['Label', 'Button', 'LinkButton', 'LineEdit', 'TextEdit', 'ControlText'],
 		tags: ['span', 'button', 'a', 'input', 'textarea', 'span'],
 		// Canvasと同じ親へ文字と入力専用rootを一度だけ作る。
@@ -50,6 +52,24 @@ const YWebText = {
 			root.style.top = `${box.top - parentBox.top}px`;
 			root.style.width = `${box.width}px`;
 			root.style.height = `${box.height}px`;
+		},
+		// 書体が持つ本来の行送りを測る。同じ書体と寸法の組は一度だけ測って覚える。
+		naturalLine: function (element, fontSize) {
+			const family = element.style.fontFamily || 'sans-serif';
+			const key = `${family}/${fontSize}`;
+			if (YWebText.lineCache[key] === undefined) {
+				const ruler = YWebText.ruler || (YWebText.ruler = (() => {
+					const node = document.createElement('div');
+					node.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;line-height:normal;top:-9999px;left:-9999px';
+					node.textContent = 'Mg';
+					document.body.appendChild(node);
+					return node;
+				})());
+				ruler.style.fontFamily = family;
+				ruler.style.fontSize = `${fontSize}px`;
+				YWebText.lineCache[key] = ruler.getBoundingClientRect().height;
+			}
+			return YWebText.lineCache[key];
 		},
 		// Godot位置行列とBrowser fontの横幅補正を一つのtransformへ反映する。
 		place: function (element) {
@@ -321,8 +341,12 @@ const YWebText = {
 		element.style.setProperty('--yweb-placeholder', YWebText.color(placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha));
 		element.style.fontFamily = globalThis.YWEB_FONT_MAP?.[font]?.family || 'sans-serif';
 		element.style.fontSize = `${fontSize}px`;
-		// 標準Controlの文字はGodotが確定した行の高さを行ボックスへそのまま使い、Browser fontの行送りではみ出させない。
-		element.style.lineHeight = `${kind === 5 ? height : fontSize + lineSpacing}px`;
+		// 文字はGodotが確定した行の高さを行ボックスへ使い、Browser fontの行送りではみ出させない。
+		// ButtonとLinkButtonはGodotがline_spacingを渡さないので、そのままだと行ボックスが
+		// 文字寸法ちょうどまで縮み、Godotより字が上へ寄る。書体本来の行送りを下限にして揃える。
+		const spaced = fontSize + lineSpacing;
+		const single = kind === 1 || kind === 2 ? Math.max(spaced, YWebText.naturalLine(element, fontSize)) : spaced;
+		element.style.lineHeight = `${kind === 5 ? height : single}px`;
 		element.style.webkitTextStroke = outlineSize > 0 && outlineAlpha > 0 ? `${outlineSize}px ${YWebText.color(outlineRed, outlineGreen, outlineBlue, outlineAlpha)}` : '0 transparent';
 		element.style.textShadow = shadowAlpha > 0 ? `${shadowX}px ${shadowY}px 0 ${YWebText.color(shadowRed, shadowGreen, shadowBlue, shadowAlpha)}` : 'none';
 		element.style.textDecorationLine = flags & 16 ? 'underline' : 'none';

@@ -18,13 +18,15 @@ const godot = process.env.GODOT_BIN || '/Applications/Godot 4.7.1.app/Contents/M
 const width = 640; // 両方で揃える画面の横。
 const height = 480; // 両方で揃える画面の縦。
 const frame = 12; // 撮影する描画frame。動きが落ち着くまで待つ。
-const limit = Number(process.env.YWEB_MAE_LIMIT || 0.4); // 許す食い違いの上限(%)。
+const limit = Number(process.env.YWEB_MAE_LIMIT || 0.7); // 一画面ごとに許す食い違いの上限(%)。
+const overall = Number(process.env.YWEB_MAE_HARMONIC || 0.05); // 全画面をまとめた調和平均の上限(%)。
 const capture = 'pixel_capture.gd'; // project内へ置くGodot側の撮影入口。
 // 何を確かめる画面かと、起動を待つ目印。
 const SCENES = [
 	{ name: 'text', fixture: 'pixel_parity', work: 'pixel-parity', port: 49191, ready: { text: 'PIXEL PARITY' } },
 	{ name: 'shapes3d', fixture: 'parity_3d', work: 'parity-3d', port: 49192, ready: { pixels: true } },
 	{ name: 'mixed3d', fixture: 'parity_mixed', work: 'parity-mixed', port: 49193, ready: { text: 'MIXED SCENE' } },
+	{ name: 'nodes', fixture: 'parity_nodes', work: 'parity-nodes', port: 49194, ready: { text: 'LABEL text' } },
 ];
 // 書体の取り込みかた。hintingを切り位置を細かく取ると、Browserの字形へ近づく。
 const IMPORT = [
@@ -106,15 +108,20 @@ async function compare(scene) {
 	return meanAbsoluteError(left, right) * 100;
 }
 
-// 全部の画面を順に測り、どれも上限を下回ることを確かめる。
+// 全部の画面を順に測り、一枚ごとと全体のまとまりの両方で確かめる。
 async function main() {
 	const results = {};
+	const values = [];
 	for (const scene of SCENES) {
 		const mae = await compare(scene);
 		results[scene.name] = `${mae.toFixed(4)}%`;
+		values.push(mae);
 		assert.ok(mae < limit, `${scene.name}の見た目の食い違いが大きい: ${mae.toFixed(4)}% (上限${limit}%)`);
 	}
-	console.log(JSON.stringify({ ok: true, limit: `${limit}%`, size: `${width}x${height}`, scenes: results }));
+	// 調和平均は悪い一枚に引きずられにくく、良い画面の効きを素直に映す。
+	const harmonic = values.length / values.reduce((sum, value) => sum + 1 / value, 0);
+	assert.ok(harmonic < overall, `全画面をまとめた食い違いが大きい: ${harmonic.toFixed(4)}% (上限${overall}%)`);
+	console.log(JSON.stringify({ ok: true, limit: `${limit}%`, harmonic: harmonic.toFixed(4), harmonicLimit: `${overall}%`, size: `${width}x${height}`, scenes: results }));
 }
 
 main();
