@@ -1,0 +1,11 @@
+# 書き出しlevelごとに差し替えるSCons option。共通部分はtemplate.optionsが持つ。
+# 描画と物理の有無だけを変え、同じsourceから三つのテンプレートを作る。
+
+# Canvasを積まず、全要素をDOMで出す。
+dom extra_suffix=ywebdom opengl3=no disable_3d=yes disable_physics_3d=yes disable_navigation_3d=yes
+
+# 2D描画と2D物理をCanvasへ残す。
+2d extra_suffix=yweb2d opengl3=yes disable_3d=yes disable_physics_3d=yes disable_navigation_3d=yes
+
+# 3D描画と3D物理まで積む。
+3d extra_suffix=yweb3d opengl3=yes disable_3d=no disable_physics_3d=no disable_navigation_3d=no

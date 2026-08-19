@@ -13,13 +13,13 @@ const zlib = require('node:zlib');
 const root = path.resolve(__dirname, '..'); // yweb project root。
 const addon = path.join(root, 'addons/yurutto_website_exporter'); // 配布単位のaddon。
 const distribution = JSON.parse(fs.readFileSync(path.join(addon, 'templates/manifest.json'))); // 対応版とテンプレートの由来。
-const template = path.join(addon, 'templates', distribution.template.file); // manifestが指す内蔵テンプレート。
+const template = path.join(addon, 'templates', distribution.templates['2d'].file); // 既定levelの内蔵テンプレート。
 const work = path.join(root, 'tmp/yweb-exporter'); // 検査専用directory。
 const site = path.join(work, 'site'); // 実書き出し確認先。
 const project = path.join(work, 'project'); // addonを導入するproject copy。
 const fixture = path.join(root, 'tests/fixtures/site_runtime'); // 最小projectの正本。
 const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot 4.7.1。
-const expectedHash = distribution.template.sha256; // buildとplatformが共有する識別値。
+const expectedHash = distribution.templates['2d'].sha256; // buildとplatformが共有する識別値。
 
 const plugin = fs.readFileSync(path.join(addon, 'plugin.gd'), 'utf8');
 const platform = fs.readFileSync(path.join(addon, 'platform.gd'), 'utf8');

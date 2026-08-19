@@ -14,8 +14,9 @@ const { compressSite } = require('./compress_web.cjs');
 const repo = path.resolve(__dirname, '..'); // 配布定義を持つproject root。
 const archive = path.resolve(process.argv[2] || ''); // Godotが生成したWeb template。
 const out = path.resolve(process.argv[3] || path.join(repo, 'tmp/minimum/template-proof')); // 展開確認先。
+const level = process.argv[4] || '2d'; // 書き出しlevel。dom、2d、3dのいずれか。
 const addon = path.join(repo, 'addons/yurutto_website_exporter/templates'); // addon配布物の配置先。
-const template = path.join(addon, 'yweb.zip'); // 一つの対応版エクスポートテンプレート。
+const template = path.join(addon, `yweb-${level}.zip`); // このlevelのエクスポートテンプレート。
 const manifestFile = path.join(addon, 'manifest.json'); // versionと由来の正本。
 const rawEntries = ['godot.js', 'godot.wasm', 'godot.audio.worklet.js', 'godot.audio.position.worklet.js', 'godot.html']; // Godot Web起動物。
 const compressedEntries = rawEntries.filter((name) => name.endsWith('.js') || name.endsWith('.wasm')); // Brotliを持つ転送対象。
@@ -82,12 +83,21 @@ function entry(stage, name) {
 	return { file: name, bytes: fs.statSync(file).size, sha256: sha(file) };
 }
 
+// levels.optionsから、このlevelだけの追加optionを読む。
+function levelOptions() {
+	const line = fs.readFileSync(path.join(repo, 'build/levels.options'), 'utf8')
+		.split(/\r?\n/).map((text) => text.trim())
+		.find((text) => text && !text.startsWith('#') && text.split(/\s+/)[0] === level);
+	assert.ok(line, `levels.optionsに定義なし: ${level}`);
+	return Object.fromEntries(line.split(/\s+/).slice(1).map((pair) => pair.split('=')));
+}
+
 // 固定mtimeとentry順で配布templateを生成する。
 function pack() {
 	assert.ok(fs.existsSync(archive), `Godot Web templateなし: ${archive}`);
 	const source = lock(path.join(repo, 'build/source.lock'));
 	const distribution = lock(path.join(repo, 'build/distribution.lock'));
-	const profile = options(path.join(repo, 'build/template.options'));
+	const profile = { ...options(path.join(repo, 'build/template.options')), ...levelOptions() };
 	const epoch = Number(process.env.SOURCE_DATE_EPOCH || distribution.SOURCE_DATE_EPOCH);
 	const quality = Number(distribution.BROTLI_QUALITY);
 	assert.ok(Number.isSafeInteger(epoch) && epoch > 0, '再現timestampが不正');
@@ -102,12 +112,13 @@ function pack() {
 		const brotli = compressSite(stage, quality);
 		const packed = [...rawEntries, ...licenseEntries, ...compressedEntries.map((name) => `${name}.br`)];
 		for (const name of [...packed, 'yweb-compression.json']) fs.utimesSync(path.join(stage, name), epoch, epoch);
-		const built = path.join(out, 'yweb-minimum-template.zip');
+		const built = path.join(out, `yweb-${level}-template.zip`);
 		fs.rmSync(built, { force: true });
 		child.execFileSync('zip', ['-X', '-q', '-9', built, ...packed], { cwd: stage });
 		for (const name of [...packed, 'yweb-compression.json']) fs.copyFileSync(path.join(stage, name), path.join(out, name));
 		for (const name of ['godot.font.woff2', 'FONT_LICENSE.txt']) fs.rmSync(path.join(out, name), { force: true });
 		fs.copyFileSync(built, template);
+		const previous = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')) : {};
 		const manifest = {
 			schema: 1,
 			profile: distribution.TEMPLATE_PROFILE,
@@ -130,6 +141,7 @@ function pack() {
 				sourceLockSha256: sha(path.join(repo, 'build/source.lock')),
 				distributionLockSha256: sha(path.join(repo, 'build/distribution.lock')),
 				templateOptionsSha256: sha(path.join(repo, 'build/template.options')),
+				levelsOptionsSha256: sha(path.join(repo, 'build/levels.options')),
 				patchSha256: sha(path.join(repo, 'build/patches/web_yweb_text.patch')),
 				overlaySha256: treeHash(path.join(repo, 'build/overlay')),
 				buildSha256: filesHash([
@@ -139,16 +151,20 @@ function pack() {
 					'build/compress_web.cjs',
 				].map((file) => path.join(repo, file))),
 			},
-			features: {
-				domText: true, threads: false, gdextension: false, threeD: false,
-				webfont: 'external-project-asset',
+			templates: {
+				...previous.templates,
+				[level]: {
+					file: path.basename(template), bytes: fs.statSync(template).size,
+					sha256: sha(template), entries: packed.map((name) => entry(stage, name)),
+					features: {
+						domText: true, threads: false, gdextension: false,
+						canvas: level !== 'dom', threeD: level === '3d',
+						webfont: 'external-project-asset',
+					},
+					options: profile,
+					brotli,
+				},
 			},
-			options: profile,
-			template: {
-				file: path.basename(template), bytes: fs.statSync(template).size,
-				sha256: sha(template), entries: packed.map((name) => entry(stage, name)),
-			},
-			brotli,
 		};
 		fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
 		return manifest;
@@ -158,4 +174,5 @@ function pack() {
 }
 
 const result = pack();
-console.log(JSON.stringify({ profile: result.profile, godot: result.godot.version, template: result.template.sha256, entries: result.template.entries.length }));
+const made = result.templates[level];
+console.log(JSON.stringify({ level, godot: result.godot.version, template: made.sha256, entries: made.entries.length }));

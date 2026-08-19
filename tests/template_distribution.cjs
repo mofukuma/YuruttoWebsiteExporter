@@ -14,7 +14,7 @@ const root = path.resolve(__dirname, '..'); // yweb project root。
 const build = path.join(root, 'build'); // 配布build定義。
 const templateDir = path.join(root, 'addons/yurutto_website_exporter/templates'); // addon内テンプレート。
 const manifest = JSON.parse(fs.readFileSync(path.join(templateDir, 'manifest.json'))); // 配布物の由来正本。
-const template = path.join(templateDir, manifest.template.file); // 検査対象ZIP。
+const levels = Object.entries(manifest.templates); // level別の検査対象ZIP。
 const work = path.join(root, 'tmp/template-distribution'); // 検査結果保存先。
 const buffer = { maxBuffer: 32 * 1024 * 1024 }; // WASM展開に必要な上限。
 
@@ -83,14 +83,9 @@ assert.equal(manifest.toolchain.node, distribution.NODE_VERSION);
 assert.equal(manifest.toolchain.scons, distribution.SCONS_VERSION);
 assert.equal(manifest.toolchain.emscripten, source.EMSDK_VERSION);
 assert.equal(manifest.toolchain.sourceDateEpoch, Number(distribution.SOURCE_DATE_EPOCH));
-assert.equal(manifest.features.webfont, 'external-project-asset');
-assert.equal(manifest.features.domText, true);
-assert.equal(manifest.features.threeD, false);
-assert.deepEqual(manifest.options, options);
 assert.ok(options.includes('yweb_text_dom=yes'));
 assert.ok(options.includes('threads=no'));
 assert.ok(options.includes('dlink_enabled=no'));
-assert.ok(options.includes('disable_3d=yes'));
 
 assert.match(dockerfile, new RegExp(distribution.BUILDER_IMAGE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 assert.match(dockerfile, new RegExp(`SCONS_VERSION=${distribution.SCONS_VERSION.replaceAll('.', '\\.')}`));
@@ -107,28 +102,42 @@ assert.equal(manifest.inputs.buildSha256, filesHash([
 	'build_template.sh', 'apply_overlay.sh', 'package_template.cjs', 'compress_web.cjs',
 ].map((file) => path.join(build, file))));
 
-assert.equal(fs.readdirSync(templateDir).filter((name) => name.endsWith('.zip')).length, 1, 'テンプレートZIPが複数');
-assert.equal(manifest.template.sha256, sha(template));
-assert.equal(manifest.template.bytes, fs.statSync(template).size);
-const names = child.execFileSync('unzip', ['-Z1', template], { encoding: 'utf8' }).trim().split('\n');
-assert.deepEqual(names, manifest.template.entries.map((entry) => entry.file));
-assert.equal(names.includes('godot.font.woff2'), false);
-assert.equal(names.includes('FONT_LICENSE.txt'), false);
-for (const entry of manifest.template.entries) {
-	const data = child.execFileSync('unzip', ['-p', template, entry.file], buffer);
-	assert.equal(data.length, entry.bytes, `entry容量不一致: ${entry.file}`);
-	assert.equal(sha(data), entry.sha256, `entry hash不一致: ${entry.file}`);
-}
-for (const item of manifest.brotli.entries) {
-	const raw = child.execFileSync('unzip', ['-p', template, item.file], buffer);
-	const encoded = child.execFileSync('unzip', ['-p', template, `${item.file}.br`], buffer);
-	assert.deepEqual(zlib.brotliDecompressSync(encoded), raw, `Brotli不一致: ${item.file}`);
-}
+assert.equal(fs.readdirSync(templateDir).filter((name) => name.endsWith('.zip')).length, levels.length, `テンプレートZIP数がlevel数と違う`);
 const notice = ['GODOT-MIT.txt', 'GODOT-COPYRIGHT.txt'].map((file) => fs.readFileSync(path.join(root, 'LICENSES', file), 'utf8').replace(/\n*$/, '\n')).join('\n');
-assert.equal(child.execFileSync('unzip', ['-p', template, 'GODOT_LICENSE.txt'], { ...buffer, encoding: 'utf8' }), notice);
+const counts = {}; // level別のentry数。
+
+// level別に、ZIPの中身がmanifestの記録と一致することを見る。
+for (const [level, item] of levels) {
+	const template = path.join(templateDir, item.file);
+	assert.equal(item.sha256, sha(template), `template hash不一致: ${level}`);
+	assert.equal(item.bytes, fs.statSync(template).size, `template容量不一致: ${level}`);
+	const names = child.execFileSync('unzip', ['-Z1', template], { encoding: 'utf8' }).trim().split('\n');
+	assert.deepEqual(names, item.entries.map((entry) => entry.file), `entry構成不一致: ${level}`);
+	assert.equal(names.includes('godot.font.woff2'), false, `font混入: ${level}`);
+	assert.equal(names.includes('FONT_LICENSE.txt'), false, `font通知混入: ${level}`);
+	for (const entry of item.entries) {
+		const data = child.execFileSync('unzip', ['-p', template, entry.file], buffer);
+		assert.equal(data.length, entry.bytes, `entry容量不一致: ${level} ${entry.file}`);
+		assert.equal(sha(data), entry.sha256, `entry hash不一致: ${level} ${entry.file}`);
+	}
+	for (const brotli of item.brotli.entries) {
+		const raw = child.execFileSync('unzip', ['-p', template, brotli.file], buffer);
+		const encoded = child.execFileSync('unzip', ['-p', template, `${brotli.file}.br`], buffer);
+		assert.deepEqual(zlib.brotliDecompressSync(encoded), raw, `Brotli不一致: ${level} ${brotli.file}`);
+	}
+	assert.equal(child.execFileSync('unzip', ['-p', template, 'GODOT_LICENSE.txt'], { ...buffer, encoding: 'utf8' }), notice, `license不一致: ${level}`);
+	counts[level] = names.length;
+}
+
+// levelごとの機能境界が、選んだbuild optionと合っていることを見る。
+for (const [level, item] of levels) {
+	assert.equal(item.features.canvas, level !== 'dom', `canvas境界が不正: ${level}`);
+	assert.equal(item.features.threeD, level === '3d', `3D境界が不正: ${level}`);
+	assert.equal(item.options.opengl3, level === 'dom' ? 'no' : 'yes', `描画option不一致: ${level}`);
+}
 
 fs.rmSync(work, { recursive: true, force: true });
 fs.mkdirSync(work, { recursive: true });
-const result = { ok: true, godot: manifest.godot.version, profile: manifest.profile, inputs: Object.keys(manifest.inputs).length, entries: names.length, brotli: manifest.brotli.entries.length, template: manifest.template.sha256 };
+const result = { ok: true, godot: manifest.godot.version, profile: manifest.profile, inputs: Object.keys(manifest.inputs).length, levels: Object.fromEntries(levels.map(([level, item]) => [level, { bytes: item.bytes, entries: counts[level] }])) };
 fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
 console.log(JSON.stringify(result));

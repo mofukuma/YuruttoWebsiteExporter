@@ -12,6 +12,8 @@ const CONFIG_PATH := "res://yweb-site.json" # Scene情報JSONの既定位置。
 const I18n := preload("i18n.gd") # 画面文言の言語選び。
 const ProjectCheck := preload("project_check.gd") # 3D境界検査。
 const OGP_PATH := "res://web/ogp.png" # OGP画像の既定位置。
+const LEVELS := ["dom", "2d", "3d"] # 書き出しlevel。表示順とmanifestのkeyを揃える。
+const LEVEL_HINT := "DOM only,2D,3D" # Export画面へ出すlevelの選択肢。
 
 var editor: EditorPlugin # Editor機能への接続元。
 var manifest: Dictionary # 読込済み配布テンプレート情報。
@@ -44,7 +46,7 @@ func _get_platform_features() -> PackedStringArray:
 
 # 固定テンプレートの機能境界とtexture形式を返す。
 func _get_preset_features(preset: EditorExportPreset) -> PackedStringArray:
-	var features := PackedStringArray(["nothreads", "web_noextensions", "wasm32"])
+	var features := PackedStringArray(["nothreads", "web_noextensions", "wasm32", _level(preset)])
 	if bool(preset.get("vram_texture_compression/for_desktop")):
 		features.append_array(PackedStringArray(["s3tc", "bptc"]))
 	return features
@@ -54,6 +56,7 @@ func _get_export_options() -> Array[Dictionary]:
 	return [
 		_option("vram_texture_compression/for_desktop", TYPE_BOOL, true),
 		_option("html/focus_canvas_on_start", TYPE_BOOL, true),
+		_option("yweb/level", TYPE_INT, 1, PROPERTY_HINT_ENUM, LEVEL_HINT, true),
 		_option("yweb/site/enabled", TYPE_BOOL, true, PROPERTY_HINT_NONE, "", true),
 		_option("yweb/site/config", TYPE_STRING, CONFIG_PATH, PROPERTY_HINT_FILE, "*.json"),
 		_option("yweb/site/base_url", TYPE_STRING, "https://example.com"),
@@ -71,7 +74,7 @@ func _get_export_options() -> Array[Dictionary]:
 
 # Site無効時もDOM文字設定だけを表示する。
 func _get_export_option_visibility(preset: EditorExportPreset, option: String) -> bool:
-	if option == "yweb/site/enabled" or option.begins_with("yweb/font/"):
+	if option == "yweb/level" or option == "yweb/site/enabled" or option.begins_with("yweb/font/"):
 		return true
 	return not option.begins_with("yweb/") or bool(preset.get("yweb/site/enabled"))
 
@@ -105,10 +108,11 @@ func _has_valid_export_configuration(preset: EditorExportPreset, _debug: bool) -
 		errors.append(I18n.t("godot_mismatch", [supported]))
 	if ClassDB.class_exists("CSharpScript"):
 		errors.append(I18n.t("no_csharp", [supported]))
-	var template := _template()
+	var level := _level(preset)
+	var template := _template(level)
 	if template.is_empty() or not FileAccess.file_exists(template):
 		errors.append(I18n.t("no_template"))
-	elif FileAccess.get_sha256(template) != String(manifest.get("template", {}).get("sha256", "")):
+	elif FileAccess.get_sha256(template) != String(_entry(level).get("sha256", "")):
 		errors.append(I18n.t("template_changed"))
 	set_config_error("\n".join(errors))
 	set_config_missing_templates(false)
@@ -128,7 +132,7 @@ func _export_project(preset: EditorExportPreset, debug: bool, path: String, flag
 	var made := DirAccess.make_dir_recursive_absolute(directory)
 	if made != OK:
 		return _fail(I18n.t("topic_export"), I18n.t("no_out_dir", [directory]), made)
-	var blocked: Array[String] = ProjectCheck.new().inspect(ProjectSettings.globalize_path("res://"))
+	var blocked: Array[String] = [] if _level(preset) == "3d" else ProjectCheck.new().inspect(ProjectSettings.globalize_path("res://"))
 	if not blocked.is_empty():
 		return _fail(I18n.t("topic_project"), "\n".join(blocked), ERR_UNAVAILABLE)
 	var base := path.get_file().get_basename()
@@ -139,7 +143,7 @@ func _export_project(preset: EditorExportPreset, debug: bool, path: String, flag
 		return _fail(I18n.t("topic_pck"), I18n.t("no_pck", [pack]), error)
 	if not saved.get("so_files", []).is_empty():
 		return _fail(I18n.t("topic_template"), I18n.t("no_gdextension"), ERR_UNAVAILABLE)
-	error = _extract(directory, base)
+	error = _extract(directory, base, _level(preset))
 	if error != OK:
 		return error
 	error = _write_html(preset, path, base, pack, flags)
@@ -181,9 +185,18 @@ func _manifest() -> Dictionary:
 	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST))
 	return value if value is Dictionary and int(value.get("schema", 0)) == 1 else {}
 
+# presetが選んだlevelを返す。範囲外は2Dへ寄せる。
+func _level(preset: EditorExportPreset) -> String:
+	var index := int(preset.get("yweb/level"))
+	return LEVELS[index] if index >= 0 and index < LEVELS.size() else "2d"
+
+# 指定levelのmanifest項目を返す。
+func _entry(level: String) -> Dictionary:
+	return manifest.get("templates", {}).get(level, {})
+
 # manifestが指すaddon内templateだけを返す。
-func _template() -> String:
-	var name := String(manifest.get("template", {}).get("file", ""))
+func _template(level: String) -> String:
+	var name := String(_entry(level).get("file", ""))
 	if name.is_empty() or name != name.get_file() or name.get_extension() != "zip":
 		return ""
 	return "res://addons/yurutto_website_exporter/templates/%s" % name
@@ -206,9 +219,9 @@ func _version_matches(version: Dictionary, godot: Dictionary) -> bool:
 	return not current.is_empty() and (commit.begins_with(current) or current.begins_with(commit))
 
 # 内蔵ZIPを安全に展開し、テンプレート名を出力名へ揃える。
-func _extract(directory: String, base: String) -> Error:
+func _extract(directory: String, base: String, level: String) -> Error:
 	var zip := ZIPReader.new()
-	var error := zip.open(ProjectSettings.globalize_path(_template()))
+	var error := zip.open(ProjectSettings.globalize_path(_template(level)))
 	if error != OK:
 		return _fail(I18n.t("topic_template"), I18n.t("template_open"), error)
 	for name in zip.get_files():

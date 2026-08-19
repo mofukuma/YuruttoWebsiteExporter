@@ -15,12 +15,9 @@ mkdir -p "$build_root"
 work=$(mktemp -d "$build_root/template-source.XXXXXX") # source展開用一時領域。
 trap 'rm -rf "$work"' EXIT
 
-# lock、patch、overlayを一つのsource識別値へまとめる。
-stamp=$(cd "$repo" && {
-	shasum -a 256 build/source.lock build/patches/web_yweb_text.patch
-	shasum -a 256 build/distribution.lock build/template.options
-	find build/overlay -type f | LC_ALL=C sort | xargs shasum -a 256
-} | shasum -a 256 | awk '{print $1}')
+# sourceを作り直す必要がある入力だけを識別値にする。
+# overlayは既存treeへ上書きするだけで足りるため、ここへ混ぜると差分compileが毎回捨てられる。
+stamp=$(cd "$repo" && shasum -a 256 build/source.lock build/patches/web_yweb_text.patch | shasum -a 256 | awk '{print $1}')
 
 # Godot archiveを公式releaseから取得してhashを検証する。
 if test ! -f "$archive"; then
@@ -55,4 +52,7 @@ sh "$repo/build/apply_overlay.sh" "$source_root"
 printf '%s\n' "$stamp" > "$source_root/.yweb-source-stamp"
 cmp "$repo/LICENSES/GODOT-MIT.txt" "$source_root/LICENSE.txt"
 cmp "$repo/LICENSES/GODOT-COPYRIGHT.txt" "$source_root/COPYRIGHT.txt"
-sh "$repo/build/build_template.sh" "$source_root" "$emsdk" "$template_out"
+# 同じsourceから三段のlevelを順に作る。
+for level in $(awk '!/^#/ && NF { print $1 }' "$repo/build/levels.options"); do
+	sh "$repo/build/build_template.sh" "$level" "$source_root" "$emsdk" "$template_out/$level"
+done
