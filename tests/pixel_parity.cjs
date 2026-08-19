@@ -27,6 +27,7 @@ const SCENES = [
 	{ name: 'shapes3d', fixture: 'parity_3d', work: 'parity-3d', port: 49192, ready: { pixels: true } },
 	{ name: 'mixed3d', fixture: 'parity_mixed', work: 'parity-mixed', port: 49193, ready: { text: 'MIXED SCENE' } },
 	{ name: 'nodes', fixture: 'parity_nodes', work: 'parity-nodes', port: 49194, ready: { text: 'LABEL text' } },
+	{ name: 'rotate', fixture: 'rotate_label', work: 'rotate-label', port: 49195, ready: { text: 'Y' } },
 ];
 // 書体の取り込みかた。hintingを切り位置を細かく取ると、Browserの字形へ近づく。
 const IMPORT = [
