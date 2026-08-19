@@ -13,7 +13,10 @@ const zlib = require('node:zlib');
 const root = path.resolve(__dirname, '..'); // yweb project root。
 const build = path.join(root, 'build'); // 配布build定義。
 const templateDir = path.join(root, 'addons/yurutto_website_exporter/templates'); // addon内テンプレート。
-const profileName = process.env.YWEB_PROFILE || ''; // 3Dのように別種を検査するときの識別名。
+// 既定では、addonが実際に読んでいるmanifestを検査する。
+// 種類を明かに指したいときだけYWEB_PROFILEで選ぶ。
+const shipped = /templates\/manifest(-[a-z0-9]+)?\.json/.exec(fs.readFileSync(path.join(root, 'addons/yurutto_website_exporter/platform.gd'), 'utf8'));
+const profileName = process.env.YWEB_PROFILE || (shipped && shipped[1] ? shipped[1].slice(1) : '');
 const suffix = profileName ? `-${profileName}` : ''; // 種類ごとに成果物名を分ける。
 const optionsFile = path.join(build, `template${suffix}.options`); // この種類のSCons option正本。
 const manifest = JSON.parse(fs.readFileSync(path.join(templateDir, `manifest${suffix}.json`))); // 配布物の由来正本。
