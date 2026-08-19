@@ -12,8 +12,10 @@ const zlib = require('node:zlib');
 
 const root = path.resolve(__dirname, '..'); // yweb project root。
 const addon = path.join(root, 'addons/yurutto_website_exporter'); // 配布単位のaddon。
-const suffix = process.env.YWEB_PROFILE ? `-${process.env.YWEB_PROFILE}` : ''; // 検査するテンプレートの種類。
-const distribution = JSON.parse(fs.readFileSync(path.join(addon, `templates/manifest${suffix}.json`))); // 対応版とテンプレートの由来。
+const platformSource = fs.readFileSync(path.join(addon, 'platform.gd'), 'utf8'); // Exporter本体。
+const manifestName = /templates\/(manifest[^"]*\.json)/.exec(platformSource)?.[1] || ''; // addonが実際に読むmanifest。
+assert.ok(manifestName, 'テンプレートmanifest参照なし');
+const distribution = JSON.parse(fs.readFileSync(path.join(addon, 'templates', manifestName))); // 対応版とテンプレートの由来。
 const template = path.join(addon, 'templates', distribution.template.file); // manifestが指す内蔵テンプレート。
 const work = path.join(root, 'tmp/yweb-exporter'); // 検査専用directory。
 const site = path.join(work, 'site'); // 実書き出し確認先。
@@ -28,7 +30,6 @@ assert.match(plugin, /add_export_platform\(platform\)/, '独立platform登録な
 assert.match(platform, /extends EditorExportPlatformExtension/, '拡張platformではない');
 assert.equal(platform.includes('EditorExportPlatformWeb'), false, '標準Web実装へ依存');
 assert.equal(platform.includes('find_export_template'), false, '公式template探索へ依存');
-assert.match(platform, /templates\/manifest\.json/, 'テンプレートmanifest参照なし');
 assert.equal(platform.includes('Godot 4.7.1専用'), false, '対応版をcodeへ固定');
 assert.equal(platform.includes('OS.execute'), false, '外部processへ依存');
 assert.equal(platform.includes('yweb/tools/node'), false, 'Node.js設定が残存');
