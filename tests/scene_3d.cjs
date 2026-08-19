@@ -38,10 +38,22 @@ async function main() {
 
 		// 画面の文字がHTMLで出るまで待ち、3Dのsceneが起動したことを確かめる。
 		try {
-			await page.getByText('SCENE 3D', { exact: true }).waitFor({ timeout: 60000 });
+			await page.getByText('SPOT 0', { exact: true }).waitFor({ timeout: 60000 });
 		} catch {
 			const state = await page.evaluate(() => ({ text: document.body.innerText, status: document.querySelector('#status-notice')?.textContent }));
 			throw new Error(`3D sceneが起動しない: ${JSON.stringify({ state, errors })}`);
+		}
+
+		// 文字は2Dと同じように、置いた位置のとおりDOMへ出る。
+		const spots = [[20, 20], [180, 90], [60, 260]]; // fixtureが置いた場所。
+		const boxes = await page.evaluate(() => [...document.querySelectorAll('[data-yweb-text]')]
+			.filter((node) => /^SPOT \d$/.test(node.textContent.trim()))
+			.map((node) => { const r = node.getBoundingClientRect(); return { text: node.textContent.trim(), x: Math.round(r.x), y: Math.round(r.y) }; })
+			.sort((a, b) => a.text.localeCompare(b.text)));
+		assert.equal(boxes.length, spots.length, `文字DOMの数が違う: ${JSON.stringify(boxes)}`);
+		for (const index of spots.keys()) {
+			assert.ok(Math.abs(boxes[index].x - spots[index][0]) <= 2, `横位置がずれた: ${JSON.stringify(boxes[index])}`);
+			assert.ok(Math.abs(boxes[index].y - spots[index][1]) <= 2, `縦位置がずれた: ${JSON.stringify(boxes[index])}`);
 		}
 
 		// Godot側に3Dの型が生きていることを、実行中のsceneから確かめる。
@@ -55,7 +67,7 @@ async function main() {
 		const second = await shot();
 		assert.notEqual(first, second, '3Dが動いていない');
 		assert.deepEqual(errors, [], `Browser errorが出た: ${errors.join(' / ')}`);
-		console.log(JSON.stringify({ ok: true, threeD: true, wasm: fs.statSync(path.join(site, 'index.wasm')).size }));
+		console.log(JSON.stringify({ ok: true, threeD: true, spots: boxes, wasm: fs.statSync(path.join(site, 'index.wasm')).size }));
 	} finally {
 		await browser.close();
 		server.close();

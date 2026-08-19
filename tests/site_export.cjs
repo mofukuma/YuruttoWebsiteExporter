@@ -20,7 +20,9 @@ const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-core
 const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // Exporterを実行する固定Godot。
 const rawPort = 49181; // raw nginx比較port。
 const sitePort = 49182; // History nginx検査port。
-const containers = []; // 必ず終了するDocker container ID。
+const containers = []; // 必ず終了するcontainer ID。
+const { runtime } = require('./nginx.cjs'); // 手元で動くcontainer command。
+const container = runtime(); // 無ければtestを省略する。
 const font = ensure(); // 取得済みWeb fontのpath。
 
 // 検査用projectと最小Godot HTML成果物を生成する。
@@ -52,12 +54,12 @@ function fixture(mode, target) {
 	});
 }
 
-// Docker nginxを固定portで開始し、container IDを回収対象へ積む。
+// nginxを固定portで開始し、container IDを回収対象へ積む。
 function start(port, site, config = '') {
 	const args = ['run', '--rm', '-d', '-p', `127.0.0.1:${port}:${config ? 8080 : 80}`, '-v', `${site}:/usr/share/nginx/html:ro`];
 	if (config) args.push('-v', `${config}:/etc/nginx/conf.d/default.conf:ro`);
 	args.push('nginx:alpine');
-	const id = child.execFileSync('docker', args, { encoding: 'utf8' }).trim();
+	const id = child.execFileSync(container, args, { encoding: 'utf8' }).trim();
 	containers.push(id);
 	return id;
 }
@@ -123,7 +125,7 @@ async function main() {
 		await hashPage.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 		assert.deepEqual(await hashPage.evaluate(() => routeFiles), ['res://about.tscn', 'res://about.tscn']);
 		await hashPage.close();
-		child.execFileSync('docker', ['stop', raw]);
+		child.execFileSync(container, ['stop', raw]);
 		containers.splice(containers.indexOf(raw), 1);
 
 		start(sitePort, historyOut, path.join(historyOut, 'nginx-yweb.conf.example'));
@@ -172,9 +174,15 @@ async function main() {
 	fs.writeFileSync(path.join(root, 'result.json'), `${JSON.stringify({ hashDefault: true, hashTraversalCallbacks: 1, basePath: '/sub/', rawUnknown: 404, historyUnknown: 200, ogp: '1200x630', webfonts: 1, brotli: wasm.headers['content-encoding'], identity: true, sceneScriptLoads: 1 }, null, 2)}\n`);
 }
 
+// container実行環境が無い手元では、nginxの検査だけを省略する。
+if (!container) {
+	console.log(JSON.stringify({ skipped: 'no container runtime' }));
+	process.exit(0);
+}
+
 main().catch((error) => {
 	console.error(error);
 	process.exitCode = 1;
 }).finally(() => {
-	for (const id of containers) child.spawnSync('docker', ['stop', id], { stdio: 'ignore' });
+	for (const id of containers) child.spawnSync(container, ['stop', id], { stdio: 'ignore' });
 });
