@@ -5,13 +5,16 @@
 
 const child = require('node:child_process');
 
+const CANDIDATES = ['docker', 'podman']; // 試す順。先に見つかったものを使う。
+
 // container commandとして実際に動くものを一つ選ぶ。無ければ空。
-function runtime() {
-	for (const name of ['docker', 'podman']) {
-		const found = child.spawnSync(name, ['version'], { stdio: 'ignore' });
+// 実行の仕方を差し替えられるようにして、検査から全ての分かれ道を通せるようにする。
+function runtime(run = (name) => child.spawnSync(name, ['version'], { stdio: 'ignore' })) {
+	for (const name of CANDIDATES) {
+		const found = run(name);
 		if (!found.error && found.status === 0) return name;
 	}
 	return '';
 }
 
-module.exports = { runtime };
+module.exports = { runtime, CANDIDATES };
