@@ -24,7 +24,9 @@ const YWebText = {
 			const canvas = GodotConfig.canvas;
 			const root = document.createElement('div');
 			root.id = 'yweb-text-root';
-			root.style.cssText = 'position:absolute;transform-origin:0 0;pointer-events:none;overflow:hidden;z-index:1;font-family:sans-serif';
+			// -webkit-font-smoothing:antialiasedは、字の縁を灰色の濃淡だけで描かせる指定。
+			// Godotも同じ描きかたをするので、これを揃えるとCanvasとDOMの文字の見た目が近づく。
+			root.style.cssText = 'position:absolute;transform-origin:0 0;pointer-events:none;overflow:hidden;z-index:1;font-family:sans-serif;-webkit-font-smoothing:antialiased';
 			const style = document.createElement('style');
 			style.textContent = '#yweb-text-root input::placeholder,#yweb-text-root textarea::placeholder{color:var(--yweb-placeholder,currentColor);opacity:1}';
 			document.head.appendChild(style);
