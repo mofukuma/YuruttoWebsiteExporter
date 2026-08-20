@@ -28,12 +28,15 @@ func _files(root: String) -> Array[String]:
 		directory.list_dir_begin()
 		var name := directory.get_next()
 		while not name.is_empty():
-			if name != ".godot" and name != ".git":
-				var file := current.path_join(name)
-				if directory.current_is_dir():
-					pending.append(file)
-				else:
-					found.append(file)
+			var file := current.path_join(name)
+			# 生成物と履歴は中身を見ないので、入り口で外す。
+			if name == ".godot" or name == ".git":
+				name = directory.get_next()
+				continue
+			if directory.current_is_dir():
+				pending.append(file)
+			else:
+				found.append(file)
 			name = directory.get_next()
 		directory.list_dir_end()
 	found.sort()
