@@ -58,6 +58,7 @@ void yweb_draw_circle(CanvasItem *p_item, const Point2 &p_pos, real_t p_radius, 
 void yweb_draw_line(CanvasItem *p_item, const Point2 &p_from, const Point2 &p_to, const Color &p_color, real_t p_width);
 void yweb_draw_texture(CanvasItem *p_item, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, const Color &p_modulate);
 void yweb_draw_transform(CanvasItem *p_item, const Transform2D &p_transform);
+void yweb_draw_string(const CanvasItem *p_item, const Point2 &p_pos, const String &p_text, int p_alignment, float p_width, int p_font_size, const Color &p_color);
 #define YWEB_DRAW(m_call) m_call
 #else
 #define YWEB_DRAW(m_call)
@@ -1139,6 +1140,7 @@ void CanvasItem::draw_string(RequiredParam<Font> rp_font, const Point2 &p_pos, c
 	ERR_DRAW_GUARD;
 	EXTRACT_PARAM_OR_FAIL(p_font, rp_font);
 
+	YWEB_DRAW(yweb_draw_string(this, p_pos, p_text, (int)p_alignment, p_width, p_font_size, p_modulate));
 	p_font->draw_string(canvas_item, p_pos, p_text, p_alignment, p_width, p_font_size, p_modulate, p_jst_flags, p_direction, p_orientation, p_oversampling);
 }
 

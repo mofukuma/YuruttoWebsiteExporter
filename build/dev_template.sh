@@ -40,4 +40,5 @@ git -C "$emsdk" checkout --detach "$EMSDK_COMMIT" >/dev/null 2>&1
 
 # overlayとpatchを既存sourceへ重ねる。変更したfileだけがSConsの再compile対象になる。
 sh "$repo/build/apply_overlay.sh" "$src"
-sh "$repo/build/build_template.sh" "$level" "$src" "$emsdk" "$out"
+# 配布物は固定環境のbuildだけが作る。開発buildの成果物はtmp/へ留める。
+YWEB_PUBLISH=0 sh "$repo/build/build_template.sh" "$level" "$src" "$emsdk" "$out"

@@ -24,12 +24,9 @@
 #include "core/io/image.h"
 #include "scene/2d/sprite_2d.h"
 #include "scene/2d/line_2d.h"
-#include "scene/2d/polygon_2d.h"
 #include "scene/gui/color_rect.h"
 #include "scene/gui/progress_bar.h"
-#include "scene/gui/separator.h"
 #include "scene/gui/slider.h"
-#include "scene/gui/texture_button.h"
 #include "scene/gui/nine_patch_rect.h"
 #include "scene/gui/texture_rect.h"
 #include "scene/resources/style_box.h"
@@ -113,7 +110,8 @@ static HashMap<ObjectID, Vector<TextState>> parts; // 一Control内の複数文�
 static HashMap<RID, ObjectID> canvas_owners; // 文字描画canvasとControlの対応。
 static HashMap<ObjectID, Vector<RID>> owner_canvases; // Control解放時に回収するCanvas RID一覧。
 static HashMap<ObjectID, OutlineState> outlines; // outline直後の通常文字へ渡す状態。
-static int paint_order = -1; // 描画が無い場合に木の走査順から与える重なり順。-1は未使用。
+static int paint_order = -1; // 木を辿る間だけ使う重なり順。-1は走査の外。
+static HashMap<ObjectID, int> node_orders; // nodeごとの重なり順。描画命令は別timingで走るためここから引く。
 static HashSet<String> sent_images; // Browserへ渡し終えた画像の識別値。
 static bool event_ready = false; // Browser入力callbackの登録状態。
 static ObjectID site_scene; // Browserへ通知済みのcurrent scene識別子。
@@ -544,10 +542,10 @@ static void sync_box(Control *p_control, int p_order) {
 		background = rect->get_color();
 	} else {
 		// 種別ごとに面を持つstylebox名が違うため、持っているものを順に探す。
-		static const char *names[] = { "panel", "normal", "bg", "slider", "separator", "background", nullptr };
+		// StringNameの構築は表引きでlockを取るため、一度だけ作って使い回す。
+		static const StringName names[] = { SNAME("panel"), SNAME("normal"), SNAME("bg"), SNAME("slider"), SNAME("separator"), SNAME("background") };
 		Ref<StyleBoxFlat> flat;
-		for (int index = 0; names[index] != nullptr; index++) {
-			const StringName name = StringName(names[index]);
+		for (const StringName &name : names) {
 			if (!p_control->has_theme_stylebox(name)) {
 				continue;
 			}
@@ -596,7 +594,7 @@ static void sync_button_text(Control *p_control, const String &p_text, int p_kin
 #ifndef GLES3_ENABLED
 
 // 二点を結ぶ線を、太さぶんの細い面として置く。線を出す処理はここへ集める。
-static void emit_line(CanvasItem *p_item, const Transform2D &p_basis, const Vector2 &p_from, const Vector2 &p_to, float p_width, const Color &p_color, const CharString &p_uid, int p_order) {
+static void emit_line(const Transform2D &p_basis, const Vector2 &p_from, const Vector2 &p_to, float p_width, const Color &p_color, const CharString &p_uid, int p_order) {
 	const Vector2 delta = p_to - p_from;
 	const float length = delta.length();
 	if (length <= 0.0f) {
@@ -752,7 +750,7 @@ static void sync_shape(CanvasItem *p_item, int p_order) {
 	const Transform2D basis = p_item->get_global_transform_with_canvas();
 	for (int index = 0; index + 1 < points.size(); index++) {
 		const CharString uid = (String::num_uint64((uint64_t)p_item->get_instance_id()) + "-line" + itos(index)).utf8();
-		emit_line(p_item, basis, points[index], points[index + 1], line->get_width(), color, uid, p_order);
+		emit_line(basis, points[index], points[index + 1], line->get_width(), color, uid, p_order);
 	}
 }
 
@@ -767,6 +765,12 @@ void yweb_draw_begin(CanvasItem *p_item) {
 	draw_transforms[p_item->get_instance_id()] = Transform2D();
 	const CharString prefix = (String::num_uint64((uint64_t)p_item->get_instance_id()) + "-d").utf8();
 	yweb_draw_reset(prefix.get_data());
+}
+
+// 描画命令が使う重なり順を、そのnodeの走査順から引く。走査前なら最背面に置く。
+static int draw_order(CanvasItem *p_item) {
+	const int *order = node_orders.getptr(p_item->get_instance_id());
+	return order != nullptr ? *order : 0;
 }
 
 // 命令ごとのDOM IDを返す。
@@ -796,7 +800,7 @@ void yweb_draw_rect(CanvasItem *p_item, const Rect2 &p_rect, const Color &p_colo
 	const CharString uid = draw_uid(p_item, "r");
 	const float edge = p_filled ? 0.0f : MAX((float)p_width, 1.0f);
 	yweb_box_sync(uid.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
-			p_rect.size.width, p_rect.size.height, paint_order,
+			p_rect.size.width, p_rect.size.height, draw_order(p_item),
 			p_filled ? color.r : 0.0f, p_filled ? color.g : 0.0f, p_filled ? color.b : 0.0f, p_filled ? color.a : 0.0f,
 			edge, edge, edge, edge, color.r, color.g, color.b, p_filled ? 0.0f : color.a, 0, 0, 0, 0);
 }
@@ -810,7 +814,7 @@ void yweb_draw_circle(CanvasItem *p_item, const Point2 &p_pos, real_t p_radius, 
 	const float size = p_radius * 2.0f;
 	const float edge = p_filled ? 0.0f : MAX((float)p_width, 1.0f);
 	yweb_box_sync(uid.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
-			size, size, paint_order,
+			size, size, draw_order(p_item),
 			p_filled ? color.r : 0.0f, p_filled ? color.g : 0.0f, p_filled ? color.b : 0.0f, p_filled ? color.a : 0.0f,
 			edge, edge, edge, edge, color.r, color.g, color.b, p_filled ? 0.0f : color.a,
 			p_radius, p_radius, p_radius, p_radius);
@@ -819,7 +823,25 @@ void yweb_draw_circle(CanvasItem *p_item, const Point2 &p_pos, real_t p_radius, 
 // 線の描画命令を、共通の線置きへ渡す。
 void yweb_draw_line(CanvasItem *p_item, const Point2 &p_from, const Point2 &p_to, const Color &p_color, real_t p_width) {
 	const Color color = p_color * p_item->get_modulate() * p_item->get_self_modulate();
-	emit_line(p_item, draw_basis(p_item), p_from, p_to, (float)p_width, color, draw_uid(p_item, "l"), paint_order);
+	emit_line(draw_basis(p_item), p_from, p_to, (float)p_width, color, draw_uid(p_item, "l"), draw_order(p_item));
+}
+
+// 文字の描画命令を、DOMの文字要素として出す。基準線から上端へ寄せて矩形に合わせる。
+void yweb_draw_string(const CanvasItem *p_item, const Point2 &p_pos, const String &p_text, int p_alignment, float p_width, int p_font_size, const Color &p_color) {
+	CanvasItem *item = const_cast<CanvasItem *>(p_item);
+	const Color color = p_color * item->get_modulate() * item->get_self_modulate();
+	const float height = p_font_size * 1.25f; // 基準線を含む行の高さの目安。
+	Transform2D transform = draw_basis(item);
+	transform[2] = transform.xform(p_pos - Vector2(0, p_font_size));
+	const CharString uid = draw_uid(item, "s");
+	const CharString text = p_text.utf8();
+	const CharString empty = String().utf8();
+	yweb_text_sync(uid.get_data(), text.get_data(), empty.get_data(), empty.get_data(),
+			transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
+			p_width > 0 ? p_width : p_text.length() * p_font_size, height, TEXT_VISIBLE, draw_order(item),
+			p_alignment, VERTICAL_ALIGNMENT_TOP, TEXT_LABEL, 0, 0, 0,
+			color.r, color.g, color.b, color.a, p_font_size, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }
 
 // 画像命令は、既存の画像同期へそのまま渡す。
@@ -834,14 +856,20 @@ void yweb_draw_texture(CanvasItem *p_item, const Ref<Texture2D> &p_texture, cons
 	const CharString uid = draw_uid(p_item, "t");
 	const CharString key_utf8 = key.utf8();
 	yweb_image_sync(uid.get_data(), key_utf8.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
-			p_rect.size.width, p_rect.size.height, paint_order, color.r, color.g, color.b, color.a);
+			p_rect.size.width, p_rect.size.height, draw_order(p_item), color.r, color.g, color.b, color.a);
 }
 #endif
 
 // Scene全体のControlを順に辿り、表示順のまま箱と文字を出す。
 // 描画命令を捕まえられないため、文字も持ち主の現在値から作る。
 static void sync_boxes(Node *p_node, int &r_order) {
+	// 見えない枝は中身ごと出さない。走る量も減る。
+	CanvasItem *visible = Object::cast_to<CanvasItem>(p_node);
+	if (visible != nullptr && !visible->is_visible_in_tree()) {
+		return;
+	}
 	if (CanvasItem *item = Object::cast_to<CanvasItem>(p_node)) {
+		node_orders[item->get_instance_id()] = r_order * 2 + 1;
 		sync_image_node(item, r_order * 2 + 1);
 		sync_shape(item, r_order * 2 + 1);
 	}
@@ -850,7 +878,7 @@ static void sync_boxes(Node *p_node, int &r_order) {
 		sync_box(control, order * 2);
 		sync_ranged(control, order * 2 + 1);
 		paint_order = order * 2 + 1;
-		if (control->is_visible_in_tree()) {
+		{
 			if (Label *label = Object::cast_to<Label>(control)) sync_label(label);
 			else if (LineEdit *line = Object::cast_to<LineEdit>(control)) sync_line_input(line);
 			else if (TextEdit *edit = Object::cast_to<TextEdit>(control)) sync_text_area(edit);
@@ -877,6 +905,15 @@ void yweb_text_sync_process() {
 	Node *scene = tree ? tree->get_current_scene() : nullptr;
 	if (scene && scene->get_instance_id() != site_scene) {
 		site_scene = scene->get_instance_id();
+#ifndef GLES3_ENABLED
+		// 前の画面の描画由来要素は、そのnodeが消えると描き直されないため、ここで捨てる。
+		const CharString all = String().utf8();
+		yweb_draw_reset(all.get_data());
+		draw_counts.clear();
+		draw_transforms.clear();
+		node_orders.clear();
+		sent_images.clear();
+#endif
 		const CharString path = scene->get_scene_file_path().utf8();
 		yweb_site_scene(path.get_data());
 	}

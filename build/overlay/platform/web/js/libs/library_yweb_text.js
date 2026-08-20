@@ -318,6 +318,7 @@ const YWebText = {
 	yweb_text_sync: function (pUid, pText, pAux, pFont, xx, xy, yx, yy, x, y, width, height, flags, z, horizontal, vertical, kind, maxLength, selectionStart, selectionEnd, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha, scrollX, scrollY) {
 		const uid = GodotRuntime.parseString(pUid);
 		YWebText.seen.add(uid);
+		if (uid.includes('-d')) YWebText.drawn.add(uid);
 		const text = GodotRuntime.parseString(pText);
 		const aux = GodotRuntime.parseString(pAux);
 		const font = GodotRuntime.parseString(pFont);
@@ -433,6 +434,7 @@ const YWebText = {
 	// 描画は毎frameとは限らないため、捨てる時機をここに固定する。
 	yweb_draw_reset: function (pPrefix) {
 		const prefix = GodotRuntime.parseString(pPrefix);
+		if (prefix === '') YWebText.images.clear();
 		for (const uid of [...YWebText.drawn]) {
 			if (!uid.startsWith(prefix)) continue;
 			YWebText.elements.get(uid)?.remove();

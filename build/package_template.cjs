@@ -16,6 +16,7 @@ const archive = path.resolve(process.argv[2] || ''); // Godotが生成したWeb 
 const out = path.resolve(process.argv[3] || path.join(repo, 'tmp/minimum/template-proof')); // 展開確認先。
 const level = process.argv[4] || '2d'; // 書き出しlevel。dom、2d、3dのいずれか。
 const addon = path.join(repo, 'addons/yurutto_website_exporter/templates'); // addon配布物の配置先。
+const publish = process.env.YWEB_PUBLISH !== '0'; // 配布物へ反映するか。開発buildは再現性を持たないため反映しない。
 const template = path.join(addon, `yweb-${level}.zip`); // このlevelのエクスポートテンプレート。
 const manifestFile = path.join(addon, 'manifest.json'); // versionと由来の正本。
 const rawEntries = ['godot.js', 'godot.wasm', 'godot.audio.worklet.js', 'godot.audio.position.worklet.js', 'godot.html']; // Godot Web起動物。
@@ -103,7 +104,7 @@ function pack() {
 	assert.ok(Number.isSafeInteger(epoch) && epoch > 0, '再現timestampが不正');
 	assert.ok(Number.isInteger(quality) && quality > 0, 'Brotli品質が不正');
 	fs.mkdirSync(out, { recursive: true });
-	fs.mkdirSync(addon, { recursive: true });
+	if (publish) fs.mkdirSync(addon, { recursive: true });
 	const stage = fs.mkdtempSync(path.join(out, 'template-package.'));
 	try {
 		child.execFileSync('unzip', ['-oq', archive, ...rawEntries, '-d', stage]);
@@ -117,7 +118,7 @@ function pack() {
 		child.execFileSync('zip', ['-X', '-q', '-9', built, ...packed], { cwd: stage });
 		for (const name of [...packed, 'yweb-compression.json']) fs.copyFileSync(path.join(stage, name), path.join(out, name));
 		for (const name of ['godot.font.woff2', 'FONT_LICENSE.txt']) fs.rmSync(path.join(out, name), { force: true });
-		fs.copyFileSync(built, template);
+		if (publish) fs.copyFileSync(built, template);
 		const previous = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')) : {};
 		const manifest = {
 			schema: 1,
@@ -154,8 +155,8 @@ function pack() {
 			templates: {
 				...previous.templates,
 				[level]: {
-					file: path.basename(template), bytes: fs.statSync(template).size,
-					sha256: sha(template), entries: packed.map((name) => entry(stage, name)),
+					file: path.basename(template), bytes: fs.statSync(built).size,
+					sha256: sha(built), entries: packed.map((name) => entry(stage, name)),
 					features: {
 						domText: true, threads: false, gdextension: false,
 						canvas: level !== 'dom', threeD: level === '3d',
@@ -166,7 +167,7 @@ function pack() {
 				},
 			},
 		};
-		fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+		if (publish) fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
 		return manifest;
 	} finally {
 		fs.rmSync(stage, { recursive: true, force: true });
