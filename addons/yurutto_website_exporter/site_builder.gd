@@ -30,6 +30,7 @@ func build(options: Dictionary, target: String) -> Error:
 	out = target.get_base_dir()
 	if not FileAccess.file_exists(output):
 		return _fail(I18n.t("no_export_html", [output]))
+	# site機能を切っていても、Canvas文字の扱いだけはBrowserへ伝える。
 	var avoid := bool(options.get("yweb/font/avoid_canvas_theme_font", true))
 	if not bool(options.get("yweb/site/enabled", true)):
 		var error := _write_text_config(avoid)
@@ -39,6 +40,7 @@ func build(options: Dictionary, target: String) -> Error:
 		return FAILED
 	data.avoid_canvas_theme_font = avoid
 	data.mode = "History" if int(options.get("yweb/routing/mode", 0)) == 1 else "Hash"
+	# 各sceneの公開URLを確定する。以後のcanonical、sitemap、route生成はこの値を使う。
 	var url := _urls(data.site.base_url)
 	if not error_message.is_empty():
 		return FAILED
@@ -50,6 +52,7 @@ func build(options: Dictionary, target: String) -> Error:
 	var font_map := _webfonts(bool(options.get("yweb/font/matching_webfont", true)), url.public_path)
 	if not error_message.is_empty():
 		return FAILED
+	# 共有画像とfaviconを一箇所へ集め、どのpageからも同じURLで指せるようにする。
 	var asset_dir := out.path_join("yweb-assets")
 	DirAccess.make_dir_recursive_absolute(asset_dir)
 	var image := _ogp(data.ogp, asset_dir)
@@ -63,6 +66,7 @@ func build(options: Dictionary, target: String) -> Error:
 		var copied := DirAccess.copy_absolute(icon, asset_dir.path_join(icon_name))
 		if copied != OK:
 			return _fail(I18n.t("favicon_copy"))
+	# Godotが書いたHTMLを下地に、site rootへ出すsceneを選ぶ。
 	var base := FileAccess.get_file_as_string(output)
 	var scenes: Array = data.scenes.values()
 	var first: Dictionary = scenes[0]
@@ -76,6 +80,7 @@ func build(options: Dictionary, target: String) -> Error:
 	var error := _write(output, rendered)
 	if error != OK:
 		return error
+	# 見つからないpage用に、起点sceneの体裁を借りた404を作る。検索には載せない。
 	var missing := first.duplicate(true)
 	missing.merge({
 		"title": I18n.t("not_found_title", [data.site.name], data.site.locale),
@@ -86,6 +91,7 @@ func build(options: Dictionary, target: String) -> Error:
 	error = _write(out.path_join("404.html"), _render(base, data, missing, image, url, font_map))
 	if error != OK:
 		return error
+	# History方式では、URLごとに実fileを置いて直リンクを開けるようにする。
 	if data.mode == "History":
 		for scene in scenes:
 			if scene.uri == "/":
@@ -95,16 +101,19 @@ func build(options: Dictionary, target: String) -> Error:
 			error = _write(directory.path_join("index.html"), _render(base, data, scene, image, url, font_map))
 			if error != OK:
 				return error
+	# Browser側のscene切替が読む設定を書き出す。
 	data.webfonts = font_map
 	error = _write(out.path_join("yweb-site.json"), JSON.stringify(data, "\t") + "\n")
 	if error != OK:
 		return error
+	# 直リンクを開ける配信設定の例を添える。
 	error = _write_nginx(NGINX, out.path_join("nginx-yweb.conf.example"), url.root)
 	if error != OK:
 		return error
 	error = _write_nginx(NGINX_PROXY, out.path_join("nginx-yweb-proxy.conf.example"), url.root)
 	if error != OK:
 		return error
+	# 検索へ知らせるため、全pageのURLを並べたsitemapとrobotsを出す。
 	var pages := ""
 	for scene in scenes:
 		pages += "<url><loc>%s</loc></url>" % _html(scene.canonical)

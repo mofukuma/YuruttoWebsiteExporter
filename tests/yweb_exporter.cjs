@@ -57,6 +57,7 @@ child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 
 for (const name of ['index.html', 'index.js', 'index.wasm', 'index.pck', 'index.js.br', 'index.wasm.br', 'index.audio.worklet.js.br', 'index.audio.position.worklet.js.br', 'GODOT_LICENSE.txt']) {
 	assert.ok(fs.existsSync(path.join(site, name)), `公開成果物なし: ${name}`);
 }
+// 配布物の由来と、addonが読む正本が噛み合っているかを見る。
 const manifest = JSON.parse(fs.readFileSync(path.join(site, 'yweb-compression.json')));
 assert.equal(manifest.entries.length, 4, '固定テンプレートのBrotli対応数不一致');
 for (const entry of manifest.entries) assert.ok(entry.brotliBytes < entry.originalBytes, `圧縮率不正: ${entry.file}`);

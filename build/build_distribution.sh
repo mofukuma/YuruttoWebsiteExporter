@@ -16,6 +16,7 @@ home=/work/tmp/distribution-$platform_name/home # Emscripten設定の書込先�
 docker build \
   --platform "$BUILDER_PLATFORM" \
   --build-arg "SCONS_VERSION=$SCONS_VERSION" \
+  --build-arg "UV_VERSION=$UV_VERSION" \
   -f "$repo/build/distribution/Dockerfile" \
   -t "$image" "$repo"
 

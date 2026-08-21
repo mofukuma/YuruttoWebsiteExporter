@@ -25,6 +25,7 @@ const options = fs.readFileSync(path.join(build, 'template.options'), 'utf8').sp
 const dockerfile = fs.readFileSync(path.join(build, 'distribution/Dockerfile'), 'utf8');
 const distributionScript = fs.readFileSync(path.join(build, 'build_distribution.sh'), 'utf8');
 
+// Godot版とtoolchainが、lockの固定値どおりmanifestへ入っているかを見る。
 assert.equal(manifest.schema, 1);
 assert.equal(manifest.godot.version, source.GODOT_VERSION);
 assert.equal(manifest.godot.commit, source.GODOT_COMMIT);
@@ -41,9 +42,12 @@ assert.ok(options.includes('dlink_enabled=no'));
 
 assert.match(dockerfile, new RegExp(distribution.BUILDER_IMAGE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 assert.match(dockerfile, new RegExp(`SCONS_VERSION=${distribution.SCONS_VERSION.replaceAll('.', '\\.')}`));
+assert.match(dockerfile, new RegExp(`UV_VERSION=${distribution.UV_VERSION.replaceAll('.', '\\.')}`));
+assert.equal(dockerfile.includes('python3 -m pip'), false, 'Python道具の導入がuv以外');
 assert.match(distributionScript, /--platform "\$BUILDER_PLATFORM"/);
 assert.match(distributionScript, /tests\/template_distribution\.cjs/);
 
+// build入力fileの内容が、manifestへ記録したhashと一致するかを見る。
 assert.equal(manifest.inputs.sourceLockSha256, sha(path.join(build, 'source.lock')));
 assert.equal(manifest.inputs.distributionLockSha256, sha(path.join(build, 'distribution.lock')));
 assert.equal(manifest.inputs.templateOptionsSha256, sha(path.join(build, 'template.options')));

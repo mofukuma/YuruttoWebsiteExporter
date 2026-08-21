@@ -54,22 +54,22 @@ func _get_preset_features(preset: EditorExportPreset) -> PackedStringArray:
 # Editorへ表示する全設定と安全な既定値を返す。
 func _get_export_options() -> Array[Dictionary]:
 	return [
-		_option("vram_texture_compression/for_desktop", TYPE_BOOL, true),
-		_option("html/focus_canvas_on_start", TYPE_BOOL, true),
-		_option("yweb/level", TYPE_INT, 1, PROPERTY_HINT_ENUM, LEVEL_HINT, true),
-		_option("yweb/site/enabled", TYPE_BOOL, true, PROPERTY_HINT_NONE, "", true),
-		_option("yweb/site/config", TYPE_STRING, CONFIG_PATH, PROPERTY_HINT_FILE, "*.json"),
-		_option("yweb/site/base_url", TYPE_STRING, "https://example.com"),
-		_option("yweb/site/title", TYPE_STRING, ProjectSettings.get_setting("application/config/name", "Godot Web Site")),
-		_option("yweb/site/description", TYPE_STRING, I18n.t("site_description")),
-		_option("yweb/site/locale", TYPE_STRING, "ja_JP"),
-		_option("yweb/site/favicon", TYPE_STRING, "", PROPERTY_HINT_FILE, "*.png,*.svg,*.ico"),
-		_option("yweb/routing/mode", TYPE_INT, 0, PROPERTY_HINT_ENUM, "Hash,History"),
-		_option("yweb/font/matching_webfont", TYPE_BOOL, true),
-		_option("yweb/font/avoid_canvas_theme_font", TYPE_BOOL, true),
-		_option("yweb/ogp/image", TYPE_STRING, OGP_PATH, PROPERTY_HINT_FILE, "*.png,*.jpg,*.jpeg,*.webp"),
-		_option("yweb/ogp/alt", TYPE_STRING, I18n.t("ogp_alt")),
-		_option("yweb/ogp/frame", TYPE_INT, 2, PROPERTY_HINT_RANGE, "1,3600,1"),
+		_option("vram_texture_compression/for_desktop", TYPE_BOOL, true), # PC向けtexture圧縮を含めるか。
+		_option("html/focus_canvas_on_start", TYPE_BOOL, true), # 起動直後に操作対象をCanvasへ移すか。
+		_option("yweb/level", TYPE_INT, 1, PROPERTY_HINT_ENUM, LEVEL_HINT, true), # 書き出しの段。使うテンプレートが変わる。
+		_option("yweb/site/enabled", TYPE_BOOL, true, PROPERTY_HINT_NONE, "", true), # SEOとroute生成を行うか。
+		_option("yweb/site/config", TYPE_STRING, CONFIG_PATH, PROPERTY_HINT_FILE, "*.json"), # Sceneと公開URLの対応表の位置。
+		_option("yweb/site/base_url", TYPE_STRING, "https://example.com"), # 公開先の基点URL。canonicalとsitemapへ使う。
+		_option("yweb/site/title", TYPE_STRING, ProjectSettings.get_setting("application/config/name", "Godot Web Site")), # pageのtitle。既定はproject名。
+		_option("yweb/site/description", TYPE_STRING, I18n.t("site_description")), # 検索結果へ出る説明文。
+		_option("yweb/site/locale", TYPE_STRING, "ja_JP"), # HTMLへ書く言語。
+		_option("yweb/site/favicon", TYPE_STRING, "", PROPERTY_HINT_FILE, "*.png,*.svg,*.ico"), # tabへ出す小さな絵。
+		_option("yweb/routing/mode", TYPE_INT, 0, PROPERTY_HINT_ENUM, "Hash,History"), # URLの作り方。Historyはserver設定が要る。
+		_option("yweb/font/matching_webfont", TYPE_BOOL, true), # Theme fontと同名のwoff2をDOMへ適用するか。
+		_option("yweb/font/avoid_canvas_theme_font", TYPE_BOOL, true), # 再現できない文字装飾をBrowser標準へ寄せるか。
+		_option("yweb/ogp/image", TYPE_STRING, OGP_PATH, PROPERTY_HINT_FILE, "*.png,*.jpg,*.jpeg,*.webp"), # SNSへ出す共有画像。
+		_option("yweb/ogp/alt", TYPE_STRING, I18n.t("ogp_alt")), # 共有画像の代替文字。
+		_option("yweb/ogp/frame", TYPE_INT, 2, PROPERTY_HINT_RANGE, "1,3600,1"), # OGP Autoで撮る描画frame。
 	]
 
 # Site無効時もDOM文字設定だけを表示する。
