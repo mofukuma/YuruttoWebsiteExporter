@@ -38,6 +38,11 @@ Each file has its own job.
 
 Write `res://yweb-site.json` when you want more pages. List which scene shows at which address, plus a title and description.
 Scenes are matched by file location, so renaming a root node won't break anything.
+
+In your game, keep changing scenes the usual way with `get_tree().change_scene_to_file()`.
+The address, the title, and the back button follow along on their own — no web-specific code to write.
+It works the other way too: opening an address directly, or pressing back, moves you to the matching scene.
+
 Site-wide things — the public URL, language, favicon, social image, address style, web font — live on the export screen.
 
 ## Text that stays searchable and copyable
@@ -148,6 +153,11 @@ Godotで作った作品を、そのままWebサイトにするアドオン。
 
 ページを増やしたくなったら`res://yweb-site.json`を書こう。どのシーンをどのアドレスで見せるか、タイトルと説明を並べる。
 シーンはファイルの場所で見分けるから、ルートノードの名前を変えても壊れないよ。
+
+作品のほうは、いつもどおり`get_tree().change_scene_to_file()`でシーンを変えればいい。
+アドレスとタイトルと戻るボタンは、そのあと勝手についてくる。Web用の書き足しはいらないよ。
+逆にアドレスを直に開いたときや、ブラウザの戻るを押したときも、対応するシーンへ移る。
+
 公開URL、言語、favicon、SNS用の画像、URLの見せかた、Webフォントみたいなサイト全体の話は、エクスポート画面のほうにあるよ。
 
 ## 文字を検索やコピーの効く形に
