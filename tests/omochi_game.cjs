@@ -16,6 +16,21 @@ const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
 
 // 表示文字を指定して現在の矩形とtransformを返す。
+// 追従が終わって横位置が動かなくなるまで待ち、その時の状態を返す。
+// 実時間で待つと、機械の速さで追従の途中を読んでしまい、移動量の判定が揺れる。
+async function settledAt(page, text) {
+	await page.evaluate(() => { globalThis.ywebAt = undefined; globalThis.ywebStill = 0; });
+	await page.waitForFunction((value) => {
+		const node = [...document.querySelectorAll('[data-yweb-text]')].find((entry) => entry.textContent === value);
+		if (!node) return false;
+		const now = node.getBoundingClientRect().x;
+		globalThis.ywebStill = Math.abs(now - (globalThis.ywebAt ?? Infinity)) < 0.5 ? globalThis.ywebStill + 1 : 0;
+		globalThis.ywebAt = now;
+		return globalThis.ywebStill >= 5;
+	}, text, { timeout: 20000, polling: 'raf' });
+	return item(page, text);
+}
+
 async function item(page, text) {
 	return page.evaluate((value) => {
 		const node = [...document.querySelectorAll('[data-yweb-text]')].find((entry) => entry.textContent === value);
@@ -84,11 +99,9 @@ async function item(page, text) {
 
 		// 左右のmouse移動へ同じゴドウさんDOMが追従する。
 		await page.mouse.move(130, 590);
-		await page.waitForTimeout(180);
-		const godouLeft = await item(page, 'ゴドウさん');
+		const godouLeft = await settledAt(page, 'ゴドウさん');
 		await page.mouse.move(830, 590);
-		await page.waitForTimeout(700);
-		const godouRight = await item(page, 'ゴドウさん');
+		const godouRight = await settledAt(page, 'ゴドウさん');
 		assert.equal(godouLeft.id, godouStart.id, 'ゴドウさんIDが移動で変化');
 		assert.equal(godouRight.id, godouStart.id, 'ゴドウさんIDが移動で変化');
 		assert.ok(godouRight.box.x - godouLeft.box.x > 550, `ゴドウさん横移動不足: ${godouLeft.box.x} → ${godouRight.box.x}`);

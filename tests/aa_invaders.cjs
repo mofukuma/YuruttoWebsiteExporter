@@ -111,7 +111,8 @@ async function main() {
 	for (let shot = 0; shot < 5 && await page.getByText('SCORE 0000', { exact: true }).count(); shot++) {
 		await aim(page);
 		await hold(page, 'FIRE', 35);
-		await page.waitForTimeout(620);
+		// 弾が当たるか外れるまで見る。実時間で置くと、速い機械では無駄に待ち、遅い機械では足りない。
+		await page.waitForFunction(() => ![...document.querySelectorAll('[data-yweb-text]')].some((node) => node.textContent === 'SCORE 0000'), undefined, { timeout: 1500, polling: 'raf' }).catch(() => {});
 	}
 	await page.waitForFunction(() => ![...document.querySelectorAll('[data-yweb-text]')].some((node) => node.textContent === 'SCORE 0000'));
 	const score = await page.evaluate(() => [...document.querySelectorAll('[data-yweb-text]')].find((node) => node.textContent.startsWith('SCORE ')).textContent);

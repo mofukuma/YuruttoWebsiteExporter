@@ -35,6 +35,16 @@ function build() {
 }
 
 // 回っている画面から、文字の状態を何度か読み取る。
+// 文字の傾きが前回と変わるまで待つ。回っていることの確認に必要な「時間の経過」を、変化そのもので置き換える。
+async function turned(page) {
+	await page.waitForFunction(() => {
+		const now = [...document.querySelectorAll('[data-yweb-text]')].map((node) => getComputedStyle(node).transform).join('|');
+		const changed = globalThis.ywebSpin !== undefined && now !== globalThis.ywebSpin;
+		globalThis.ywebSpin = now;
+		return changed;
+	}, undefined, { timeout: 20000, polling: 'raf' });
+}
+
 async function main() {
 	build();
 	const server = createServer(site);
@@ -48,7 +58,8 @@ async function main() {
 		await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
 		await page.getByText('Y', { exact: true }).first().waitFor({ timeout: 90000 });
 		await page.evaluate(() => document.fonts.ready);
-		await page.waitForTimeout(1200);
+		// 輪が組み上がるまで待つ。文字が出そろい、位置が動き始めた時が組み上がった時。
+		await page.waitForFunction((need) => document.querySelectorAll('[data-yweb-text]').length >= need, letters, { timeout: 20000, polling: 'raf' });
 		// 傾きと位置を、時間をあけて何度も読む。
 		const frames = [];
 		for (let index = 0; index < shots; index += 1) {
@@ -63,7 +74,8 @@ async function main() {
 				return { count: nodes.length, angles: read.map((item) => item.angle), spots: read.map((item) => [item.x, item.y]),
 					text: document.body.innerText.replace(/\s+/g, '') };
 			}));
-			await page.waitForTimeout(400);
+			// 次を読む前に、傾きが実際に変わるまで待つ。時間ではなく変化を待てば、機械の速さに左右されない。
+			if (index + 1 < shots) await turned(page);
 		}
 		await Promise.all([page.screenshot({ path: path.join(work, 'spin.png') })]);
 

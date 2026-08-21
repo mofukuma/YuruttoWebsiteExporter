@@ -67,11 +67,19 @@ async function control(page, kind) {
 }
 
 // 動く文字の位置とIDを連続採取する。
+// 実時間を空けるのではなく、見た目が変わるまで待つ。機械の速さで採取の間隔が変わらない。
 async function samples(page, text, count, gap) {
 	const values = [];
 	for (let index = 0; index < count; index++) {
 		values.push(await item(page, text));
-		await page.waitForTimeout(gap);
+		if (index + 1 >= count) break;
+		await page.waitForFunction((value) => {
+			const node = [...document.querySelectorAll('[data-yweb-text]')].find((entry) => entry.textContent === value);
+			const now = node ? `${node.id}/${getComputedStyle(node).transform}` : '';
+			const changed = globalThis.ywebStep !== undefined && now !== globalThis.ywebStep;
+			globalThis.ywebStep = now;
+			return changed;
+		}, text, { timeout: gap * 40, polling: 'raf' }).catch(() => {});
 	}
 	return values;
 }

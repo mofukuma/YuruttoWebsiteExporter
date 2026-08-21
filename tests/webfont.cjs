@@ -36,7 +36,9 @@ async function inspect(browser, enabled, output) {
 		page = await browser.newPage({ viewport: { width: 640, height: 240 } });
 		await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
 		await page.waitForFunction(() => document.querySelector('#canvas')?.width > 0);
-		await page.waitForTimeout(250);
+		// 対象の文字がDOMへ出るまで待つ。実時間で置くと、遅い機械では出る前に読んでしまう。
+		await page.waitForFunction(() => [...document.querySelectorAll('[data-yweb-text]')].some((item) => item.textContent.includes('Web Font')), undefined, { timeout: 20000, polling: 'raf' });
+		await page.evaluate(() => document.fonts.ready);
 		const state = await page.evaluate(() => {
 			const node = [...document.querySelectorAll('[data-yweb-text]')].find((item) => item.textContent.includes('Web Font'));
 			return { map: window.YWEB_FONT_MAP, dom: !!node, family: node ? getComputedStyle(node).fontFamily : '' };

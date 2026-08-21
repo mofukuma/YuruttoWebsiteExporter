@@ -76,6 +76,19 @@ for (const name of screens) {
 fs.mkdirSync(site, { recursive: true });
 child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe', timeout: 300000 });
 
+// 描画が落ち着くまで待つ。物理で動く画面は、要素の位置が変わらなくなった時が形の決まった時。
+// 実時間で待つと、機械の速さで撮る瞬間がずれ、Godotと違う状態を比べてしまう。
+async function settleDom(page, name) {
+	const quiet = settle[name] ? 3 : 1; // 動く画面は、変化なしがこの回数続くまで見る。
+	await page.waitForFunction((need) => {
+		const now = [...document.querySelectorAll('[data-yweb-transform]')].map((node) => node.dataset.ywebTransform).join('|');
+		globalThis.ywebStill = now === globalThis.ywebSeen ? (globalThis.ywebStill || 0) + 1 : 0;
+		globalThis.ywebSeen = now;
+		return globalThis.ywebStill >= need;
+	}, quiet, { timeout: 20000, polling: 'raf' });
+	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
 // Browser側で画面ごとに撮り、Godotとの差を調和平均でまとめる。
 (async () => {
 	const server = createServer(site);
@@ -89,7 +102,7 @@ child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 
 			await page.goto(`http://127.0.0.1:${server.address().port}/#${uri}`, { waitUntil: 'domcontentloaded' });
 			await page.waitForFunction(() => document.querySelectorAll('[data-yweb-box]').length > 0, { timeout: 20000 });
 			await page.evaluate(() => document.fonts.ready);
-			await page.waitForTimeout(settle[name] ? 2500 : 400);
+			await settleDom(page, name);
 			const shot = path.join(work, `browser-${name}.png`);
 			await page.screenshot({ path: shot });
 			await page.close();

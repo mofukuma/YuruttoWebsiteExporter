@@ -88,7 +88,17 @@ async function exported(scene, place) {
 			return middle[0] + middle[1] + middle[2] > 30;
 		}, { timeout: 90000 });
 		await page.evaluate(() => document.fonts.ready); // 書体が届く前に撮らない。
-		await page.waitForTimeout(2000); // 最初の描画が落ち着くまで置く。
+		// 絵が変わらなくなるまで待つ。実時間で置くと、機械の速さで撮る瞬間がずれる。
+		await page.waitForFunction(() => {
+			const canvas = document.querySelector('canvas');
+			const probe = document.createElement('canvas');
+			probe.width = canvas.width; probe.height = canvas.height;
+			probe.getContext('2d').drawImage(canvas, 0, 0);
+			const now = probe.toDataURL();
+			globalThis.ywebStill = now === globalThis.ywebSeen ? (globalThis.ywebStill || 0) + 1 : 0;
+			globalThis.ywebSeen = now;
+			return globalThis.ywebStill >= 3;
+		}, undefined, { timeout: 90000, polling: 'raf' });
 		const shot = await page.screenshot({ clip: { x: 0, y: 0, width, height } });
 		fs.writeFileSync(path.join(place.work, 'web.png'), shot);
 		assert.deepEqual(errors, [], `${scene.name}でBrowser errorが出た: ${errors.join(' / ')}`);

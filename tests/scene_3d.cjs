@@ -62,10 +62,14 @@ async function main() {
 
 		// 立方体が回っている絵を、時間差の2枚が違うことで確かめる。
 		const shot = async () => (await page.locator('canvas').screenshot()).toString('base64');
+		// 絵が変わるまで撮り直す。時間で待つと、機械が遅い時に間に合わず、速い時は無駄に待つ。
 		const first = await shot();
-		await page.waitForTimeout(700);
-		const second = await shot();
-		assert.notEqual(first, second, '3Dが動いていない');
+		let second = first;
+		for (let tries = 0; tries < 120 && second === first; tries += 1) {
+			await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+			second = await shot();
+		}
+		assert.notEqual(second, first, '3Dが動いていない');
 		assert.deepEqual(errors, [], `Browser errorが出た: ${errors.join(' / ')}`);
 		console.log(JSON.stringify({ ok: true, threeD: true, spots: boxes, wasm: fs.statSync(path.join(site, 'index.wasm')).size }));
 	} finally {
