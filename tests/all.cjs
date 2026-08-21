@@ -43,7 +43,7 @@ function run(name) {
 	});
 }
 
-// 枠の数だけ同時に走らせ、空いた枠へ次を入れる。
+// 枠の数まで同時に走らせ、空いた枠へ次を入れる。
 async function main() {
 	const { shared, solo } = targets();
 	const total = shared.length + solo.length;

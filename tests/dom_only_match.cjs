@@ -111,7 +111,7 @@ async function settleDom(page, name) {
 	const browser = await chromium.launch({ executablePath: browserPath, headless: true, args: ['--use-angle=swiftshader'] });
 	const measured = {};
 	try {
-		// 起動は一度だけにして、画面はURLの移動で回る。作品と同じ道筋を通り、起動の待ちも一度で済む。
+		// 起動は一度で済ませ、画面はURLの移動で回る。作品と同じ道筋を通り、起動の待ちも減る。
 		const page = await browser.newPage({ viewport: size, deviceScaleFactor: 1 });
 		await page.goto(`http://127.0.0.1:${server.address().port}/#/`, { waitUntil: 'domcontentloaded' });
 		await page.waitForFunction(() => document.querySelectorAll('[data-yweb-box]').length > 0, { timeout: 20000 });

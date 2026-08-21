@@ -1,4 +1,4 @@
-; 標準のscene切替だけでrouteが追従するかを見る検査project。
+; 標準のscene切替でrouteが追従するかを見る検査project。
 
 config_version=5
 

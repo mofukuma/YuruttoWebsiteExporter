@@ -1,5 +1,5 @@
 # 起点の画面。Buttonを押すと標準のchange_scene_to_file()でabout sceneへ移る。
-# YWebSiteのようなWeb向けの記述は持たない。書き出しただけでrouteが付くかを見るための画面。
+# YWebSiteのようなWeb向けの記述は持たない。書き出すとrouteが付くかを見るための画面。
 
 extends Control
 

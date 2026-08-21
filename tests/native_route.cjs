@@ -1,5 +1,5 @@
-// Web向けの書き足しをしないGodot作品が、書き出しただけでrouteを持つかを確かめる。
-// 作品側はget_tree().change_scene_to_file()を呼ぶだけで、Browser側のURLとtitleは
+// Web向けの書き足しをしないGodot作品が、書き出すとrouteを持つことを確かめる。
+// 作品側が呼ぶのはget_tree().change_scene_to_file()で、Browser側のURLとtitleは
 // エンジンが裏で合わせる。この裏方が働いていることを、両方向の移動で固定する。
 
 'use strict';
@@ -36,7 +36,7 @@ async function press(page, label) {
 	await page.mouse.click(box.x, box.y);
 }
 
-// 作品はscene切替を呼ぶだけ。URLとtitleが追いつくことを行きと帰りで見る。
+// 作品が呼ぶのはscene切替。URLとtitleが追いつくことを行きと帰りで見る。
 async function main() {
 	const server = createServer(site);
 	await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -58,7 +58,7 @@ async function main() {
 		await page.waitForFunction(() => location.hash === '#/about/', undefined, { timeout: 20000, polling: 'raf' });
 		assert.equal(await page.title(), 'About Route');
 
-		// 戻る向きでも同じことが起きる。片道だけの実装になっていないことを見る。
+		// 戻る向きでも同じことが起きる。片道で終わる実装になっていないことを見る。
 		await press(page, 'GO HOME');
 		await page.getByText('MAIN SCENE', { exact: true }).waitFor({ timeout: 20000 });
 		await page.waitForFunction(() => location.hash === '#/', undefined, { timeout: 20000, polling: 'raf' });

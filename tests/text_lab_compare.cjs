@@ -132,7 +132,7 @@ async function compareImages(browser, standard, minimum, masks) {
 				square += gap * gap;
 			}
 		}
-		// 変わった画素の数だけでなく、どれだけ大きく変わったかもRMSEで残す。
+		// 変わった画素の数に加えて、どれだけ大きく変わったかもRMSEで残す。
 		const rmse = compared ? Math.sqrt(square / (compared * 3)) / 255 : 0;
 		return { compared, exactChanges, tolerantChanges, maxDelta, rmse, changedBounds: { minX, minY, maxX, maxY } };
 	}, { left: standard.toString('base64'), right: minimum.toString('base64'), boxes: masks });
