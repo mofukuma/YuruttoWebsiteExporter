@@ -4,9 +4,11 @@
 FROM node:24.1.0-bookworm-slim@sha256:4b7fd762424e57e5cb316bece2c33fa35263ab11edd406f1a49d228e223c29d1
 
 ARG SCONS_VERSION=4.10.1
-ARG UV_VERSION=0.12.1
+ARG UV_VERSION=0.5.11
 
 # Python道具の導入はuvへ寄せる。版を固定したまま、同じ手順をhost側とも揃える。
+# uvの版はQEMUのx86模倣でも動くものを選ぶ。新しい版はarm64 host上の模倣で落ちる。
+# uvは道具を入れるだけで、SConsの版はSCONS_VERSIONが決めるため成果物には響かない。
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential ca-certificates curl git libdigest-sha-perl patch pkg-config python3 unzip xz-utils zip \

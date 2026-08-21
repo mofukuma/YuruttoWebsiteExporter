@@ -321,17 +321,18 @@ async function cyanPixels(page, image, rect) {
 			const area = document.querySelector('[data-yweb-kind="TextEdit"]');
 			return area.scrollHeight > area.clientHeight && area.scrollWidth > area.clientWidth;
 		});
-		await page.evaluate(() => {
+		// scrollをGodotが受け取るまで、位置を置き直しては知らせ続ける。
+		// 一度きりの通知だと、Godotが聞き始める前に投げた回が捨てられ、待ち続けてしまう。
+		await page.waitForFunction(() => {
 			const area = document.querySelector('[data-yweb-kind="TextEdit"]');
+			if (!area) return false;
 			area.scrollTop = 48;
 			area.scrollLeft = 32;
 			area.dispatchEvent(new Event('scroll'));
-		});
-		await page.waitForFunction(() => {
 			const state = [...document.querySelectorAll('[data-yweb-text]')].find((node) => node.textContent.startsWith('AREA MODEL:ROW0'))?.textContent || '';
 			const values = state.match(/:(\d+):(\d+)$/);
-			return values && Number(values[1]) > 0 && Number(values[2]) > 0;
-		});
+			return Boolean(values) && Number(values[1]) > 0 && Number(values[2]) > 0;
+		}, undefined, { timeout: 30000, polling: 'raf' });
 		const scrolledArea = await control(page, 'TextEdit');
 		assert.ok(scrolledArea.scroll.top > 0 && scrolledArea.scroll.left > 0, `textarea scroll未追従: ${JSON.stringify(scrolledArea.scroll)}`);
 

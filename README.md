@@ -78,7 +78,11 @@ To use a moment from your work, set the frame with `OGP Frame` and press `OGP Au
 
 ## What it can and can't do
 
-Made for 2D web works. A project containing 3D can't be exported. Some of `RichTextLabel`'s BBCode can't be reproduced.
+Pick a level on the export screen: DOM only, 2D, or 3D. DOM only draws everything with HTML and skips the canvas.
+2D keeps canvas drawing and 2D physics. 3D adds 3D drawing and 3D physics, and the file you ship gets bigger.
+
+DOM only and 2D can't export a project containing 3D, and they say so before writing anything.
+GDExtension doesn't run at any level. Some of `RichTextLabel`'s BBCode can't be reproduced.
 
 ## For people working on the addon
 
@@ -105,6 +109,12 @@ The browser tests need Chromium. Install it with this.
 ```sh
 npm --prefix tmp/playwright install playwright-core@1.56.0
 node tmp/playwright/node_modules/playwright-core/cli.js install chromium
+```
+
+One test compares the look and the frame cost against a plain Godot web export, so it needs Godot's own template. This puts it under `tmp/`, leaving your Godot install alone.
+
+```sh
+sh build/fetch_godot_templates.sh
 ```
 
 ## License
@@ -193,7 +203,12 @@ URLの見せかたを選べるよ。最初は`/#about`みたいな感じにな�
 
 ## できること・できないこと
 
-2DのWeb作品向け。3Dが入っているプロジェクトは書き出せないよ。`RichTextLabel`のBBCodeは一部再現できないよ。
+エクスポート画面で段を選ぶよ。DOM only、2D、3Dの三つ。
+DOM onlyはCanvasを積まず、全部HTMLで描くよ。2DはCanvasの描画と2D物理を持つよ。
+3Dは3Dの描画と物理まで入るぶん、配るファイルは大きくなるよ。
+
+DOM onlyと2Dは3Dの入ったプロジェクトを書き出せない。書き出す前に教えてくれるよ。
+GDExtensionはどの段でも動かないよ。`RichTextLabel`のBBCodeは一部再現できないよ。
 
 ## アドオン自体をいじる人へ
 
@@ -220,6 +235,12 @@ sh build/dev_template.sh 2d
 ```sh
 npm --prefix tmp/playwright install playwright-core@1.56.0
 node tmp/playwright/node_modules/playwright-core/cli.js install chromium
+```
+
+見た目とフレームの重さを素のGodot Web書き出しと比べるテストがあって、そっちはGodot本家のテンプレートが要るよ。`tmp/`へ置くから、手元のGodotの設定はそのままだよ。
+
+```sh
+sh build/fetch_godot_templates.sh
 ```
 
 ## ライセンス

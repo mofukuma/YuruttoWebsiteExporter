@@ -4,6 +4,7 @@
 'use strict';
 
 const child = require('node:child_process');
+const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -11,6 +12,10 @@ const repo = path.resolve(__dirname, '..'); // 書き出しscriptを持つprojec
 const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const template = path.join(repo, 'addons/yurutto_website_exporter/templates/yweb-2d.zip'); // 成果物へ入る既定levelのテンプレート。
 const generated = new Set(['.godot', 'addons', 'export_presets.cfg']); // 書き出し手順が生成するproject内領域。
+// 素のGodot Web templateの置き場。Godotの導入先へ入れず、tmpへ落としたものを直に指す。
+// これがないとGodotは書き出しを断るため、比較の相手を用意できない。
+const standardTemplate = path.resolve(__dirname, '../tmp/godot-templates/web_nothreads_release.zip');
+
 const standardPreset = `[preset.0]
 
 name="Web"
@@ -26,6 +31,7 @@ script_export_mode=2
 
 vram_texture_compression/for_desktop=true
 html/focus_canvas_on_start=true
+custom_template/release="${standardTemplate}"
 `; // 比較用の標準Web書き出し設定。
 
 // project内で最も新しい更新時刻を返す。
@@ -65,6 +71,7 @@ function ensureStandard(project, site) {
 	const work = `${site}-project`; // addonを外した標準書き出し用の複製。
 	fs.rmSync(work, { recursive: true, force: true });
 	fs.cpSync(project, work, { recursive: true, filter: (from) => !generated.has(path.basename(from)) });
+	assert.ok(fs.existsSync(standardTemplate), `素のGodot Web templateがない: ${standardTemplate}\nbuild/fetch_godot_templates.sh で用意できる。`);
 	fs.writeFileSync(path.join(work, 'export_presets.cfg'), standardPreset);
 	fs.mkdirSync(site, { recursive: true });
 	child.execFileSync(godot, ['--headless', '--path', work, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe' });
