@@ -4,7 +4,7 @@
 
 extends Node2D
 
-const YWEB_TICKS := 2250 # 検査用に上げる物理更新数。YWEB_FREEZE分を約0.4秒で終える速さ。
+const YWEB_TICKS := 4500 # 検査用に上げる物理更新数。YWEB_FREEZE分を約0.2秒で終える速さ。
 const YWEB_FREEZE := 900 # 形を固定するまでの物理frame数。
 
 var _yweb_ticks := 0 # 経過した物理frame。

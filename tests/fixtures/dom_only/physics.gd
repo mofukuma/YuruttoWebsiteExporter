@@ -4,7 +4,7 @@
 
 extends Control
 
-const TICKS := 750 # 検査用に上げる物理更新数。FREEZE分を約0.4秒で終える速さ。
+const TICKS := 1500 # 検査用に上げる物理更新数。FREEZE分を約0.2秒で終える速さ。
 const FREEZE := 300 # 形を固定するまでの物理frame数。
 const COUNT := 9 # 落とすおもちの数。
 
