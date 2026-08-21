@@ -111,16 +111,23 @@ async function settleDom(page, name) {
 	const browser = await chromium.launch({ executablePath: browserPath, headless: true, args: ['--use-angle=swiftshader'] });
 	const measured = {};
 	try {
+		// 起動は一度だけにして、画面はURLの移動で回る。作品と同じ道筋を通り、起動の待ちも一度で済む。
+		const page = await browser.newPage({ viewport: size, deviceScaleFactor: 1 });
+		await page.goto(`http://127.0.0.1:${server.address().port}/#/`, { waitUntil: 'domcontentloaded' });
+		await page.waitForFunction(() => document.querySelectorAll('[data-yweb-box]').length > 0, { timeout: 20000 });
+		await page.evaluate(() => document.fonts.ready);
 		for (const [index, name] of screens.entries()) {
-			const page = await browser.newPage({ viewport: size, deviceScaleFactor: 1 });
-			const uri = index === 0 ? '/' : `/${name}/`;
-			await page.goto(`http://127.0.0.1:${server.address().port}/#${uri}`, { waitUntil: 'domcontentloaded' });
-			await page.waitForFunction(() => document.querySelectorAll('[data-yweb-box]').length > 0, { timeout: 20000 });
-			await page.evaluate(() => document.fonts.ready);
+			if (index > 0) {
+				// URLを変えるとruntimeがGodotへ伝え、Godotがsceneを入れ替える。
+				// 入れ替わりは、前の画面の文字が消えて次の画面の要素が出そろった時に終わる。
+				const before = await page.evaluate(() => document.body.innerText);
+				await page.evaluate((uri) => { location.hash = uri; }, `#/${name}/`);
+				await page.waitForFunction((was) => document.body.innerText !== was
+					&& document.querySelectorAll('[data-yweb-box]').length > 0, before, { timeout: 20000, polling: 'raf' });
+			}
 			await settleDom(page, name);
 			const shot = path.join(work, `browser-${name}.png`);
 			await page.screenshot({ path: shot });
-			await page.close();
 
 			// Godot側はalphaを持つため、両方を黒へ重ねてから測る。透明画素が差から外れると値が実態より小さく出る。
 			const reference = flatten(decode(fs.readFileSync(path.join(work, `godot-${name}.png`))));
