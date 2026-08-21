@@ -105,6 +105,7 @@ async function compareImages(browser, standard, minimum, masks) {
 		let exactChanges = 0;
 		let tolerantChanges = 0;
 		let maxDelta = 0;
+		let square = 0; // 差の二乗の合計。RMSEを出すために貯める。
 		let minX = width;
 		let minY = height;
 		let maxX = 0;
@@ -126,8 +127,14 @@ async function compareImages(browser, standard, minimum, masks) {
 				maxY = Math.max(maxY, y);
 			}
 			maxDelta = Math.max(maxDelta, delta);
+			for (let channel = 0; channel < 3; channel++) {
+				const gap = leftData[index + channel] - rightData[index + channel];
+				square += gap * gap;
+			}
 		}
-		return { compared, exactChanges, tolerantChanges, maxDelta, changedBounds: { minX, minY, maxX, maxY } };
+		// 変わった画素の数だけでなく、どれだけ大きく変わったかもRMSEで残す。
+		const rmse = compared ? Math.sqrt(square / (compared * 3)) / 255 : 0;
+		return { compared, exactChanges, tolerantChanges, maxDelta, rmse, changedBounds: { minX, minY, maxX, maxY } };
 	}, { left: standard.toString('base64'), right: minimum.toString('base64'), boxes: masks });
 	await page.close();
 	return result;

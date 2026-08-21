@@ -6,7 +6,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const zlib = require('node:zlib');
-const { decode, meanAbsoluteError } = require('./png.cjs');
+const { decode, meanAbsoluteError, rootMeanSquareError } = require('./png.cjs');
 
 const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]); // PNGの署名。
 
@@ -154,4 +154,31 @@ test('透明度は食い違いに数えない', () => {
 test('大きさが違う絵どうしは、理由を言って断る', () => {
 	assert.throws(() => meanAbsoluteError(solid(2, 2, 0), solid(3, 3, 0)), /大きさが違う/);
 	assert.throws(() => meanAbsoluteError(solid(2, 3, 0), solid(2, 4, 0)), /大きさが違う/);
+});
+
+test('二乗平均でも、同じ絵どうしの食い違いは0', () => {
+	assert.equal(rootMeanSquareError(solid(4, 4, 100), solid(4, 4, 100)), 0);
+});
+
+test('二乗平均でも、黒と白の食い違いは1', () => {
+	assert.equal(rootMeanSquareError(solid(2, 2, 0), solid(2, 2, 255)), 1);
+});
+
+test('二乗平均は、一部の大きな崩れを平均より強く数える', () => {
+	// 4画素のうち1画素だけが真っ白。平均は0.25、二乗平均は0.5になる。
+	const black = decode(png(2, 2, 6, [
+		{ filter: 0, bytes: [0, 0, 0, 255, 0, 0, 0, 255] },
+		{ filter: 0, bytes: [0, 0, 0, 255, 0, 0, 0, 255] },
+	]));
+	const spot = decode(png(2, 2, 6, [
+		{ filter: 0, bytes: [255, 255, 255, 255, 0, 0, 0, 255] },
+		{ filter: 0, bytes: [0, 0, 0, 255, 0, 0, 0, 255] },
+	]));
+	assert.equal(+meanAbsoluteError(black, spot).toFixed(6), 0.25);
+	assert.equal(+rootMeanSquareError(black, spot).toFixed(6), 0.5);
+});
+
+test('二乗平均でも、大きさが違う絵どうしは理由を言って断る', () => {
+	assert.throws(() => rootMeanSquareError(solid(2, 2, 0), solid(3, 3, 0)), /大きさが違う/);
+	assert.throws(() => rootMeanSquareError(solid(2, 3, 0), solid(2, 4, 0)), /大きさが違う/);
 });

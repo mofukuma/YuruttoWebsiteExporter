@@ -1,5 +1,5 @@
 // DOM onlyの見た目が、Godotの画面とどれだけ一致するかを画素で測る。
-// 同じsceneをGodotとBrowserで同じ寸法へ描き、正規化MAEで差を数値にする。
+// 同じsceneをGodotとBrowserで同じ寸法へ描き、平均(MAE)と二乗平均(RMSE)で差を数値にする。
 
 'use strict';
 
@@ -11,6 +11,7 @@ const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 const { browserPath } = require('./browser.cjs');
 const { createServer } = require('../build/serve_web.cjs');
 const { install } = require('../build/fetch_webfont.cjs');
+const { decode, meanAbsoluteError, rootMeanSquareError } = require('./png.cjs'); // 絵の食い違いを数で表す道具。
 
 const repo = path.resolve(__dirname, '..'); // project root。
 const work = path.join(repo, 'tmp/dom-only-match'); // 比較用projectと画像。
@@ -76,10 +77,24 @@ for (const name of screens) {
 fs.mkdirSync(site, { recursive: true });
 child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe', timeout: 300000 });
 
+// 透明を黒へ重ねて不透明にする。撮り手ごとのalphaの扱いの違いを、測る前に消す。
+function flatten(image) {
+	const pixels = Buffer.from(image.pixels);
+	for (let index = 0; index < image.width * image.height; index += 1) {
+		const at = index * 4;
+		const alpha = pixels[at + 3] / 255;
+		for (let channel = 0; channel < 3; channel += 1) pixels[at + channel] = Math.round(pixels[at + channel] * alpha);
+		pixels[at + 3] = 255;
+	}
+	return { width: image.width, height: image.height, pixels };
+}
+
 // 描画が落ち着くまで待つ。物理で動く画面は、要素の位置が変わらなくなった時が形の決まった時。
 // 実時間で待つと、機械の速さで撮る瞬間がずれ、Godotと違う状態を比べてしまう。
 async function settleDom(page, name) {
 	const quiet = settle[name] ? 3 : 1; // 動く画面は、変化なしがこの回数続くまで見る。
+	// 前の画面の記録を持ち越すと、変わっていないと誤って判断する。
+	await page.evaluate(() => { globalThis.ywebSeen = undefined; globalThis.ywebStill = 0; });
 	await page.waitForFunction((need) => {
 		const now = [...document.querySelectorAll('[data-yweb-transform]')].map((node) => node.dataset.ywebTransform).join('|');
 		globalThis.ywebStill = now === globalThis.ywebSeen ? (globalThis.ywebStill || 0) + 1 : 0;
@@ -107,19 +122,10 @@ async function settleDom(page, name) {
 			await page.screenshot({ path: shot });
 			await page.close();
 
-			// Godot側はalphaを持つため、両方を不透明にしてから測る。透明画素が差から外れると値が実態より小さく出る。
-			const flat = (source, target) => {
-				child.execFileSync('magick', [source, '-background', 'black', '-alpha', 'remove', '-alpha', 'off', target]);
-				return target;
-			};
-			const reference = flat(path.join(work, `godot-${name}.png`), path.join(work, `flat-godot-${name}.png`));
-			const compared = flat(shot, path.join(work, `flat-browser-${name}.png`));
-
-			// 画素差を正規化MAEで測る。compareは差があると終了値1を返すため出力だけを読む。
-			const measure = child.spawnSync('magick', ['compare', '-metric', 'MAE', reference, compared, path.join(work, `diff-${name}.png`)], { encoding: 'utf8' });
-			const matched = /\(([0-9.eE+-]+)\)/.exec(measure.stderr || '');
-			assert.ok(matched, `MAEを測れない: ${name} ${measure.stderr}`);
-			measured[name] = Number(matched[1]);
+			// Godot側はalphaを持つため、両方を黒へ重ねてから測る。透明画素が差から外れると値が実態より小さく出る。
+			const reference = flatten(decode(fs.readFileSync(path.join(work, `godot-${name}.png`))));
+			const compared = flatten(decode(fs.readFileSync(shot)));
+			measured[name] = { mae: meanAbsoluteError(reference, compared), rmse: rootMeanSquareError(reference, compared) };
 		}
 	} finally {
 		await browser.close();
@@ -127,10 +133,10 @@ async function settleDom(page, name) {
 	}
 
 	// 画面ごとに上限を当てる。平均では、良い画面が悪い画面を隠してしまう。
-	const over = Object.entries(measured).filter(([name, value]) => value >= (limits[name] ?? limit));
+	const over = Object.entries(measured).filter(([name, value]) => value.mae >= (limits[name] ?? limit));
 	fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ measured, limit, limits }, null, 2)}\n`);
 	console.log(JSON.stringify({ ok: over.length === 0, measured, limit, limits }));
-	assert.deepEqual(over, [], `Godot画面との差が大きい: ${over.map(([name, value]) => `${name} ${value}`).join(', ')}`);
+	assert.deepEqual(over, [], `Godot画面との差が大きい: ${over.map(([name, value]) => `${name} 平均${value.mae} RMSE${value.rmse}`).join(', ')}`);
 })().catch((error) => {
 	console.error(error);
 	process.exitCode = 1;

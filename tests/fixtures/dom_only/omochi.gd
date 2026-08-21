@@ -4,7 +4,7 @@
 
 extends Node2D
 
-const YWEB_TICKS := 600 # 検査用に上げる物理更新数。実時間を縮めて待ち時間を減らす。
+const YWEB_TICKS := 2250 # 検査用に上げる物理更新数。YWEB_FREEZE分を約0.4秒で終える速さ。
 const YWEB_FREEZE := 900 # 形を固定するまでの物理frame数。
 
 var _yweb_ticks := 0 # 経過した物理frame。
@@ -48,6 +48,8 @@ var pins: Array[Vector2] = [] # Canvas描画と衝突を共有する丸ピン位
 
 # 遊技盤、意味文字、物理障害物、捕獲機、Omochiを一括構築する。
 func _ready() -> void:
+	# 前の画面が止めたままなら動かし直す。scene切替で来ても同じ状態から始める。
+	get_tree().paused = false
 	Engine.physics_ticks_per_second = YWEB_TICKS
 	text_theme = _make_text_theme()
 	_build_ui()

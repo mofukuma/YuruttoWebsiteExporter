@@ -4,7 +4,7 @@
 
 extends Control
 
-const TICKS := 600 # 検査用に上げる物理更新数。実時間を縮める。
+const TICKS := 750 # 検査用に上げる物理更新数。FREEZE分を約0.4秒で終える速さ。
 const FREEZE := 300 # 形を固定するまでの物理frame数。
 const COUNT := 9 # 落とすおもちの数。
 
@@ -13,6 +13,8 @@ var ticks := 0 # 経過した物理frame。
 
 # カゴと障害物を置き、おもちを散らして落とす。
 func _ready() -> void:
+	# 前の画面が止めたままなら動かし直す。scene切替で来ても同じ状態から始める。
+	get_tree().paused = false
 	Engine.physics_ticks_per_second = TICKS
 	var back := ColorRect.new()
 	back.color = Color("0b1220")

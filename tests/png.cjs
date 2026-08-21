@@ -97,4 +97,22 @@ function meanAbsoluteError(left, right) {
 	return total / (count * 3 * 255);
 }
 
-module.exports = { decode, meanAbsoluteError };
+// 二枚の絵の食い違いを二乗平均平方根(RMSE)で返す。0が同一、1が最大。
+// 平均(MAE)と違い、大きく外れた画素をより強く数える。狭い範囲の大崩れを見逃さない。
+function rootMeanSquareError(left, right) {
+	if (left.width !== right.width || left.height !== right.height) {
+		throw new Error(`大きさが違う: ${left.width}x${left.height} と ${right.width}x${right.height}`);
+	}
+	let total = 0;
+	const count = left.width * left.height;
+	for (let index = 0; index < count; index += 1) {
+		const at = index * 4;
+		for (let channel = 0; channel < 3; channel += 1) {
+			const gap = left.pixels[at + channel] - right.pixels[at + channel];
+			total += gap * gap;
+		}
+	}
+	return Math.sqrt(total / (count * 3)) / 255;
+}
+
+module.exports = { decode, meanAbsoluteError, rootMeanSquareError };

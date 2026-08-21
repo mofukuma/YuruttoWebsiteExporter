@@ -10,7 +10,7 @@ const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 const { createServer } = require('../build/serve_web.cjs');
 const { install } = require('../build/fetch_webfont.cjs');
-const { decode, meanAbsoluteError } = require('./png.cjs');
+const { decode, meanAbsoluteError, rootMeanSquareError } = require('./png.cjs');
 const { browserPath } = require('./browser.cjs');
 
 const repo = path.resolve(__dirname, '..'); // yweb project root。
@@ -116,7 +116,8 @@ async function compare(scene) {
 	const right = await exported(scene, place);
 	assert.equal(left.width, width, `${scene.name}の見本の横が違う: ${left.width}`);
 	assert.equal(right.width, width, `${scene.name}の書き出しの横が違う: ${right.width}`);
-	return meanAbsoluteError(left, right) * 100;
+	// 合否は平均で決め、RMSEは狭い範囲の大崩れを見つけるための記録として並べて出す。
+	return { mae: meanAbsoluteError(left, right) * 100, rmse: rootMeanSquareError(left, right) * 100 };
 }
 
 // 全部の画面を順に測り、一枚ごとと全体のまとまりの両方で確かめる。
@@ -124,10 +125,10 @@ async function main() {
 	const results = {};
 	const values = [];
 	for (const scene of SCENES) {
-		const mae = await compare(scene);
-		results[scene.name] = `${mae.toFixed(4)}%`;
+		const { mae, rmse } = await compare(scene);
+		results[scene.name] = { mae: `${mae.toFixed(4)}%`, rmse: `${rmse.toFixed(4)}%` };
 		values.push(mae);
-		assert.ok(mae < limit, `${scene.name}の見た目の食い違いが大きい: ${mae.toFixed(4)}% (上限${limit}%)`);
+		assert.ok(mae < limit, `${scene.name}の見た目の食い違いが大きい: 平均${mae.toFixed(4)}% RMSE${rmse.toFixed(4)}% (上限${limit}%)`);
 	}
 	// 調和平均は悪い一枚に引きずられにくく、良い画面の効きを素直に映す。
 	const harmonic = values.length / values.reduce((sum, value) => sum + 1 / value, 0);
