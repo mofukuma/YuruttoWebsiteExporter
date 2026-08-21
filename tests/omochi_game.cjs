@@ -132,7 +132,9 @@ async function item(page, text) {
 		const state = await page.evaluate(() => {
 			const frameText = [...document.querySelectorAll('[data-yweb-text]')].find((node) => /^投下 \d+ \/ フレーム \d+$/.test(node.textContent)).textContent;
 			const ids = [...document.querySelectorAll('[data-yweb-kind="Button"]')].map((node) => node.id);
-			return { frameText, ids };
+			// _draw()のdraw_stringで書いた文字が、DOMへ漏れていないかを見る。
+			const drawn = document.body.innerText.includes('CANVAS: PHYSICS');
+			return { frameText, ids, drawn };
 		});
 		const [, dropText, frameValue] = state.frameText.match(/^投下 (\d+) \/ フレーム (\d+)$/);
 		const dropCount = Number(dropText);
@@ -145,9 +147,12 @@ async function item(page, text) {
 		const nextOmochi = await item(page, 'おもち');
 		const canvas = await page.locator('canvas').boundingBox();
 		assert.ok(nextOmochi.box.x >= canvas.x && nextOmochi.box.x + nextOmochi.box.width <= canvas.x + canvas.width, 'OmochiがCanvas横外へ超過');
+		// _draw()の中で描いた文字はGodotの絵のまま。Controlの文字がHTMLになる境界を固定する。
+		assert.equal(state.drawn, false, '_draw()のdraw_stringがDOMへ出ている');
 		assert.ok(image.length > 25000, `確認画像が小さすぎる: ${image.length}`);
 		assert.deepEqual(errors, [], `Browser error: ${errors.join(' | ')}`);
 		const result = {
+			drawStringStaysOnCanvas: !state.drawn,
 			ok: true,
 			dom: { link: 'A', button: 'BUTTON', objectIds: true },
 			mouse: { distance: godouRight.box.x - godouLeft.box.x },

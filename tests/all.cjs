@@ -8,7 +8,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const here = __dirname; // 検査fileの置き場。
-const helpers = new Set(['all.cjs', 'browser.cjs', 'godot.cjs', 'site.cjs']); // 単体で走らない補助。
+const helpers = new Set([
+	'all.cjs', 'browser.cjs', 'godot.cjs', 'site.cjs',
+	'nginx.cjs', 'png.cjs', 'nginx_unit.cjs', 'png_unit.cjs',
+]); // 単体で走らない補助と、unit.cjsがまとめる検査。
 const heavy = ['site_export.cjs', 'dom_only_match.cjs']; // Dockerや多画面比較を伴う重いもの。
 
 // 補助を除いた検査fileを、軽い順に並べて返す。

@@ -18,7 +18,7 @@ function check(project, locale = 'en') {
 }
 
 const allowed = check(path.join(root, 'examples/text_lab'));
-const blocked = check(path.join(root, 'tests/fixtures/minimum_3d'));
+const blocked = check(path.join(root, 'tests/fixtures/project_3d'));
 fs.mkdirSync(path.join(cases, 'dynamic'), { recursive: true });
 for (const name of ['allowed', 'scene_3d', 'resource_3d', 'curve_3d', 'extension']) {
 	fs.mkdirSync(path.join(cases, name), { recursive: true });
@@ -49,7 +49,7 @@ assert.match(binaryCurve.stderr, /curve\.res: 3D type in a binary resource/);
 assert.equal(extension.status, 1, `GDExtensionを許可: ${extension.stderr}`);
 assert.match(extension.stderr, /addon\.gdextension: GDExtension is not supported/);
 // 同じ拒否を日本語Editorでも読めることを確認する。
-const blockedJa = check(path.join(root, 'tests/fixtures/minimum_3d'), 'ja');
+const blockedJa = check(path.join(root, 'tests/fixtures/project_3d'), 'ja');
 assert.equal(blockedJa.status, 1, `3D sceneを許可: ${blockedJa.stderr}`);
 assert.match(blockedJa.stderr, /main\.tscn: 3D型/);
 console.log(JSON.stringify({ ok: true, allowed: 3, rejected: 6 }));

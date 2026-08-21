@@ -10,7 +10,7 @@ const SiteBuilder := preload("site_builder.gd") # SEOと配信物の生成処理
 const SiteConfig := preload("site_config.gd") # Scene情報JSONの用意と補完。
 const CONFIG_PATH := "res://yweb-site.json" # Scene情報JSONの既定位置。
 const I18n := preload("i18n.gd") # 画面文言の言語選び。
-const ProjectCheck := preload("project_check.gd") # 3D境界検査。
+const ProjectCheck := preload("project_check.gd") # 2D以下の3D境界検査。
 const OGP_PATH := "res://web/ogp.png" # OGP画像の既定位置。
 const LEVELS := ["dom", "2d", "3d"] # 書き出しlevel。表示順とmanifestのkeyを揃える。
 const LEVEL_HINT := "DOM only,2D,3D" # Export画面へ出すlevelの選択肢。
@@ -132,7 +132,11 @@ func _export_project(preset: EditorExportPreset, debug: bool, path: String, flag
 	var made := DirAccess.make_dir_recursive_absolute(directory)
 	if made != OK:
 		return _fail(I18n.t("topic_export"), I18n.t("no_out_dir", [directory]), made)
-	var blocked: Array[String] = [] if _level(preset) == "3d" else ProjectCheck.new().inspect(ProjectSettings.globalize_path("res://"))
+	var level := _level(preset)
+	var blocked: Array[String] = []
+	# 3Dを持たないlevelでは、対応外resourceを書き出す前に止める。
+	if level != "3d":
+		blocked = ProjectCheck.new().inspect(ProjectSettings.globalize_path("res://"))
 	if not blocked.is_empty():
 		return _fail(I18n.t("topic_project"), "\n".join(blocked), ERR_UNAVAILABLE)
 	var base := path.get_file().get_basename()
@@ -143,7 +147,7 @@ func _export_project(preset: EditorExportPreset, debug: bool, path: String, flag
 		return _fail(I18n.t("topic_pck"), I18n.t("no_pck", [pack]), error)
 	if not saved.get("so_files", []).is_empty():
 		return _fail(I18n.t("topic_template"), I18n.t("no_gdextension"), ERR_UNAVAILABLE)
-	error = _extract(directory, base, _level(preset))
+	error = _extract(directory, base, level)
 	if error != OK:
 		return error
 	error = _write_html(preset, path, base, pack, flags)
