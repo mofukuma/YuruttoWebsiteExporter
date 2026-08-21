@@ -9,6 +9,8 @@ const YWebText = {
 	$YWebText__deps: ['$GodotConfig', '$GodotRuntime'],
 	$YWebText: {
 		elements: new Map(),
+		images: new Map(), // 識別値ごとの画像data URI。
+		drawn: new Set(), // 描画命令から作った要素。次の描画まで残す。
 		seen: new Set(), // 現frameで同期されたDOM ID。
 		event: null,
 		siteEvent: null,
@@ -28,7 +30,9 @@ const YWebText = {
 			root.id = 'yweb-text-root';
 			// -webkit-font-smoothing:antialiasedは、字の縁を灰色の濃淡だけで描かせる指定。
 			// Godotも同じ描きかたをするので、これを揃えるとCanvasとDOMの文字の見た目が近づく。
-			root.style.cssText = 'position:absolute;transform-origin:0 0;pointer-events:none;overflow:hidden;z-index:1;font-family:sans-serif;-webkit-font-smoothing:antialiased';
+			// text-rendering:geometricPrecisionは、字の送りを整数へ丸めさせない指定。
+			// Godotと同じ位置へ字を置けるので、拡大や回転をしても食い違いが増えない。
+			root.style.cssText = 'position:absolute;transform-origin:0 0;pointer-events:none;overflow:hidden;z-index:1;font-family:sans-serif;-webkit-font-smoothing:antialiased;text-rendering:geometricPrecision';
 			const style = document.createElement('style');
 			style.textContent = '#yweb-text-root input::placeholder,#yweb-text-root textarea::placeholder{color:var(--yweb-placeholder,currentColor);opacity:1}';
 			document.head.appendChild(style);
@@ -37,6 +41,14 @@ const YWebText = {
 			window.addEventListener('mouseup', () => { YWebText.mouseDown = false; });
 			YWebText.root = root;
 			return root;
+		},
+		// DOM onlyでは描画しないCanvasを画面から外す。寸法はrootの基準として残す。
+		hideCanvas: function () {
+			const canvas = GodotConfig.canvas;
+			if (canvas.dataset.ywebHidden) return;
+			canvas.dataset.ywebHidden = '1';
+			canvas.style.visibility = 'hidden';
+			YWebText.getRoot().style.pointerEvents = 'auto';
 		},
 		// rootをCanvasのCSS表示矩形へ一致させる。
 		resizeRoot: function () {
@@ -222,6 +234,77 @@ const YWebText = {
 			return element;
 		},
 	},
+	yweb_box_sync__sig: 'vp' + 'f'.repeat(8) + 'i' + 'f'.repeat(16),
+	// Controlの面と枠を、文字と同じ座標系の箱としてDOMへ写す。
+	// Canvasが無いDOM onlyでの見た目はこの箱が担うため、描画は全てCSSで指定する。
+	yweb_box_sync: function (pUid, xx, xy, yx, yy, x, y, width, height, z, red, green, blue, alpha, left, top, right, bottom, borderRed, borderGreen, borderBlue, borderAlpha, topLeft, topRight, bottomRight, bottomLeft) {
+		const uid = GodotRuntime.parseString(pUid);
+		YWebText.seen.add(uid);
+		if (uid.includes('-d')) YWebText.drawn.add(uid);
+		YWebText.hideCanvas();
+		let element = YWebText.elements.get(uid);
+		if (!element) {
+			element = document.createElement('div');
+			element.dataset.ywebBox = uid;
+			element.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0;box-sizing:border-box';
+			YWebText.getRoot().appendChild(element);
+			YWebText.elements.set(uid, element);
+		}
+		const style = [
+			`width:${width}px`, `height:${height}px`, `z-index:${z}`,
+			`background-color:${YWebText.color(red, green, blue, alpha)}`,
+			`border-style:solid`,
+			`border-width:${top}px ${right}px ${bottom}px ${left}px`,
+			`border-color:${YWebText.color(borderRed, borderGreen, borderBlue, borderAlpha)}`,
+			`border-radius:${topLeft}px ${topRight}px ${bottomRight}px ${bottomLeft}px`,
+		].join(';');
+		if (element.dataset.ywebStyle !== style) {
+			element.dataset.ywebStyle = style;
+			element.style.cssText = `position:absolute;left:0;top:0;transform-origin:0 0;box-sizing:border-box;${style}`;
+		}
+		const transform = [xx, xy, yx, yy, x, y].join(',');
+		if (element.dataset.ywebTransform !== transform) {
+			element.dataset.ywebTransform = transform;
+			element.style.transform = `matrix(${transform})`;
+		}
+	},
+	yweb_image_data__sig: 'vpp',
+	// 画像の中身を識別値へ一度だけ覚える。以後は同じ識別値で参照する。
+	yweb_image_data: function (pKey, pData) {
+		YWebText.images.set(GodotRuntime.parseString(pKey), GodotRuntime.parseString(pData));
+	},
+	yweb_image_sync__sig: 'vpp' + 'f'.repeat(8) + 'i' + 'f'.repeat(4),
+	// 画像を、箱や文字と同じ座標系と重なり順でDOMへ置く。
+	yweb_image_sync: function (pUid, pKey, xx, xy, yx, yy, x, y, width, height, z, red, green, blue, alpha) {
+		const uid = GodotRuntime.parseString(pUid);
+		const key = GodotRuntime.parseString(pKey);
+		YWebText.seen.add(uid);
+		if (uid.includes('-d')) YWebText.drawn.add(uid);
+		YWebText.hideCanvas();
+		let element = YWebText.elements.get(uid);
+		if (!element) {
+			element = document.createElement('img');
+			element.dataset.ywebImage = uid;
+			element.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0';
+			YWebText.getRoot().appendChild(element);
+			YWebText.elements.set(uid, element);
+		}
+		const source = YWebText.images.get(key);
+		if (source && element.dataset.ywebImageKey !== key) {
+			element.dataset.ywebImageKey = key;
+			element.src = source;
+		}
+		const style = `width:${width}px;height:${height}px;z-index:${z};opacity:${alpha}`;
+		if (element.dataset.ywebStyle !== style) {
+			element.dataset.ywebStyle = style;
+			element.style.cssText = `position:absolute;left:0;top:0;transform-origin:0 0;${style}`;
+		}
+		const transform = [xx, xy, yx, yy, x, y].join(',');
+		if (element.dataset.ywebTransform !== transform) {
+			element.dataset.ywebTransform = transform;
+			element.style.transform = `matrix(${transform})`;
+		}
+	},
 	yweb_text_set_event_cb__sig: 'vp',
 	// Browser入力を受けるC++ callbackを登録する。
 	yweb_text_set_event_cb: function (callback) {
@@ -259,6 +342,7 @@ const YWebText = {
 	yweb_text_sync: function (pUid, pText, pAux, pFont, xx, xy, yx, yy, x, y, width, height, flags, z, horizontal, vertical, kind, maxLength, selectionStart, selectionEnd, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha, scrollX, scrollY) {
 		const uid = GodotRuntime.parseString(pUid);
 		YWebText.seen.add(uid);
+		if (uid.includes('-d')) YWebText.drawn.add(uid);
 		const text = GodotRuntime.parseString(pText);
 		const aux = GodotRuntime.parseString(pAux);
 		const font = GodotRuntime.parseString(pFont);
@@ -368,9 +452,22 @@ const YWebText = {
 	// 今frameで使われなかった複数項目と解放済み要素を回収する。
 	yweb_text_end: function () {
 		for (const [uid, element] of YWebText.elements) {
-			if (YWebText.seen.has(uid)) continue;
+			if (YWebText.seen.has(uid) || YWebText.drawn.has(uid)) continue;
 			element.remove();
 			YWebText.elements.delete(uid);
+		}
+	},
+	yweb_draw_reset__sig: 'vp',
+	// 一つのnodeが描き直す直前に、前回その描画で作った要素を捨てる。
+	// 描画は毎frameとは限らないため、捨てる時機をここに固定する。
+	yweb_draw_reset: function (pPrefix) {
+		const prefix = GodotRuntime.parseString(pPrefix);
+		if (prefix === '') YWebText.images.clear();
+		for (const uid of [...YWebText.drawn]) {
+			if (!uid.startsWith(prefix)) continue;
+			YWebText.elements.get(uid)?.remove();
+			YWebText.elements.delete(uid);
+			YWebText.drawn.delete(uid);
 		}
 	},
 };

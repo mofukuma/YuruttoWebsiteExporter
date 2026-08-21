@@ -10,7 +10,7 @@ const path = require('node:path');
 
 const repo = path.resolve(__dirname, '..'); // project root。
 const work = path.join(repo, 'tmp/site-config'); // 検査用projectの置き場。
-const godot = process.env.GODOT_BIN || '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot。
+const { godot } = require('./godot.cjs'); // 対応版のGodot。
 
 // addonとmain sceneだけを持つ最小projectを作る。
 fs.rmSync(work, { recursive: true, force: true });

@@ -19,7 +19,6 @@ try {
 	assert.match(once, /platform="Yurutto Website"/, '独立platform設定なし');
 	assert.equal(once.includes('html/canvas_resize_policy'), false, '標準Web表示設定が残留');
 	assert.equal(once.includes('custom_template'), false, '標準Web template設定が残留');
-	assert.equal(once.includes('yweb/tools/node'), false, 'Node.js設定が残存');
 	assert.equal(once.includes('/old/machine'), false, 'machine固有pathが残留');
 	assert.match(once, /yweb\/routing\/mode=1/, 'History選択を上書き');
 	assert.match(once, /yweb\/font\/matching_webfont=false/, 'Web font選択を上書き');

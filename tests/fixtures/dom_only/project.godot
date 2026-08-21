@@ -1,0 +1,19 @@
+; DOM onlyの再現度をGodot画面と比べるための検査project。
+
+config_version=5
+
+[application]
+
+config/name="DOM Only Match"
+run/main_scene="res://main.tscn"
+
+[display]
+
+window/size/viewport_width=800
+window/size/viewport_height=600
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

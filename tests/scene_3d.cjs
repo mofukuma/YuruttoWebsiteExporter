@@ -24,8 +24,8 @@ async function main() {
 	child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), project, path.join(site, 'index.html')], { stdio: 'pipe', timeout: 300000 });
 
 	// 3D版テンプレートから書き出したことを、成果物の大きさで確かめる。
-	const manifest = JSON.parse(fs.readFileSync(path.join(repo, 'addons/yurutto_website_exporter/templates/manifest-3d.json')));
-	assert.equal(manifest.features.threeD, true, '3D版manifestでない');
+	const manifest = JSON.parse(fs.readFileSync(path.join(repo, 'addons/yurutto_website_exporter/templates/manifest.json')));
+	assert.equal(manifest.templates['3d'].features.threeD, true, '3D levelのmanifestでない');
 
 	const server = createServer(site);
 	await new Promise((done) => server.listen(port, '127.0.0.1', done));

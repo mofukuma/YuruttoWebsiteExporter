@@ -30,10 +30,12 @@ function download(ttf, woff2) {
 		throw new Error(`Google Fonts CDNからLINE Seed JPを取得できません: ${error.message}`);
 	}
 	try {
-		child.execFileSync('python3', ['-m', 'fontTools.ttLib.woff2', 'compress', '-q', '-o', woff2, ttf], { stdio: 'pipe' });
+		// 変換道具はuvがその場で用意する。host側へ事前導入しなくても同じ結果になる。
+		child.execFileSync('uv', ['run', '--quiet', '--with', 'fonttools', '--with', 'brotli',
+			'python', '-m', 'fontTools.ttLib.woff2', 'compress', '-q', '-o', woff2, ttf], { stdio: 'pipe' });
 	} catch (error) {
 		fs.rmSync(ttf, { force: true });
-		throw new Error(`WOFF2変換にfonttoolsが必要です (pip install fonttools brotli): ${error.message}`);
+		throw new Error(`WOFF2変換にuvが必要です (https://docs.astral.sh/uv/): ${error.message}`);
 	}
 }
 

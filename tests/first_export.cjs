@@ -12,7 +12,7 @@ const repo = path.resolve(__dirname, '..'); // project root。
 const work = path.join(repo, 'tmp/first-export'); // 新規projectと成果物の置き場。
 const project = path.join(work, 'project'); // 利用者側を模した検査project。
 const site = path.join(work, 'site'); // 書き出したWeb成果物。
-const godot = process.env.GODOT_BIN || '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot。
+const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const pages = [ // 表示文とその次の遷移先。
 	{ name: 'main', node: 'Main', text: 'MAIN PAGE', next: 'res://news.tscn' },
 	{ name: 'news', node: 'News', text: 'NEWS PAGE', next: 'res://contact.tscn' },

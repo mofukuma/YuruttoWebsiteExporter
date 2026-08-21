@@ -8,9 +8,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const repo = path.resolve(__dirname, '..'); // 書き出しscriptを持つproject root。
-const godot = process.env.GODOT_BIN || '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot editor。
-const suffix = process.env.YWEB_PROFILE ? `-${process.env.YWEB_PROFILE}` : ''; // 検査するテンプレートの種類。
-const template = path.join(repo, `addons/yurutto_website_exporter/templates/yweb${suffix}.zip`); // 成果物へ入る配布テンプレート。
+const { godot } = require('./godot.cjs'); // 対応版のGodot。
+const template = path.join(repo, 'addons/yurutto_website_exporter/templates/yweb-2d.zip'); // 成果物へ入る既定levelのテンプレート。
 const generated = new Set(['.godot', 'addons', 'export_presets.cfg']); // 書き出し手順が生成するproject内領域。
 const standardPreset = `[preset.0]
 
@@ -45,9 +44,15 @@ function stale(site, source) {
 }
 
 // ゆるっとWebテンプレートの成果物を用意する。
+// 書き出しはaddonの複製とpreset書き換えをprojectへ行うため、examplesではなくtmpの複製で走らせる。
 function ensure(project, site) {
 	if (stale(site, Math.max(newest(project), fs.statSync(template).mtimeMs))) {
-		child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), project, path.join(site, 'index.html')], { stdio: 'pipe' });
+		const work = `${site}-project`; // 書き出し手順が触ってよい複製。
+		// presetは書き出し設定の正本なので複製へ持ち込む。addonとimport cacheは手順が作り直す。
+		const skip = new Set(['.godot', 'addons']);
+		fs.rmSync(work, { recursive: true, force: true });
+		fs.cpSync(project, work, { recursive: true, filter: (from) => !skip.has(path.basename(from)) });
+		child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), work, path.join(site, 'index.html')], { stdio: 'pipe' });
 	}
 	return site;
 }

@@ -32,4 +32,4 @@ Web runtimeはアドオン内で固定されるため、同じhashのJavaScript�
 
 ## 配布物
 
-利用者に必要なものはGodot 4.7.1と`addons/yweb_site`だけ。Node.js、公式Export template、repository内build scriptを利用時の前提にしない構成。
+利用者に必要なものはGodot 4.7.1-stableとaddon。Node.jsとDockerはaddonを作る側が使う。Node.js、公式Export template、repository内build scriptを利用時の前提にしない構成。

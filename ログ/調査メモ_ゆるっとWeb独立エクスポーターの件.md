@@ -55,4 +55,4 @@ Godotのテンプレート管理画面は公式プラットフォーム用テン
 
 ## 結論
 
-`EditorExportPlugin`による標準Web拡張ではなく、`EditorExportPlatformExtension`による独立プラットフォームへ変更。表示名は「ゆるっとWeb」。アドオンの導入と有効化だけでExport presetを追加できる構成。
+`EditorExportPlugin`による標準Web拡張ではなく、`EditorExportPlatformExtension`による独立プラットフォームへ変更。表示名は「ゆるっとWeb」。アドオンを導入して有効化すればExport presetが増える構成。

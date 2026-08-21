@@ -4,7 +4,6 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const http = require('node:http');
 const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 
@@ -12,22 +11,8 @@ const { ensure, ensureStandard } = require('./site.cjs'); // 比較する二方�
 const project = path.resolve(__dirname, '../examples/text_lab'); // 同一の検査対象Godot project。
 const base = path.resolve(__dirname, '../tmp/text-lab'); // 比較成果物と結果の保存先。
 const roots = { minimum: ensure(project, path.join(base, 'site')), standard: ensureStandard(project, path.join(base, 'standard')) }; // 同一sceneの二方式。
+const { createServer: serve } = require('../build/serve_web.cjs');
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
-const mime = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.woff2': 'font/woff2', '.png': 'image/png' }; // 配信に必要な応答型。
-
-// 一方式をsite rootとして独立originへ配信する。
-function serve(root) {
-	return http.createServer((request, response) => {
-		const name = request.url.slice(1).split('?')[0] || 'index.html';
-		const file = path.resolve(root, name);
-		if (!file.startsWith(`${root}${path.sep}`) || !fs.existsSync(file)) {
-			response.writeHead(404).end();
-			return;
-		}
-		response.writeHead(200, { 'content-type': mime[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
-		fs.createReadStream(file).pipe(response);
-	});
-}
 
 // 数列の中央値を返す。
 function median(values) {

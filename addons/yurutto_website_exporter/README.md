@@ -1,10 +1,22 @@
-# ゆるっとWeb
+# YuruttoWebsiteExporter
 
-Godot 4.7.1-stable固定commit用の独立Webエクスポーター。
+Godotで作った作品を、そのままWebサイトにするアドオンだよ。
+絵とかはGodotのまま、文字は本物のHTMLで出すから、検索にも出るしコピーも読み上げもできる。
 
-1. このdirectoryをprojectの`addons/yurutto_website_exporter`へ配置。
-2. `プロジェクト > プロジェクト設定 > プラグイン`で「ゆるっとWeb」を有効化。
-3. `プロジェクト > エクスポート > 追加 > ゆるっとWeb`を選択。
-4. 出力先を`.html`にしてエクスポート。
+## 使ってみよう
 
-専用WebテンプレートとBrotliを内蔵。利用時にGodot公式Webテンプレート、Node.js、Dockerは不要。異なるGodot版はExport前に拒否。
+まずはこのフォルダを、君のプロジェクトの`addons`へ置こう。
+
+そうしたら`プロジェクト > プロジェクト設定 > プラグイン`を開いて、`YuruttoWebsiteExporter`を有効にしよう。
+
+あとは`プロジェクト > エクスポート > 追加 > Yurutto Website`を選んで、出力先を`.html`にして書き出そう。
+
+## 一緒に入ってるもの
+
+書き出しに使うWebテンプレートと、転送を軽くするBrotli圧縮は、この中に入ってるよ。
+Godotの公式Webテンプレートも、Node.jsも、Dockerもいらない。
+
+## 対応しているGodot
+
+Godot 4.7.1-stableの決まったcommit向けに作ってあるよ。
+違う版で書き出そうとしたときは、失敗する前に画面で知らせるようにしてある。

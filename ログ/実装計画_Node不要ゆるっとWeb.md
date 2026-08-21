@@ -2,7 +2,7 @@
 
 ## 目的
 
-Godot 4.7.1と`addons/yweb_site`だけで、検査、PCK、runtime、SEO、route、Web font、Brotli配信物まで生成するExportプラットフォーム。
+Godot 4.7.1-stableの固定commitとこのアドオンがあれば、検査、PCK、テンプレート、SEO、route、Web font、Brotli配信物まで生成できるExportプラットフォーム。
 
 ## 構成
 
@@ -56,7 +56,7 @@ Node.jsのpath設定なし。Site、route、font、OGPの各設定だけを表�
 
 ## 完了条件
 
-- Godot 4.7.1とaddonだけでExport成功。
+- Godot 4.7.1-stableとaddonがあればExportが通る。
 - 利用者環境のNode.js、公式Export template、build directoryを参照しない。
 - 固定runtimeのJavaScriptとWebAssemblyがBrotli配信可能。
 - 既存のDOM文字、フォーム、SEO、route、OGP、2D Canvas境界を維持。

@@ -7,17 +7,21 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..'); // yweb project root。
-const suffix = process.env.YWEB_PROFILE ? `-${process.env.YWEB_PROFILE}` : ''; // 検査するテンプレートの種類。
-const distribution = JSON.parse(fs.readFileSync(path.join(root, `addons/yurutto_website_exporter/templates/manifest${suffix}.json`))); // 配布テンプレート情報。
-const template = path.join(root, 'addons/yurutto_website_exporter/templates', distribution.template.file); // 配布template。
+const distribution = JSON.parse(fs.readFileSync(path.join(root, 'addons/yurutto_website_exporter/templates/manifest.json'))); // 配布テンプレート情報。
+const templates = Object.values(distribution.templates).map((item) => path.join(root, 'addons/yurutto_website_exporter/templates', item.file)); // level別の配布template。
 const notice = 'GODOT_LICENSE.txt'; // 公開する通知file。
 const sources = ['LICENSES/GODOT-MIT.txt', 'LICENSES/GODOT-COPYRIGHT.txt']; // 通知の追跡元。
 
 const expected = sources.map((file) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\n*$/, '\n')).join('\n');
-assert.equal(childProcess.execFileSync('unzip', ['-p', template, notice], { encoding: 'utf8' }), expected, `template license不一致: ${notice}`);
-// 通知を分けずに一つへまとめた境界を確認する。
-assert.throws(() => childProcess.execFileSync('unzip', ['-p', template, 'GODOT_COPYRIGHT.txt'], { stdio: 'pipe' }));
-// 利用者projectのfontへ誤ったlicenseを付けない境界を確認する。
-assert.throws(() => childProcess.execFileSync('unzip', ['-p', template, 'FONT_LICENSE.txt'], { stdio: 'pipe' }));
-assert.equal(fs.existsSync(path.join(path.dirname(template), 'godot.font.woff2')), false);
-console.log(JSON.stringify({ ok: true, licenses: sources.length, notice, boundary: 'template' }));
+
+// levelごとのtemplateが、同じ通知を同じ形で持つことを確かめる。
+for (const template of templates) {
+	const level = path.basename(template);
+	assert.equal(childProcess.execFileSync('unzip', ['-p', template, notice], { encoding: 'utf8' }), expected, `template license不一致: ${level}`);
+	// 通知を分けずに一つへまとめた境界を確認する。
+	assert.throws(() => childProcess.execFileSync('unzip', ['-p', template, 'GODOT_COPYRIGHT.txt'], { stdio: 'pipe' }), `通知が分かれている: ${level}`);
+	// 利用者projectのfontへ誤ったlicenseを付けない境界を確認する。
+	assert.throws(() => childProcess.execFileSync('unzip', ['-p', template, 'FONT_LICENSE.txt'], { stdio: 'pipe' }), `font通知が混入: ${level}`);
+	assert.equal(fs.existsSync(path.join(path.dirname(template), 'godot.font.woff2')), false, `font混入: ${level}`);
+}
+console.log(JSON.stringify({ ok: true, templates: templates.length, licenses: sources.length, notice, boundary: 'template' }));

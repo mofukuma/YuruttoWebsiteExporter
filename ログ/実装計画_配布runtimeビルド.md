@@ -49,5 +49,5 @@ Godot版と独自機能から生成されるWeb runtimeを、固定環境で再�
 - 配布runtimeの全入力と出力hashを追跡可能。
 - Godot版またはcommit不一致をExport前に拒否。
 - 同じ固定環境の連続buildで同一template SHA-256。
-- addon利用時は従来どおりGodot 4.7.1だけでExport可能。
+- addon利用時はGodot 4.7.1-stableがあればExportできる。
 - Web font有無による不要なruntime二重配布なし。

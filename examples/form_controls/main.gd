@@ -114,7 +114,7 @@ func _build_controls() -> void:
 	menu.position = Vector2(18, 622)
 	menu.size = Vector2(170, 42)
 	var file := PopupMenu.new()
-	file.name = "ファイル"
+	file.name = "File" # ノード名は英語。画面の見出しは下でつける。
 	file.add_item("保存")
 	menu.add_child(file)
 	add_child(menu)
