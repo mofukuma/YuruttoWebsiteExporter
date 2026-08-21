@@ -5,36 +5,27 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const http = require('node:http');
 const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 const { ensure } = require('../build/fetch_webfont.cjs');
+const { createServer } = require('../build/serve_web.cjs');
 
 const root = require('./site.cjs').ensure(path.resolve(__dirname, '../examples/form_controls'), path.resolve(__dirname, '../tmp/form-controls/site')); // 検査対象site。
 const out = path.resolve(__dirname, '../tmp/form-controls'); // 数値結果と画面画像。
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
 const delayedFont = ensure().woff2; // 遅延読込で幅補正を検査するfont。
-const mime = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream' }; // Web起動に必要な応答型。
+
+// Web fontを遅らせて返し、読込後の幅補正を起こす。
+const routes = {
+	'/delayed-font.woff2': (request, response) => setTimeout(() => {
+		response.writeHead(200, { 'content-type': 'font/woff2' });
+		fs.createReadStream(delayedFont).pipe(response);
+	}, 400),
+};
 
 // 成果物だけを公開する短命server。
 function serve() {
-	return http.createServer((request, response) => {
-		if (request.url === '/delayed-font.woff2') {
-			setTimeout(() => {
-				response.writeHead(200, { 'content-type': 'font/woff2' });
-				fs.createReadStream(delayedFont).pipe(response);
-			}, 400);
-			return;
-		}
-		const name = request.url === '/' ? 'index.html' : request.url.slice(1).split('?')[0];
-		const file = path.resolve(root, name);
-		if (!file.startsWith(`${root}${path.sep}`) || !fs.existsSync(file)) {
-			response.writeHead(404).end();
-			return;
-		}
-		response.writeHead(200, { 'content-type': mime[path.extname(file)] || 'application/octet-stream' });
-		fs.createReadStream(file).pipe(response);
-	});
+	return createServer(root, routes);
 }
 
 // compositionを伴うBrowser確定入力を実DOMへ発生させる。

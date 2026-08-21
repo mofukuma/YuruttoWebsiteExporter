@@ -7,10 +7,10 @@ const assert = require('node:assert/strict');
 const child = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const http = require('node:http');
 const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 const { install } = require('../build/fetch_webfont.cjs');
+const { createServer: server } = require('../build/serve_web.cjs');
 
 const repo = path.resolve(__dirname, '..'); // yweb project root。
 const work = path.join(repo, 'tmp/webfont'); // 検査用projectと成果物。
@@ -20,18 +20,6 @@ const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-core
 // file内容のSHA-256を返す。
 function hash(file) {
 	return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-}
-
-// BrowserへGodot成果物を正しいMIMEで返す。
-function server(root) {
-	return http.createServer((request, response) => {
-		const name = request.url === '/' ? 'index.html' : request.url.slice(1).split('?')[0];
-		const file = path.resolve(root, name);
-		if (!file.startsWith(`${root}${path.sep}`) || !fs.existsSync(file)) return response.writeHead(404).end();
-		const type = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.woff2': 'font/woff2' }[path.extname(file)] || 'application/octet-stream';
-		response.writeHead(200, { 'content-type': type });
-		fs.createReadStream(file).pipe(response);
-	});
 }
 
 // 指定optionで書き出し、DOM所有結果を返す。

@@ -29,7 +29,7 @@ Godot 4.7.1のExport画面へ「ゆるっとWeb」を追加し、専用runtime�
 - OGP画像、代替文、撮影frame、Auto撮影
 - 起動時Canvas focus
 
-初期値だけで書き出せる構成。Site設定が無効でもDOM文字設定とBrotliを維持。
+main sceneを設定してあれば、あとは初期値のまま書き出せる構成。Site設定が無効でもDOM文字設定とBrotliを維持。
 
 ## 書き出し処理
 

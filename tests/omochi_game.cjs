@@ -12,7 +12,7 @@ const root = path.resolve(__dirname, '..'); // yweb project root。
 const project = path.join(root, 'examples/omochi_game'); // 検査対象Godot project。
 const site = require('./site.cjs').ensure(path.join(root, 'examples/omochi_game'), path.join(root, 'tmp/omochi-game/site')); // Brotli済みWeb成果物。
 const output = path.join(root, 'tmp/omochi-game'); // 数値結果と確認画像の保存先。
-const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot 4.7.1。
+const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
 
 // 表示文字を指定して現在の矩形とtransformを返す。

@@ -4,27 +4,16 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const http = require('node:http');
 const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 
 const { ensure } = require('./site.cjs'); // 検査対象成果物の書き出し。
 const root = ensure(path.resolve(__dirname, '../examples/text_lab'), path.resolve(__dirname, '../tmp/text-lab/site')); // 全機能ラボのWeb成果物。
 const out = path.resolve(__dirname, '../tmp/text-lab'); // 数値結果と確認画像の保存先。
+const { createServer } = require('../build/serve_web.cjs');
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
-const mime = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.woff2': 'font/woff2' }; // 配信に必要な応答型。
 
-// 成果物だけを公開する検査用配信。
-const server = http.createServer((request, response) => {
-	const name = request.url === '/' ? 'index.html' : request.url.slice(1).split('?')[0];
-	const file = path.resolve(root, name);
-	if (!file.startsWith(`${root}${path.sep}`) || !fs.existsSync(file)) {
-		response.writeHead(404).end();
-		return;
-	}
-	response.writeHead(200, { 'content-type': mime[path.extname(file)] || 'application/octet-stream' });
-	fs.createReadStream(file).pipe(response);
-});
+const server = createServer(root); // 成果物だけを返す検査用配信。
 
 // 表示文字を一意に選び、DOM IDと表示状態を返す。
 async function item(page, text) {

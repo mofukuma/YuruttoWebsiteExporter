@@ -10,6 +10,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { compressSite } = require('./compress_web.cjs');
+const { sha, lock, treeHash, filesHash, BUILD_FILES } = require('./manifest_hash.cjs');
 
 const repo = path.resolve(__dirname, '..'); // 配布定義を持つproject root。
 const archive = path.resolve(process.argv[2] || ''); // Godotが生成したWeb template。
@@ -23,55 +24,6 @@ const rawEntries = ['godot.js', 'godot.wasm', 'godot.audio.worklet.js', 'godot.a
 const compressedEntries = rawEntries.filter((name) => name.endsWith('.js') || name.endsWith('.wasm')); // Brotliを持つ転送対象。
 const licenseEntries = ['GODOT_LICENSE.txt']; // Godot本体と組込依存の通知を一つへまとめた成果物。
 const licenseSources = ['LICENSES/GODOT-MIT.txt', 'LICENSES/GODOT-COPYRIGHT.txt']; // 通知の追跡元。
-
-// fileまたはBufferのSHA-256を返す。
-function sha(value) {
-	const data = Buffer.isBuffer(value) ? value : fs.readFileSync(value);
-	return crypto.createHash('sha256').update(data).digest('hex');
-}
-
-// shell形式lockの単純な固定値だけを読む。
-function lock(file) {
-	const values = {};
-	for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
-		const match = /^([A-Z][A-Z0-9_]*)=(.+)$/.exec(line.trim());
-		if (match) values[match[1]] = match[2];
-	}
-	return values;
-}
-
-// directoryの相対pathと内容を安定順で一つのhashへまとめる。
-function treeHash(root) {
-	const files = [];
-	function visit(current) {
-		for (const name of fs.readdirSync(current).sort()) {
-			const file = path.join(current, name);
-			if (fs.statSync(file).isDirectory()) visit(file);
-			else files.push(file);
-		}
-	}
-	visit(root);
-	const sum = crypto.createHash('sha256');
-	for (const file of files) {
-		sum.update(path.relative(root, file).split(path.sep).join('/'));
-		sum.update('\0');
-		sum.update(fs.readFileSync(file));
-		sum.update('\0');
-	}
-	return sum.digest('hex');
-}
-
-// 複数fileのpathと内容を安定順で一つのhashへまとめる。
-function filesHash(files) {
-	const sum = crypto.createHash('sha256');
-	for (const file of [...files].sort()) {
-		sum.update(path.relative(repo, file).split(path.sep).join('/'));
-		sum.update('\0');
-		sum.update(fs.readFileSync(file));
-		sum.update('\0');
-	}
-	return sum.digest('hex');
-}
 
 // コメントを除いたSCons optionを順序どおり返す。
 function options(file) {
@@ -117,7 +69,6 @@ function pack() {
 		fs.rmSync(built, { force: true });
 		child.execFileSync('zip', ['-X', '-q', '-9', built, ...packed], { cwd: stage });
 		for (const name of [...packed, 'yweb-compression.json']) fs.copyFileSync(path.join(stage, name), path.join(out, name));
-		for (const name of ['godot.font.woff2', 'FONT_LICENSE.txt']) fs.rmSync(path.join(out, name), { force: true });
 		if (publish) fs.copyFileSync(built, template);
 		const previous = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')) : {};
 		const manifest = {
@@ -145,12 +96,7 @@ function pack() {
 				levelsOptionsSha256: sha(path.join(repo, 'build/levels.options')),
 				patchSha256: sha(path.join(repo, 'build/patches/web_yweb_text.patch')),
 				overlaySha256: treeHash(path.join(repo, 'build/overlay')),
-				buildSha256: filesHash([
-					'build/distribution/Dockerfile', 'build/build_distribution.sh',
-					'build/prepare_template.sh', 'build/build_template.sh',
-					'build/apply_overlay.sh', 'build/package_template.cjs',
-					'build/compress_web.cjs',
-				].map((file) => path.join(repo, file))),
+				buildSha256: filesHash(BUILD_FILES.map((file) => path.join(repo, file))),
 			},
 			templates: {
 				...previous.templates,

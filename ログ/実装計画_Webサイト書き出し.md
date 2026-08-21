@@ -2,7 +2,7 @@
 
 ## 目的
 
-Godot sceneをpageとして扱い、Web exportだけで検索、共有、直リンク、Browser履歴に対応する静的siteを生成。
+Godot sceneをpageとして扱い、Web exportから、検索、共有、直リンク、Browser履歴に対応する静的siteを生成する。
 
 対応下限はGodot 4.7.1。初期実証版は4.7.1-stableへ固定し、新しいreleaseはsource lockと回帰結果を追加して対応。Canvasは常にBrowser全体へ追従するAdaptive。
 
@@ -227,7 +227,7 @@ location / {
 
 ## 完了条件
 
-- Exporter設定だけでroute別静的siteを生成。
+- Exporter設定からroute別静的siteを生成する。直リンクにはHistory方式とserver設定が要る。
 - 全Web exportで`canvasResizePolicy=2`。
 - scene変更後1 frame以内にtitle、URI、metadataを更新。
 - 戻る・進む・直リンクが対応sceneを表示。

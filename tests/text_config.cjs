@@ -11,7 +11,7 @@ const repo = path.resolve(__dirname, '..'); // yweb project root。
 const root = path.join(repo, 'tmp/text-config'); // 最小exporter fixture。
 const project = path.join(root, 'project'); // addonだけを導入するGodot project。
 const html = path.join(root, 'index.html'); // 設定注入対象。
-const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot。
+const { godot } = require('./godot.cjs'); // 対応版のGodot。
 
 // false指定とscriptの一意性を確認する。
 fs.rmSync(root, { recursive: true, force: true });

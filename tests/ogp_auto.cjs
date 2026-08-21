@@ -11,7 +11,7 @@ const path = require('node:path');
 const repo = path.resolve(__dirname, '..'); // yweb project root。
 const work = path.join(repo, 'tmp/ogp-auto'); // 撮影専用projectと成果物。
 const project = path.join(work, 'project'); // 独立実行するGodot project。
-const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot 4.7.1。
+const { godot } = require('./godot.cjs'); // 対応版のGodot。
 
 // Scene実行、frame番号、PNG寸法を一括検査する。
 fs.rmSync(work, { recursive: true, force: true });

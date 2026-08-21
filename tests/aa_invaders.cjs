@@ -15,7 +15,7 @@ const work = path.join(repo, 'tmp/aa-invaders'); // Project copy、Web成果物�
 const project = path.join(work, 'project'); // addonを導入する検査project。
 const site = path.join(work, 'site'); // Browser配信成果物。
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
-const godot = '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot 4.7.1。
+const { godot } = require('./godot.cjs'); // 対応版のGodot。
 let server = null;
 let browser = null;
 

@@ -8,6 +8,7 @@ const child = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { sha, lock, treeHash, filesHash, BUILD_FILES } = require('../build/manifest_hash.cjs');
 const zlib = require('node:zlib');
 
 const root = path.resolve(__dirname, '..'); // yweb project root。
@@ -17,55 +18,6 @@ const manifest = JSON.parse(fs.readFileSync(path.join(templateDir, 'manifest.jso
 const levels = Object.entries(manifest.templates); // level別の検査対象ZIP。
 const work = path.join(root, 'tmp/template-distribution'); // 検査結果保存先。
 const buffer = { maxBuffer: 32 * 1024 * 1024 }; // WASM展開に必要な上限。
-
-// fileまたはBufferのSHA-256を返す。
-function sha(value) {
-	const data = Buffer.isBuffer(value) ? value : fs.readFileSync(value);
-	return crypto.createHash('sha256').update(data).digest('hex');
-}
-
-// shell形式lockの固定値を読む。
-function lock(file) {
-	const values = {};
-	for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
-		const match = /^([A-Z][A-Z0-9_]*)=(.+)$/.exec(line.trim());
-		if (match) values[match[1]] = match[2];
-	}
-	return values;
-}
-
-// directoryのpathと内容を安定順で一つのhashへまとめる。
-function treeHash(base) {
-	const files = [];
-	function visit(current) {
-		for (const name of fs.readdirSync(current).sort()) {
-			const file = path.join(current, name);
-			if (fs.statSync(file).isDirectory()) visit(file);
-			else files.push(file);
-		}
-	}
-	visit(base);
-	const sum = crypto.createHash('sha256');
-	for (const file of files) {
-		sum.update(path.relative(base, file).split(path.sep).join('/'));
-		sum.update('\0');
-		sum.update(fs.readFileSync(file));
-		sum.update('\0');
-	}
-	return sum.digest('hex');
-}
-
-// 複数fileのpathと内容を安定順で一つのhashへまとめる。
-function filesHash(files) {
-	const sum = crypto.createHash('sha256');
-	for (const file of [...files].sort()) {
-		sum.update(path.relative(root, file).split(path.sep).join('/'));
-		sum.update('\0');
-		sum.update(fs.readFileSync(file));
-		sum.update('\0');
-	}
-	return sum.digest('hex');
-}
 
 const source = lock(path.join(build, 'source.lock'));
 const distribution = lock(path.join(build, 'distribution.lock'));
@@ -97,10 +49,7 @@ assert.equal(manifest.inputs.distributionLockSha256, sha(path.join(build, 'distr
 assert.equal(manifest.inputs.templateOptionsSha256, sha(path.join(build, 'template.options')));
 assert.equal(manifest.inputs.patchSha256, sha(path.join(build, 'patches/web_yweb_text.patch')));
 assert.equal(manifest.inputs.overlaySha256, treeHash(path.join(build, 'overlay')));
-assert.equal(manifest.inputs.buildSha256, filesHash([
-	'distribution/Dockerfile', 'build_distribution.sh', 'prepare_template.sh',
-	'build_template.sh', 'apply_overlay.sh', 'package_template.cjs', 'compress_web.cjs',
-].map((file) => path.join(build, file))));
+assert.equal(manifest.inputs.buildSha256, filesHash(BUILD_FILES.map((file) => path.join(root, file))));
 
 assert.equal(fs.readdirSync(templateDir).filter((name) => name.endsWith('.zip')).length, levels.length, `テンプレートZIP数がlevel数と違う`);
 const notice = ['GODOT-MIT.txt', 'GODOT-COPYRIGHT.txt'].map((file) => fs.readFileSync(path.join(root, 'LICENSES', file), 'utf8').replace(/\n*$/, '\n')).join('\n');

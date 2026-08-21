@@ -285,10 +285,6 @@ func _write_html(preset: EditorExportPreset, path: String, base: String, pack: S
 
 # project固有licenseを成果物へそのまま伝える。
 func _copy_licenses(directory: String) -> Error:
-	var legacy := [directory.path_join("FONT_LICENSE.txt"), directory.path_join("godot.font.woff2")]
-	for file in legacy:
-		if FileAccess.file_exists(file):
-			DirAccess.remove_absolute(file)
 	var source := ProjectSettings.globalize_path("res://web/licenses")
 	var dir := DirAccess.open(source)
 	if dir == null:

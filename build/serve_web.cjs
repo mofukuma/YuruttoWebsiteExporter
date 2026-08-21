@@ -23,9 +23,15 @@ function resolveFile(root, requestUrl) {
 }
 
 // Brotli対応clientへ同じURLの圧縮fileを選ぶHTTP serverを作る。
-function createServer(root) {
+// routesを渡すと、file配信より先にそのURLだけを自前で応答できる。
+function createServer(root, routes = {}) {
 	const site = path.resolve(root);
 	return http.createServer((request, response) => {
+		const route = routes[(request.url || '/').split('?')[0]];
+		if (route) {
+			route(request, response);
+			return;
+		}
 		const file = resolveFile(site, request.url || '/');
 		if (!file || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
 			response.writeHead(404).end();
