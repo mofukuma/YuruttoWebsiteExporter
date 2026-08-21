@@ -1,7 +1,0 @@
-; 3D拒否境界だけを確認する最小project。
-
-config_version=5
-
-[application]
-
-run/main_scene="res://main.tscn"

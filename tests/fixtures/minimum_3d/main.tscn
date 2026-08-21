@@ -1,5 +1,0 @@
-; minimum版が拒否するNode3D scene。
-
-[gd_scene format=3]
-
-[node name="Root" type="Node3D"]

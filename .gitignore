@@ -31,6 +31,10 @@ desktop.ini
 
 # 利用者projectへ複製した配布addon
 examples/*/addons/yurutto_website_exporter/
+tests/fixtures/*/addons/yurutto_website_exporter/
+
+# 書き出し手順がfixtureへ生成するuid。yweb-site.jsonは入力として持つfixtureがあるため対象外。
+tests/fixtures/*/*.uid
 
 # Node
 node_modules/

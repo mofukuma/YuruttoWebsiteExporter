@@ -46,4 +46,16 @@ for (const name of users) {
 	}
 }
 
-console.log(JSON.stringify({ ok: true, keys: texts.size, used, locales: ['en', 'ja'] }));
+// 表から渡すkeyは I18n.t("...") の形にならないため、別途表にあることを見る。
+// project_check.gdのRULESは第二要素へ文言keyを持ち、実行時にI18n.tへ渡す。
+const rules = fs.readFileSync(path.join(addon, 'project_check.gd'), 'utf8');
+const block = /const RULES := \[([\s\S]*?)\n\]/.exec(rules);
+assert.ok(block, 'project_check.gdのRULESが読めていない');
+let indirect = 0;
+for (const [, key] of block[1].matchAll(/,\s*"([a-z0-9_]+)"\]/g)) {
+	assert.ok(texts.has(key), `文言表にないkey: project_check.gd :: RULES :: ${key}`);
+	indirect += 1;
+}
+assert.ok(indirect > 0, 'RULESの文言keyを一つも拾えていない');
+
+console.log(JSON.stringify({ ok: true, keys: texts.size, used, indirect, locales: ['en', 'ja'] }));

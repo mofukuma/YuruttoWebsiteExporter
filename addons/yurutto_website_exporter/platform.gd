@@ -132,7 +132,10 @@ func _export_project(preset: EditorExportPreset, debug: bool, path: String, flag
 	var made := DirAccess.make_dir_recursive_absolute(directory)
 	if made != OK:
 		return _fail(I18n.t("topic_export"), I18n.t("no_out_dir", [directory]), made)
-	var blocked: Array[String] = [] if _level(preset) == "3d" else ProjectCheck.new().inspect(ProjectSettings.globalize_path("res://"))
+	# 3Dは描けるlevelなので境界検査を飛ばす。domと2dは3Dを描けないため検査する。
+	var blocked: Array[String] = []
+	if _level(preset) != "3d":
+		blocked = ProjectCheck.new().inspect(ProjectSettings.globalize_path("res://"))
 	if not blocked.is_empty():
 		return _fail(I18n.t("topic_project"), "\n".join(blocked), ERR_UNAVAILABLE)
 	var base := path.get_file().get_basename()
