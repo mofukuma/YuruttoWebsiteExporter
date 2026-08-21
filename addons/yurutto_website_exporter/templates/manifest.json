@@ -18,23 +18,23 @@
   },
   "inputs": {
     "sourceLockSha256": "32e51ed88e5a2e07f4a9115144bf0915ce03040a5b72b4a88cd3d18e6530d648",
-    "distributionLockSha256": "cd52036f9d4b199791f98f3afe0ae4321f0873f2934ab89178d442e4a0b5ef83",
+    "distributionLockSha256": "da9004fc83e580303e9d5f8e6a855c980f22fabd2d1afcdc9b41adfd0907d186",
     "templateOptionsSha256": "2393dbe60a9c7dd90f04a42daf25f0998e78d45638eb4282f71ae453488d9220",
     "levelsOptionsSha256": "5c275e6c7d103813e2ed5d43d0f2953e9ad894c607b92afcd2cc36a17ee887fa",
     "patchSha256": "71f1229d7177cc257ef7c9f00131ce2cb3a9aa5dcf42ce72b68e511cc3b66e7f",
-    "overlaySha256": "2095dbcc91d44046201bda845d8f46dc483ca52e90a595841e5ad7d4534f2dfe",
-    "buildSha256": "2163996db7b073be53d03747e629d86fdc77dba3bc9a4eaad1a2b23117dbf732"
+    "overlaySha256": "c8383d61825bb59bc8427408763b86802d0de8031eff9a25dd19d062a17d37ad",
+    "buildSha256": "bd365d955793db27d65fff230c727b6047f775b664b53260b41a7ef3471c3371"
   },
   "templates": {
     "dom": {
       "file": "yweb-dom.zip",
-      "bytes": 13228857,
-      "sha256": "2bd9ff76bb1fae61722f950c0d7cb97a2f9bee4e4ea21bc6570258fb4048d08a",
+      "bytes": 13229334,
+      "sha256": "5226a70f03060e00eb5071689555170a4a381e8333afe39b02db3b44f2ef6b4f",
       "entries": [
         {
           "file": "godot.js",
-          "bytes": 224398,
-          "sha256": "d5f6781e6864843b95d5eccede12582c06e0c18d0ace14d90e70196fabf38922"
+          "bytes": 225176,
+          "sha256": "fe8911c9d3e1b6e9708f13de9d22a992d93a0a73f7c870a0dcce245c7450d1c8"
         },
         {
           "file": "godot.wasm",
@@ -63,8 +63,8 @@
         },
         {
           "file": "godot.js.br",
-          "bytes": 54785,
-          "sha256": "46e43eee23da5d13596d31b246185874f5a2c3747bca62f9acc1722b81cc7e8d"
+          "bytes": 55010,
+          "sha256": "118f08b1c2521ec2a3bfe29908ea3d8b44d5ffd5b1af1dd7d95651e80c872fe5"
         },
         {
           "file": "godot.wasm.br",
@@ -137,11 +137,11 @@
           },
           {
             "file": "godot.js",
-            "originalBytes": 224398,
-            "brotliBytes": 54785,
-            "ratio": 0.2441,
-            "sha256": "d5f6781e6864843b95d5eccede12582c06e0c18d0ace14d90e70196fabf38922",
-            "brotliSha256": "46e43eee23da5d13596d31b246185874f5a2c3747bca62f9acc1722b81cc7e8d"
+            "originalBytes": 225176,
+            "brotliBytes": 55010,
+            "ratio": 0.2443,
+            "sha256": "fe8911c9d3e1b6e9708f13de9d22a992d93a0a73f7c870a0dcce245c7450d1c8",
+            "brotliSha256": "118f08b1c2521ec2a3bfe29908ea3d8b44d5ffd5b1af1dd7d95651e80c872fe5"
           },
           {
             "file": "godot.wasm",
@@ -156,13 +156,13 @@
     },
     "2d": {
       "file": "yweb-2d.zip",
-      "bytes": 13858486,
-      "sha256": "34c460e7fe1bce8fc33770a81da10c55f31034bb9e71f26f4882377d081c1059",
+      "bytes": 13858982,
+      "sha256": "4475e0809ef5570cd2c7572dca1a95ed3813652a51dc1264eedae79dddd0025f",
       "entries": [
         {
           "file": "godot.js",
-          "bytes": 262210,
-          "sha256": "7964da4e7b3aca67fdf5948a4ca726afded27ea07f01db3d4163cc3bfaaa769a"
+          "bytes": 262988,
+          "sha256": "96af9249e670da0da0f11e0cee5f2dbd47b73e384d9b5ab7c68402dbe7cd191f"
         },
         {
           "file": "godot.wasm",
@@ -191,8 +191,8 @@
         },
         {
           "file": "godot.js.br",
-          "bytes": 62943,
-          "sha256": "164a1ee6cd28518e94d8ede35ca0f25abe0983a613e2dc21f1f0ea6455dc2029"
+          "bytes": 63191,
+          "sha256": "bc242c89b17905f55a5e94becfb6187f5f16171de7868370796b0ba391650e7d"
         },
         {
           "file": "godot.wasm.br",
@@ -265,11 +265,11 @@
           },
           {
             "file": "godot.js",
-            "originalBytes": 262210,
-            "brotliBytes": 62943,
-            "ratio": 0.24,
-            "sha256": "7964da4e7b3aca67fdf5948a4ca726afded27ea07f01db3d4163cc3bfaaa769a",
-            "brotliSha256": "164a1ee6cd28518e94d8ede35ca0f25abe0983a613e2dc21f1f0ea6455dc2029"
+            "originalBytes": 262988,
+            "brotliBytes": 63191,
+            "ratio": 0.2403,
+            "sha256": "96af9249e670da0da0f11e0cee5f2dbd47b73e384d9b5ab7c68402dbe7cd191f",
+            "brotliSha256": "bc242c89b17905f55a5e94becfb6187f5f16171de7868370796b0ba391650e7d"
           },
           {
             "file": "godot.wasm",
@@ -284,13 +284,13 @@
     },
     "3d": {
       "file": "yweb-3d.zip",
-      "bytes": 17138790,
-      "sha256": "54f50a69b29b7469b6ebb3a297edf4f24409f390fb525ab9e1dce9f15d7cfc36",
+      "bytes": 17139286,
+      "sha256": "a77f2db4eb615cd1df62980a50cddf47603e54b135b011ee5a815a63b746c985",
       "entries": [
         {
           "file": "godot.js",
-          "bytes": 262210,
-          "sha256": "45fd556542f3674b2fc0be1881219498769771d00fb1eb265d00be57c6ca689d"
+          "bytes": 262988,
+          "sha256": "9567964d53bb76149d4c4013a7cd6987abb2ffdecc12a1b8ebde71a8b0aec0aa"
         },
         {
           "file": "godot.wasm",
@@ -319,8 +319,8 @@
         },
         {
           "file": "godot.js.br",
-          "bytes": 62943,
-          "sha256": "123f8015aa1208cf56d071c061eb037882fa2f05c4b1c81c0ac9a533163ca929"
+          "bytes": 63191,
+          "sha256": "f390fe49a79387a0c92610a4a0465eb55a838ae33a97f916abe33e68ea63aed3"
         },
         {
           "file": "godot.wasm.br",
@@ -393,11 +393,11 @@
           },
           {
             "file": "godot.js",
-            "originalBytes": 262210,
-            "brotliBytes": 62943,
-            "ratio": 0.24,
-            "sha256": "45fd556542f3674b2fc0be1881219498769771d00fb1eb265d00be57c6ca689d",
-            "brotliSha256": "123f8015aa1208cf56d071c061eb037882fa2f05c4b1c81c0ac9a533163ca929"
+            "originalBytes": 262988,
+            "brotliBytes": 63191,
+            "ratio": 0.2403,
+            "sha256": "9567964d53bb76149d4c4013a7cd6987abb2ffdecc12a1b8ebde71a8b0aec0aa",
+            "brotliSha256": "f390fe49a79387a0c92610a4a0465eb55a838ae33a97f916abe33e68ea63aed3"
           },
           {
             "file": "godot.wasm",
