@@ -233,6 +233,8 @@ bool yweb_text_dom_owns(const Control *p_control) {
 		}
 		return true;
 	}
+	// RichTextLabelは段ごとの文字としてDOMが持つ。飾りは中身の文字が残る形になる。
+	if (Object::cast_to<RichTextLabel>(p_control)) return true;
 	return capture_control(p_control);
 }
 
@@ -345,24 +347,32 @@ static void sync_rich_text(RichTextLabel *p_rich) {
 	}
 	const float size = p_rich->get_theme_font_size(SNAME("normal_font_size"));
 	const Color color = p_rich->get_theme_color(SNAME("default_color"));
-	// 改行で段へ分ける。BBCodeの飾りは中身の文字だけが残るため、段ごとに一つ置けば足りる。
-	const PackedStringArray rows = parsed.split("\n", true);
-	float top = 0.0f;
-	for (int index = 0; index < rows.size() && index < 256; index++) {
-		const String body = rows[index];
-		if (!body.strip_edges().is_empty()) {
-			TextState state;
-			state.text = body;
-			state.rect = Rect2(Vector2(0, top), Size2(p_rich->get_size().width, size * 1.4f));
-			state.kind = TEXT_LABEL;
-			state.horizontal = HORIZONTAL_ALIGNMENT_LEFT;
-			state.vertical = VERTICAL_ALIGNMENT_TOP;
-			state.color = color;
-			state.font_size = size;
-			const CharString uid = (String::num_uint64((uint64_t)p_rich->get_instance_id()) + "-rt" + itos(index)).utf8();
-			sync_text(p_rich, state, uid);
+	// 折り返しも含めた行ごとに置く。位置と範囲はGodotが確定した値をそのまま使い、
+	// DOM側では並べ直さない。行の高さは次の行との差から求める。
+	const int lines = p_rich->get_line_count();
+	const int total = parsed.length();
+	for (int line = 0; line < lines && line < 512; line++) {
+		const Vector2i range = p_rich->get_line_range(line);
+		if (range.x < 0 || range.y <= range.x || range.y > total) {
+			continue;
 		}
-		top += size * 1.4f;
+		const String body = parsed.substr(range.x, range.y - range.x);
+		if (body.strip_edges().is_empty()) {
+			continue;
+		}
+		const float top = p_rich->get_line_offset(line);
+		const float next = line + 1 < lines ? p_rich->get_line_offset(line + 1) : top + size * 1.4f;
+		const float height = next > top ? next - top : size * 1.4f;
+		TextState state;
+		state.text = body;
+		state.rect = Rect2(Vector2(0, top), Size2(p_rich->get_size().width, height));
+		state.kind = TEXT_LABEL;
+		state.horizontal = HORIZONTAL_ALIGNMENT_LEFT;
+		state.vertical = VERTICAL_ALIGNMENT_TOP;
+		state.color = color;
+		state.font_size = size;
+		const CharString uid = (String::num_uint64((uint64_t)p_rich->get_instance_id()) + "-rt" + itos(line)).utf8();
+		sync_text(p_rich, state, uid);
 	}
 }
 
@@ -1143,6 +1153,7 @@ void yweb_text_sync_process() {
 		if (Label *label = Object::cast_to<Label>(control)) sync_label(label);
 		else if (LineEdit *line = Object::cast_to<LineEdit>(control)) sync_line_input(line);
 		else if (TextEdit *edit = Object::cast_to<TextEdit>(control)) sync_text_area(edit);
+		else if (RichTextLabel *rich = Object::cast_to<RichTextLabel>(control)) sync_rich_text(rich);
 		else if (const TextState *state = states.getptr(object)) sync_text(control, *state);
 #endif
 		if (const Vector<TextState> *items = parts.getptr(object)) {

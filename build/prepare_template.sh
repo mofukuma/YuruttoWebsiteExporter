@@ -53,6 +53,9 @@ printf '%s\n' "$stamp" > "$source_root/.yweb-source-stamp"
 cmp "$repo/LICENSES/GODOT-MIT.txt" "$source_root/LICENSE.txt"
 cmp "$repo/LICENSES/GODOT-COPYRIGHT.txt" "$source_root/COPYRIGHT.txt"
 # 同じsourceから三段のlevelを順に作る。
-for level in $(awk '!/^#/ && NF { print $1 }' "$repo/build/levels.options"); do
+# YWEB_LEVELSを渡すとその段だけを作る。手を入れている最中は一段で確かめるほうが速い。
+# 配る時は指定しない。三段そろえないとmanifestと成果物が食い違う。
+levels=${YWEB_LEVELS:-$(awk '!/^#/ && NF { print $1 }' "$repo/build/levels.options")}
+for level in $levels; do
 	sh "$repo/build/build_template.sh" "$level" "$source_root" "$emsdk" "$template_out/$level"
 done

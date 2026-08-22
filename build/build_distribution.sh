@@ -30,9 +30,11 @@ docker run --rm \
   -e "YWEB_BUILD_ROOT=$cache" \
   -e "YWEB_TEMPLATE_OUT=$output" \
   -e "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" \
+  -e "YWEB_LEVELS=${YWEB_LEVELS:-}" \
   -e TZ=UTC \
   -v "$repo:/work" \
   -w /work \
   "$image"
 
-node "$repo/tests/template_distribution.cjs"
+# 段を絞った時は三段そろわないため、由来の照合は飛ばす。配る時は必ず全段を作る。
+test -n "${YWEB_LEVELS:-}" || node "$repo/tests/template_distribution.cjs"

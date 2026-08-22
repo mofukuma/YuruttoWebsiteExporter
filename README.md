@@ -103,6 +103,8 @@ sh build/build_distribution.sh
 
 While working on the template itself, build it on your own Mac instead. It skips the Docker emulation and rebuilds only what you changed, so the second run takes seconds. Pass the level you want to try: `dom`, `2d`, or `3d`.
 
+The reproducible build makes all three levels, and each one links a 23MB wasm, so it takes a while. While you iterate, `YWEB_LEVELS=dom sh build/build_distribution.sh` builds that one level. Leave it unset when you publish — the manifest needs all three.
+
 ```sh
 sh build/dev_template.sh 2d
 ```
@@ -231,6 +233,8 @@ sh build/build_distribution.sh
 ```
 
 テンプレート自体をいじっている間は、手元のMacで組むほうが速いよ。Dockerの真似っこを通さず、変えたところを組み直すから、二回目からは数秒で終わる。試したい段を渡してね。`dom`、`2d`、`3d`があるよ。
+
+再現ビルドは三段ぶん作るし、一段ごとに23MBのwasmをつなぐから時間がかかる。試している間は`YWEB_LEVELS=dom sh build/build_distribution.sh`でその段だけ作れるよ。配るときは指定しないでね。manifestは三段そろっていないと合わないよ。
 
 ```sh
 sh build/dev_template.sh 2d
