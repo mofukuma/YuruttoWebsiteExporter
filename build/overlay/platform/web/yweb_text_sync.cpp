@@ -16,6 +16,7 @@
 #include "scene/gui/label.h"
 #include "scene/gui/line_edit.h"
 #include "scene/gui/link_button.h"
+#include "scene/gui/rich_text_label.h"
 #include "scene/gui/text_edit.h"
 #include "scene/main/scene_tree.h"
 #include "scene/resources/font.h"
@@ -141,7 +142,7 @@ static bool capture_control(const Control *p_control) {
 static bool text_requested(const Control *p_control) {
 	if (!p_control) return false;
 	if (p_control->has_meta(SNAME("yweb_dom_text"))) return (bool)p_control->get_meta(SNAME("yweb_dom_text"));
-	if (Object::cast_to<Label>(p_control) || Object::cast_to<Button>(p_control) || Object::cast_to<LinkButton>(p_control) || Object::cast_to<LineEdit>(p_control)) return true;
+	if (Object::cast_to<Label>(p_control) || Object::cast_to<Button>(p_control) || Object::cast_to<LinkButton>(p_control) || Object::cast_to<LineEdit>(p_control) || Object::cast_to<RichTextLabel>(p_control)) return true;
 	if (Object::cast_to<TextEdit>(p_control)) return p_control->get_class() == SNAME("TextEdit");
 	return capture_control(p_control);
 }
@@ -151,8 +152,6 @@ static void warn_pending(const Control *p_control) {
 	if (!p_control || yweb_text_prefer_dom() == 0) return;
 	if (p_control->is_class(SNAME("CodeEdit"))) {
 		WARN_PRINT_ONCE("CodeEditは後続対応です。暫定でGodot標準fontのCanvas表示を使います。");
-	} else if (p_control->is_class(SNAME("RichTextLabel"))) {
-		WARN_PRINT_ONCE("RichTextLabelとBBCodeは後続対応です。暫定でGodot標準fontのCanvas表示を使います。");
 	}
 }
 
@@ -336,6 +335,37 @@ static int text_index(TextEdit *p_edit, int p_line, int p_column) {
 }
 
 // TextEditの値、Theme、caret、selectionをtextarea状態へまとめる。
+// RichTextLabelを、行ごとの文字としてDOMへ写す。
+// BBCodeの飾りは一行の中で混ざるため、行そのものを一つの文字要素として置く。
+// 位置と行の高さはGodotが決めた値を使い、DOM側では並べ直さない。
+static void sync_rich_text(RichTextLabel *p_rich) {
+	const String parsed = p_rich->get_parsed_text();
+	if (parsed.is_empty()) {
+		return;
+	}
+	const float size = p_rich->get_theme_font_size(SNAME("normal_font_size"));
+	const Color color = p_rich->get_theme_color(SNAME("default_color"));
+	// 改行で段へ分ける。BBCodeの飾りは中身の文字だけが残るため、段ごとに一つ置けば足りる。
+	const PackedStringArray rows = parsed.split("\n", true);
+	float top = 0.0f;
+	for (int index = 0; index < rows.size() && index < 256; index++) {
+		const String body = rows[index];
+		if (!body.strip_edges().is_empty()) {
+			TextState state;
+			state.text = body;
+			state.rect = Rect2(Vector2(0, top), Size2(p_rich->get_size().width, size * 1.4f));
+			state.kind = TEXT_LABEL;
+			state.horizontal = HORIZONTAL_ALIGNMENT_LEFT;
+			state.vertical = VERTICAL_ALIGNMENT_TOP;
+			state.color = color;
+			state.font_size = size;
+			const CharString uid = (String::num_uint64((uint64_t)p_rich->get_instance_id()) + "-rt" + itos(index)).utf8();
+			sync_text(p_rich, state, uid);
+		}
+		top += size * 1.4f;
+	}
+}
+
 static void sync_text_area(TextEdit *p_edit) {
 	TextState state;
 	state.text = p_edit->get_text();
@@ -1053,6 +1083,7 @@ static void sync_boxes(Node *p_node, int &r_order) {
 			else if (TextEdit *edit = Object::cast_to<TextEdit>(control)) sync_text_area(edit);
 			else if (Button *button = Object::cast_to<Button>(control)) sync_button_text(button, button->get_text(), TEXT_BUTTON, button->get_text_alignment());
 			else if (LinkButton *link = Object::cast_to<LinkButton>(control)) sync_button_text(link, link->get_text(), TEXT_LINK, HORIZONTAL_ALIGNMENT_LEFT);
+			else if (RichTextLabel *rich = Object::cast_to<RichTextLabel>(control)) sync_rich_text(rich);
 		}
 		paint_order = -1;
 	}

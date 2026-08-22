@@ -17,6 +17,10 @@ const repo = path.resolve(__dirname, '..'); // project root。
 const work = path.join(repo, 'tmp/bbcode'); // 書き出しと結果の置き場。
 const size = { width: 900, height: 700 }; // fixtureの画面寸法と揃える。
 // 見た目の変わりかたで分けたBBCodeの一覧。fixtureのSAMPLESと同じ並びを持つ。
+// 記法ごとに置いた言葉。飾りが落ちても、この言葉はDOMへ残るはず。
+const WORDS = ['ふつうの文字', '太字', '斜体', '下線', '取消', 'code();', '色つき', '背景', '前景',
+	'縁取り', '大きい', '中央', '右', '両端', '字下げ', 'リンク', 'ゆれ', '渦', 'ふるえ', '薄れ',
+	'虹', '明滅', '一つ目', '補足'];
 const TAGS = ['plain', 'b', 'i', 'u', 's', 'code', 'color', 'bgcolor', 'fgcolor', 'outline',
 	'font_size', 'center', 'right', 'fill', 'indent', 'url', 'wave', 'tornado', 'shake', 'fade',
 	'rainbow', 'pulse', 'ul', 'hint', 'char'];
@@ -92,16 +96,15 @@ async function main() {
 		assert.ok(canvas.lit > 3000, `2DでBBCodeが描かれていない: 明るい画素${canvas.lit}`);
 		assert.match(canvas.text, /PLAIN LABEL/, '2Dで比べる相手のLabelが出ていない');
 
-		// DOM onlyはCanvasを積まない。RichTextLabelは文字DOMの対象外なので、いまは何も出ない。
-		// 対応した時はここが落ちる。落ちたらBBCodeの出かたを検査へ書き足す。
+		// DOM onlyはCanvasを積まない。RichTextLabelは行ごとの文字としてDOMへ出る。
+		// 飾りの記法は中身の文字だけが残るので、記法ごとの言葉が読めることを見る。
 		const dom = await observe(browser, build(0));
 		assert.equal(dom.visible, false, 'DOM onlyでCanvasが残っている');
-		assert.equal(dom.text, 'PLAIN LABEL', `DOM onlyでRichTextLabelの扱いが変わった: ${dom.text}`);
-		for (const tag of TAGS) {
-			assert.equal(dom.text.includes(tag), false, `DOM onlyで${tag}の文字が出た。対応したなら検査を書き足す`);
-		}
+		assert.match(dom.text, /PLAIN LABEL/, 'DOM onlyで比べる相手のLabelが出ていない');
+		const missing = WORDS.filter((word) => !dom.text.includes(word));
+		assert.deepEqual(missing, [], `DOM onlyで読めないBBCodeがある: ${missing.join(' ')}`);
 
-		const result = { ok: true, tags: TAGS.length, canvas: { lit: canvas.lit }, domOnly: { text: dom.text } };
+		const result = { ok: true, tags: TAGS.length, words: WORDS.length, canvas: { lit: canvas.lit } };
 		fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
 		console.log(JSON.stringify(result));
 	} finally {
