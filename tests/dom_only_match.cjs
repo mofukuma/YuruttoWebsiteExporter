@@ -22,9 +22,9 @@ const size = { width: 800, height: 600 }; // 両者で揃える画面寸法。
 const limit = 0.0015; // node構成の画面へ許す正規化MAEの上限。
 // 再現が目標へ届いていない画面は、いまの値を上限として記録する。下げるのが次の仕事。
 // 目標はRMSE 0.8%。ここはMAEで見るため、字形の差が乗る画面ほど大きい値になる。
-const limits = { omochi: 0.05, page_hero: 0.02, page_cards: 0.012 };
+const limits = { omochi: 0.018, page_hero: 0.02, page_cards: 0.012 };
 const screens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'page_hero', 'page_cards']; // 比べる画面。sceneとURIが対応する。
-const settle = { physics: 320, omochi: 950 }; // 物理を速く回した画面で、形が決まるまで進めるframe数。
+const settle = { physics: 320, omochi: 5 }; // 物理を速く回した画面で、形が決まるまで進めるframe数。
 
 // 全画面をGodot側で順に撮る一度きりのscript。
 const capture = `@tool

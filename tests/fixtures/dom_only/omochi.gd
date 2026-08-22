@@ -5,7 +5,7 @@
 extends Node2D
 
 const YWEB_TICKS := 4500 # 検査用に上げる物理更新数。YWEB_FREEZE分を約0.2秒で終える速さ。
-const YWEB_FREEZE := 900 # 形を固定するまでの物理frame数。
+const YWEB_FREEZE := 3 # 形を固定するまでの物理frame数。少ないほど両者の進みかたがずれない。
 
 var _yweb_ticks := 0 # 経過した物理frame。
 
@@ -93,6 +93,8 @@ func _physics_process(delta: float) -> void:
 func _build_ui() -> void:
 	ui = Control.new()
 	ui.name = "GameUI"
+	# 文字を持つ子はここへぶら下がる。Web fontを当てて、Browserと同じ字形で描かせる。
+	ui.theme = text_theme
 	add_child(ui)
 	title_label = _label("Title", "GODOU-SAN × OMOCHI MACHINE", Vector2(28, 18), Vector2(620, 38), 26, WHITE)
 	guide_label = _label("Guide", "MOVE THE MOUSE — CATCH THE FALLING OMOCHI", Vector2(30, 52), Vector2(430, 22), 13, MUTED)
@@ -234,6 +236,13 @@ func _apply_japanese_theme() -> void:
 # LinkButtonとButtonの初期文字styleを共有するTheme Resourceへまとめる。
 func _make_text_theme() -> Theme:
 	var theme := Theme.new()
+	# Browserと同じ字形で比べるため、Web fontを既定fontにする。
+	# 入れないとGodotは自前のfontで描き、Browserは端末のfontで描くため字形が食い違う。
+	var font := load("res://fonts/Match.ttf") as FontFile
+	if font != null:
+		font.hinting = TextServer.HINTING_NONE
+		font.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+		theme.default_font = font
 	theme.set_font_size("font_size", "LinkButton", 18)
 	theme.set_color("font_color", "LinkButton", CYAN)
 	theme.set_font_size("font_size", "Button", 15)
