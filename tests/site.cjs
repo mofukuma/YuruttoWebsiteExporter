@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const repo = path.resolve(__dirname, '..'); // 書き出しscriptを持つproject root。
-const { godot } = require('./godot.cjs'); // 対応版のGodot。
+const { godot, runGodot } = require('./godot.cjs'); // 対応版のGodotと、異常終了を吸収する起動。
 const template = path.join(repo, 'addons/yurutto_website_exporter/templates/yweb-2d.zip'); // 成果物へ入る既定levelのテンプレート。
 const generated = new Set(['.godot', 'addons', 'export_presets.cfg']); // 書き出し手順が生成するproject内領域。
 // 素のGodot Web templateの置き場。Godotの導入先へ入れず、tmpへ落としたものを直に指す。
@@ -74,7 +74,7 @@ function ensureStandard(project, site) {
 	assert.ok(fs.existsSync(standardTemplate), `素のGodot Web templateがない: ${standardTemplate}\nbuild/fetch_godot_templates.sh で用意できる。`);
 	fs.writeFileSync(path.join(work, 'export_presets.cfg'), standardPreset);
 	fs.mkdirSync(site, { recursive: true });
-	child.execFileSync(godot, ['--headless', '--path', work, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe' });
+	runGodot(['--headless', '--path', work, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe' });
 	return site;
 }
 

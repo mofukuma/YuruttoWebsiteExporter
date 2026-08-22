@@ -17,7 +17,7 @@ const project = path.join(root, 'project'); // exporter fixture project。
 const hashOut = path.join(root, 'hash'); // 無設定配信用Hash成果物。
 const historyOut = path.join(root, 'history'); // nginx配信用History成果物。
 const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
-const { godot } = require('./godot.cjs'); // 対応版のGodot。
+const { runGodot } = require('./godot.cjs'); // 異常終了を吸収するGodot起動。
 const rawPort = 49181; // raw nginx比較port。
 const sitePort = 49182; // History nginx検査port。
 const containers = []; // 必ず終了するcontainer ID。
@@ -49,18 +49,9 @@ function fixture(mode, target) {
 	fs.copyFileSync(font.woff2, path.join(project, `fonts/${stem}.woff2`));
 	const emptyPath = path.join(root, 'empty-path');
 	fs.mkdirSync(emptyPath, { recursive: true });
-	// Godotはfontの取り込み中にSIGSEGVで落ちることがある。書き出しの中身とは関わりがなく、
-	// 同じ入力でもう一度走らせれば通る。落ちた時は一度やり直し、それ以外の失敗はそのまま出す。
-	for (let attempt = 0; ; attempt += 1) {
-		try {
-			child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(target, 'index.html')], {
-				stdio: 'pipe', env: { ...process.env, PATH: emptyPath },
-			});
-			return;
-		} catch (error) {
-			if (error.signal !== 'SIGSEGV' || attempt >= 1) throw error;
-		}
-	}
+	runGodot(['--headless', '--path', project, '--export-release', 'Web', path.join(target, 'index.html')], {
+		env: { ...process.env, PATH: emptyPath },
+	});
 }
 
 // nginxを固定portで開始し、container IDを回収対象へ積む。

@@ -14,7 +14,7 @@ const { decode, meanAbsoluteError, rootMeanSquareError } = require('./png.cjs');
 const { browserPath } = require('./browser.cjs');
 
 const repo = path.resolve(__dirname, '..'); // yweb project root。
-const godot = process.env.GODOT_BIN || '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot。
+const { runGodot } = require('./godot.cjs'); // 異常終了を吸収するGodot起動。
 const width = 640; // 両方で揃える画面の横。
 const height = 480; // 両方で揃える画面の縦。
 const frame = 12; // 撮影する描画frame。動きが落ち着くまで待つ。
@@ -51,14 +51,14 @@ function build(scene) {
 	const font = install(path.join(project, 'fonts'));
 	// 字の描きかたをBrowser側へ寄せる。格子への寄せを切り、位置を細かく取る。
 	fs.writeFileSync(`${font.ttf}.import`, IMPORT);
-	child.execFileSync(godot, ['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 600000 });
+	runGodot(['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 600000 });
 	return { work, project, site: path.join(work, 'site') };
 }
 
 // Godotの画面をそのままPNGへ写し取る。
 function reference(place) {
 	const out = path.join(place.work, 'godot.png');
-	child.execFileSync(godot, ['--path', place.project, '--resolution', `${width}x${height}`, '--position', '10000,10000',
+	runGodot(['--path', place.project, '--resolution', `${width}x${height}`, '--position', '10000,10000',
 		'--script', capture, '--', '--scene=res://main.tscn', `--output=${out}`, `--frame=${frame}`], { stdio: 'pipe', timeout: 600000 });
 	return decode(fs.readFileSync(out));
 }

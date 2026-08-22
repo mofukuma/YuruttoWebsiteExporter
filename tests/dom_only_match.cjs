@@ -17,7 +17,7 @@ const repo = path.resolve(__dirname, '..'); // project root。
 const work = path.join(repo, 'tmp/dom-only-match'); // 比較用projectと画像。
 const project = path.join(work, 'project'); // 書き出す検査project。
 const site = path.join(work, 'site'); // DOM only成果物。
-const { godot } = require('./godot.cjs'); // 対応版のGodot。
+const { godot, runGodot } = require('./godot.cjs'); // 対応版のGodotと、異常終了を吸収する起動。
 const size = { width: 800, height: 600 }; // 両者で揃える画面寸法。
 const limit = 0.0015; // node構成の画面へ許す正規化MAEの上限。
 const limits = { omochi: 0.05 }; // 描画命令だけで作る画面は再現が届いていないため、現状値を上限として記録する。
@@ -65,17 +65,17 @@ fs.writeFileSync(path.join(project, 'yweb-site.json'), `${JSON.stringify({ versi
 install(path.join(project, 'fonts'), 'Match'); // Godotとブラウザで同じ字形を使う。
 
 // 画像を含むため、取り込みを終えてから撮る。未取り込みのtextureは寸法0で描かれない。
-child.execFileSync(godot, ['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 120000 });
+runGodot(['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 120000 });
 
 // Godot側の基準画面を撮る。画面外へ出した窓で描き、結果だけを取り出す。
-child.execFileSync(godot, ['--path', project, '--script', 'res://capture.gd', '--resolution', `${size.width}x${size.height}`, '--position', '10000,10000'], { stdio: 'pipe', timeout: 60000 });
+runGodot(['--path', project, '--script', 'res://capture.gd', '--resolution', `${size.width}x${size.height}`, '--position', '10000,10000'], { stdio: 'pipe', timeout: 60000 });
 for (const name of screens) {
 	assert.ok(fs.existsSync(path.join(work, `godot-${name}.png`)), `Godot画面を撮れていない: ${name}`);
 }
 
 // 同じsceneをDOM onlyで書き出す。
 fs.mkdirSync(site, { recursive: true });
-child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe', timeout: 300000 });
+runGodot(['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe', timeout: 300000 });
 
 // 透明を黒へ重ねて不透明にする。撮り手ごとのalphaの扱いの違いを、測る前に消す。
 function flatten(image) {

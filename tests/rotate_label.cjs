@@ -16,7 +16,7 @@ const repo = path.resolve(__dirname, '..'); // yweb project root。
 const work = path.join(repo, 'tmp/rotate-label-spin'); // 検査用projectと成果物。
 const project = path.join(work, 'project'); // 書き出すGodot project。
 const site = path.join(work, 'site'); // 書き出したWeb成果物。
-const godot = process.env.GODOT_BIN || '/Applications/Godot 4.7.1.app/Contents/MacOS/Godot'; // 固定Godot。
+const { runGodot } = require('./godot.cjs'); // 異常終了を吸収するGodot起動。
 const port = 49196; // 固定検査port。
 const letters = 55; // 三つの輪へ並べた文字の数。
 const shots = 4; // 回っている様子を確かめるために撮る枚数。
@@ -30,7 +30,7 @@ function build() {
 	// 絵を比べるための固定をやめ、実際に回る状態にする。
 	const scene = path.join(project, 'main.gd');
 	fs.writeFileSync(scene, fs.readFileSync(scene, 'utf8').replace(/^const FROZEN := .*$/m, 'const FROZEN := -1.0 # 回したいので止めない。'));
-	child.execFileSync(godot, ['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 600000 });
+	runGodot(['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 600000 });
 	child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), project, path.join(site, 'index.html')], { stdio: 'pipe', timeout: 600000 });
 }
 
