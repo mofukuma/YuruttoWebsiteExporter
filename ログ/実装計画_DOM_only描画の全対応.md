@@ -192,6 +192,28 @@ Controlのほかに、絵を出すNode2Dがある。DOM onlyでDOMへ写せて�
 `base`は各画面が自分で決めた見た目のまま。`alt`は撮ったあとにThemeを差し替え、
 既定の字の大きさを変えてもう一度撮る。二つのRMSEを平均して結果とする。
 
+## 10画面の実測(Theme二種の平均)
+
+| 画面 | RMSE | 中身 |
+| --- | --- | --- |
+| physics | 0.025% | 図形と画像。文字なし |
+| motion | 1.116% | 回転と拡縮 |
+| widgets | 1.931% | 標準Control |
+| main | 1.934% | 文字、箱、重なり |
+| page_sprites | 2.572% | AnimatedSprite2D、Sprite2D、NinePatchRect |
+| page_cards | 2.633% | 画像つきの札を六枚 |
+| page_shapes | 3.630% | Polygon2D四種、Line2D二種 |
+| page_hero | 3.984% | 見出し、写真、ボタン |
+| omochi | 5.476% | `_draw()`主体 |
+| page_rich | 11.731% | BBCode二十五種 |
+
+Themeを二種で撮って平均している。`main`はbase 1.77%に対しalt 2.10%、
+`page_rich`はbase 10.65%に対しalt 12.81%と、Themeで値が動く。
+片方の見た目へ合わせ込んだだけの一致でないことが、この差で分かる。
+
+`page_rich`が最も遠い。RichTextLabelは文字DOMの対象外で、DOM onlyでは
+文字が丸ごと出ないため、差がそのまま残る。
+
 ## 目標
 
 | 対象 | いま | 目標 |
