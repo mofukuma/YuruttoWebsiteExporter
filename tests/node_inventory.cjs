@@ -12,7 +12,7 @@ const { runGodot } = require('./godot.cjs'); // 異常終了を吸収するGodot
 const repo = path.resolve(__dirname, '..'); // project root。
 const work = path.join(repo, 'tmp/node-inventory'); // 走らせる場所。
 const doc = path.join(repo, 'ログ/全nodeの棚卸し.md'); // 書き出す棚卸し表。
-const need = 84; // DOM onlyで到達していたい達成率(%)。下がったら気づけるようにする。
+const need = 90; // DOM onlyで到達していたい達成率(%)。下がったら気づけるようにする。
 
 // 一覧を作るscriptを、addon入りの短命projectで走らせる。
 fs.rmSync(work, { recursive: true, force: true });

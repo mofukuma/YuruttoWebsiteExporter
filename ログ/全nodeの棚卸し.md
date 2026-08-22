@@ -10,15 +10,15 @@ DOM onlyは`disable_3d=yes`で組むため、3Dのnodeはそもそも入って�
 
 | 区分 | 数 |
 | --- | --- |
-| 対応済 | 69 |
-| 未対応 | 13 |
-| **達成率** | **84.1%** |
+| 対応済 | 74 |
+| 未対応 | 8 |
+| **達成率** | **90.2%** |
 
 ## 対応済の内訳
 
-### 文字をDOMへ出す (19)
+### 文字をDOMへ出す (20)
 
-`Button` `CheckBox` `CheckButton` `CodeEdit` `FoldableContainer` `ItemList` `Label` `LineEdit` `LinkButton` `MenuBar` `MenuButton` `OptionButton` `ProgressBar` `RichTextLabel` `SpinBox` `TabBar` `TabContainer` `TextEdit` `Tree`
+`Button` `CheckBox` `CheckButton` `CodeEdit` `ColorPickerButton` `FoldableContainer` `ItemList` `Label` `LineEdit` `LinkButton` `MenuBar` `MenuButton` `OptionButton` `ProgressBar` `RichTextLabel` `SpinBox` `TabBar` `TabContainer` `TextEdit` `Tree`
 
 ### 面と枠をDOMの箱へ出す (13)
 
@@ -28,9 +28,9 @@ DOM onlyは`disable_3d=yes`で組むため、3Dのnodeはそもそも入って�
 
 `AnimatedSprite2D` `Sprite2D` `TextureButton` `TextureRect`
 
-### 描画命令や形をDOMへ写す (3)
+### 描画命令や形をDOMへ写す (7)
 
-`Line2D` `Polygon2D` `TouchScreenButton`
+`Line2D` `MeshInstance2D` `MultiMeshInstance2D` `Polygon2D` `TileMap` `TileMapLayer` `TouchScreenButton`
 
 ### 位置を決めるのが役目で自分は描かない (30)
 
@@ -42,16 +42,11 @@ DOM onlyは`disable_3d=yes`で組むため、3Dのnodeはそもそも入って�
 | --- | --- |
 | `CPUParticles2D` | 粒子は数が多く、DOMでは重くなる |
 | `ColorPicker` | 色見本の並びが細かく、DOMで作り直す価値が薄い |
-| `ColorPickerButton` | 押すとColorPickerが出る |
 | `GPUParticles2D` | 粒子はGPUで動くため位置を取り出せない |
 | `GraphEdit` | 編集器向けで作品には出ない |
 | `GraphElement` | 編集器向けで作品には出ない |
 | `GraphFrame` | 編集器向けで作品には出ない |
 | `GraphNode` | 編集器向けで作品には出ない |
-| `MeshInstance2D` | 2Dのmeshを面へ分けて写す仕組みがまだ無い |
-| `MultiMeshInstance2D` | 同じ形を並べる仕組みがまだ無い |
-| `TileMap` | 並べる数が多く、まとめて写す仕組みが要る |
-| `TileMapLayer` | 並べる数が多く、まとめて写す仕組みが要る |
 | `VideoStreamPlayer` | 動画の再生はDOMのvideoが要る |
 
 ## 作品には出ないもの

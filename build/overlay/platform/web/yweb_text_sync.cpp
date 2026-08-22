@@ -23,7 +23,11 @@
 #include "core/crypto/crypto_core.h"
 #include "core/io/image.h"
 #include "scene/2d/animated_sprite_2d.h"
+#include "scene/2d/mesh_instance_2d.h"
+#include "scene/2d/multimesh_instance_2d.h"
 #include "scene/2d/polygon_2d.h"
+#include "scene/2d/tile_map_layer.h"
+#include "scene/resources/2d/tile_set.h"
 #include "scene/2d/physics/touch_screen_button.h"
 #include "scene/2d/sprite_2d.h"
 #include "scene/2d/line_2d.h"
@@ -641,6 +645,79 @@ static String image_key(const Ref<Texture2D> &p_texture) {
 	return key;
 }
 
+// 大きな絵から一区画を切り出し、その区画だけを別の絵としてBrowserへ渡す。
+// tileのように同じ絵の別々の場所を使う時に、区画ごとの識別値で覚えられるようにする。
+static String region_key(const Ref<Texture2D> &p_texture, const Rect2i &p_region) {
+	if (p_texture.is_null()) {
+		return String();
+	}
+	const String path = p_texture->get_path();
+	const String base = path.is_empty() ? "rid-" + itos(p_texture->get_rid().get_id()) : path;
+	const String key = base + "#" + itos(p_region.position.x) + "," + itos(p_region.position.y)
+			+ "," + itos(p_region.size.width) + "," + itos(p_region.size.height);
+	if (sent_images.has(key)) {
+		return key;
+	}
+	const Ref<Image> image = p_texture->get_image();
+	if (image.is_null() || image->is_empty()) {
+		return String();
+	}
+	Ref<Image> copy = image->duplicate();
+	if (copy->is_compressed()) {
+		copy->decompress();
+	}
+	const Ref<Image> piece = copy->get_region(p_region);
+	if (piece.is_null() || piece->is_empty()) {
+		return String();
+	}
+	const Vector<uint8_t> png = piece->save_png_to_buffer();
+	if (png.is_empty()) {
+		return String();
+	}
+	const String encoded = CryptoCore::b64_encode_str(png.ptr(), png.size());
+	sent_images.insert(key);
+	const CharString key_utf8 = key.utf8();
+	const CharString data_utf8 = ("data:image/png;base64," + encoded).utf8();
+	yweb_image_data(key_utf8.get_data(), data_utf8.get_data());
+	return key;
+}
+
+// 敷き詰めたtileを、一枚ずつ絵としてDOMへ写す。
+// 並べる数が多いので上限を置く。座標はGodotが決めた値をそのまま使う。
+static void sync_tiles(TileMapLayer *p_layer, int p_order) {
+	const Ref<TileSet> tiles = p_layer->get_tile_set();
+	if (tiles.is_null()) {
+		return;
+	}
+	const TypedArray<Vector2i> cells = p_layer->get_used_cells();
+	const int limit = MIN((int)cells.size(), 2048);
+	const Transform2D basis = p_layer->get_global_transform_with_canvas();
+	const Color modulate = p_layer->get_modulate() * p_layer->get_self_modulate();
+	for (int index = 0; index < limit; index++) {
+		const Vector2i cell = cells[index];
+		const int source_id = p_layer->get_cell_source_id(cell);
+		if (source_id < 0) {
+			continue;
+		}
+		TileSetAtlasSource *atlas = Object::cast_to<TileSetAtlasSource>(tiles->get_source(source_id).ptr());
+		if (atlas == nullptr) {
+			continue;
+		}
+		const Rect2i region = atlas->get_tile_texture_region(p_layer->get_cell_atlas_coords(cell));
+		const String key = region_key(atlas->get_texture(), region);
+		if (key.is_empty()) {
+			continue;
+		}
+		Transform2D transform = basis;
+		transform[2] = basis.xform(p_layer->map_to_local(cell) - Vector2(region.size) * 0.5);
+		const CharString uid = (String::num_uint64((uint64_t)p_layer->get_instance_id()) + "-tile" + itos(index)).utf8();
+		const CharString key_utf8 = key.utf8();
+		yweb_image_sync(uid.get_data(), key_utf8.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y,
+				transform[2].x, transform[2].y, region.size.width, region.size.height, p_order,
+				modulate.r, modulate.g, modulate.b, modulate.a);
+	}
+}
+
 // 画像を持つControlとSprite2Dを、矩形と重なり順だけでDOMへ写す。
 static void sync_image(CanvasItem *p_item, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, int p_order) {
 	const String key = image_key(p_texture);
@@ -688,12 +765,38 @@ static void sync_polygon(CanvasItem *p_item, const PackedVector2Array &p_points,
 			color.r, color.g, color.b, color.a);
 }
 
-// 多角形を持つnodeを、形と色だけでDOMへ写す。
+// 2Dのmeshを、面の外形を囲む多角形としてDOMへ写す。
+// 三角形の集まりを一つずつ写すと数が多くなるため、外形で近づける。
+static void sync_mesh_2d(CanvasItem *p_item, const Ref<Mesh> &p_mesh, const Color &p_color, int p_order) {
+	if (p_mesh.is_null() || p_mesh->get_surface_count() == 0) {
+		return;
+	}
+	const Array arrays = p_mesh->surface_get_arrays(0);
+	if (arrays.size() <= Mesh::ARRAY_VERTEX) {
+		return;
+	}
+	const PackedVector2Array points = arrays[Mesh::ARRAY_VERTEX];
+	if (points.size() < 3) {
+		return;
+	}
+	sync_polygon(p_item, points, p_color, p_order);
+}
+
+// 多角形を持つnodeを、形と色でDOMへ写す。
 static void sync_polygon_node(CanvasItem *p_item, int p_order) {
 	if (!p_item->is_visible_in_tree()) {
 		return;
 	}
-	if (Polygon2D *poly = Object::cast_to<Polygon2D>(p_item)) {
+	if (TileMapLayer *layer = Object::cast_to<TileMapLayer>(p_item)) {
+		sync_tiles(layer, p_order);
+	} else if (MeshInstance2D *mesh = Object::cast_to<MeshInstance2D>(p_item)) {
+		sync_mesh_2d(mesh, mesh->get_mesh(), Color(1, 1, 1), p_order);
+	} else if (MultiMeshInstance2D *many = Object::cast_to<MultiMeshInstance2D>(p_item)) {
+		const Ref<MultiMesh> multi = many->get_multimesh();
+		if (multi.is_valid()) {
+			sync_mesh_2d(many, multi->get_mesh(), Color(1, 1, 1), p_order);
+		}
+	} else if (Polygon2D *poly = Object::cast_to<Polygon2D>(p_item)) {
 		sync_polygon(poly, poly->get_polygon(), poly->get_color(), p_order);
 	} else if (TouchScreenButton *touch = Object::cast_to<TouchScreenButton>(p_item)) {
 		const Ref<Texture2D> texture = touch->get_texture_normal();

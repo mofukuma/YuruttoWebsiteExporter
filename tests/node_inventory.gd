@@ -6,7 +6,7 @@ extends SceneTree
 
 # 文字をDOM要素として出すControl。
 const TEXT_DOM := [
-	"Label", "Button", "CheckBox", "CheckButton", "LinkButton", "OptionButton", "MenuButton",
+	"Label", "Button", "ColorPickerButton", "CheckBox", "CheckButton", "LinkButton", "OptionButton", "MenuButton",
 	"LineEdit", "TextEdit", "CodeEdit", "ItemList", "Tree", "TabBar", "TabContainer",
 	"ProgressBar", "MenuBar", "FoldableContainer", "SpinBox", "RichTextLabel",
 ]
@@ -31,7 +31,7 @@ const LAYOUT_ONLY := [
 	"XRBodyModifier3D", "XRFaceModifier3D",
 ]
 # _draw()の命令をDOMへ写せるもの。自分でCanvasへ描くnode。
-const DRAW_DOM := ["Line2D", "Polygon2D", "TouchScreenButton"]
+const DRAW_DOM := ["Line2D", "Polygon2D", "TouchScreenButton", "TileMapLayer", "TileMap", "MeshInstance2D", "MultiMeshInstance2D"]
 # 当たり判定や補助の見た目で、書き出した作品には出ないもの。
 const EDITOR_ONLY := [
 	"CollisionShape2D", "CollisionPolygon2D", "CollisionShape3D", "CollisionPolygon3D",
@@ -76,7 +76,6 @@ const ENV_3D := ["WorldEnvironment", "Camera3D", "DirectionalLight3D", "OmniLigh
 # 今は写せないもの。理由を添える。
 const PENDING := {
 	"ColorPicker": "色見本の並びが細かく、DOMで作り直す価値が薄い",
-	"ColorPickerButton": "押すとColorPickerが出る",
 	"GraphEdit": "編集器向けで作品には出ない",
 	"GraphElement": "編集器向けで作品には出ない",
 	"GraphFrame": "編集器向けで作品には出ない",
@@ -86,11 +85,7 @@ const PENDING := {
 	"CPUParticles2D": "粒子は数が多く、DOMでは重くなる",
 	"GPUParticles3D": "粒子はGPUで動くため位置を取り出せない",
 	"CPUParticles3D": "粒子は数が多く、DOMでは重くなる",
-	"TileMapLayer": "並べる数が多く、まとめて写す仕組みが要る",
 	"SubViewport": "別の画面を中へ描くため入れ子になる",
-	"TileMap": "並べる数が多く、まとめて写す仕組みが要る",
-	"MeshInstance2D": "2Dのmeshを面へ分けて写す仕組みがまだ無い",
-	"MultiMeshInstance2D": "同じ形を並べる仕組みがまだ無い",
 	"Sprite3D": "3Dの中の板をまだ写していない",
 	"Label3D": "3Dの中の文字をまだ写していない",
 }
