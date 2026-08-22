@@ -79,6 +79,13 @@ async function main() {
 		assert.deepEqual(on.engine, missing.engine, 'Web font不足でengine fileが変化');
 		assert.deepEqual([on.fontFiles, off.fontFiles, missing.fontFiles], [1, 0, 0]);
 		assert.deepEqual([on.fontBrotli, off.fontBrotli, missing.fontBrotli], [0, 0, 0]);
+
+		// woff2が無いと見る人の端末のfontで描かれる。日本語は端末ごとに持つfontが違うため、
+		// 字形が変わったり豆腐になったりする。書き出す前にExport画面で知らせる形を固定する。
+		const platform = fs.readFileSync(path.join(repo, 'addons/yurutto_website_exporter/platform.gd'), 'utf8');
+		assert.match(platform, /yweb\/font\/matching_webfont" and bool\(preset\.get\(name\)\)/, 'Web font設定への警告なし');
+		assert.match(platform, /warn_no_woff2/, '隣にwoff2が無いことを知らせていない');
+		assert.match(platform, /func _fonts_without_web\(\) -> PackedStringArray:/, 'woff2の無いfontを探す処理なし');
 		fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ on, off, missing }, null, 2)}\n`);
 	} finally {
 		await browser.close();

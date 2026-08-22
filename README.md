@@ -61,6 +61,8 @@ Backgrounds, icons, focus rings, 2D drawing, physics, and shaders stay on Godot'
 
 If your theme uses `res://fonts/Title.otf`, put `res://fonts/Title.woff2` beside it and the web font gets used.
 
+Japanese needs this. Without a web font the browser reaches for whatever the reader's device has, so the shapes change and any missing character comes out as a box. The export screen tells you which fonts have no web font next to them.
+
 Some decorative typefaces can't be reproduced in HTML. When you'd rather keep the typeface, turn `YWeb > Font > Avoid Canvas Theme Font` off, and that text comes out on Godot's canvas instead.
 
 ## Publishing
@@ -186,6 +188,8 @@ Godotで作った作品を、そのままWebサイトにするアドオン。
 ## 作品と同じ書体で文字を出す
 
 テーマで`res://fonts/Title.otf`を使っているなら、隣に`res://fonts/Title.woff2`を置けば、Webフォントを使ってくれる。
+
+日本語のときは特に大事だよ。Webフォントが無いと、見る人の端末が持っているフォントで描かれるから、字の形が変わるし、持っていない字は豆腐になっちゃう。隣にWebフォントが無いときは、エクスポート画面が教えてくれるよ。
 
 書体を優先したいときは`YWeb > Font > Avoid Canvas Theme Font`をオフに。そういう文字はGodotの絵で出る。
 

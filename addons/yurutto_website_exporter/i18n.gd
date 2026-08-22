@@ -14,6 +14,7 @@ const TEXTS := {
 	# 設定への助言。
 	"warn_no_config": ["No scene JSON. Exporting with the main scene as the only page.", "Scene情報JSONがありません。main sceneの既定値で書き出します。"],
 	"warn_https": ["Use an HTTPS URL for the public base URL.", "公開用base URLにはHTTPS URLを指定してください。"],
+	"warn_no_woff2": ["No web font beside these, so browsers fall back to their own: %s", "隣にWeb fontが無いため、見る人の端末のfontで描かれます: %s"],
 	"warn_no_ogp": ["No social image yet. OGP Auto can make one from the current scene.", "OGP画像がありません。OGP Autoで現在Sceneから生成できます。"],
 	"need_main_scene": ["Set a main scene.", "main sceneを設定してください。"],
 	# 導入状態の不一致。

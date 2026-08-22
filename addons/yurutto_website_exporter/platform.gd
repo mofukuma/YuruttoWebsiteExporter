@@ -95,7 +95,35 @@ func _get_export_option_warning(preset: EditorExportPreset, option: StringName) 
 		var image := String(preset.get(name))
 		if image.is_empty() or not FileAccess.file_exists(image):
 			return I18n.t("warn_no_ogp")
+	if name == "yweb/font/matching_webfont" and bool(preset.get(name)):
+		var bare := _fonts_without_web()
+		if not bare.is_empty():
+			return I18n.t("warn_no_woff2", [", ".join(bare)])
 	return ""
+
+# 隣にwoff2の無いfontを集める。woff2が無いとBrowserは見る人の端末のfontで描く。
+# 日本語は端末ごとに持っているfontが違い、字形が変わったり豆腐になったりする。
+func _fonts_without_web() -> PackedStringArray:
+	var bare := PackedStringArray()
+	var pending: Array[String] = ["res://"]
+	while not pending.is_empty():
+		var current: String = pending.pop_back()
+		var directory := DirAccess.open(current)
+		if directory == null:
+			continue
+		directory.list_dir_begin()
+		var entry := directory.get_next()
+		while not entry.is_empty():
+			var at := current.path_join(entry)
+			if directory.current_is_dir():
+				if entry != ".godot" and not at.begins_with("res://addons/"):
+					pending.append(at)
+			elif entry.get_extension().to_lower() in ["ttf", "otf"]:
+				if not FileAccess.file_exists("%s.woff2" % at.get_basename()):
+					bare.append(entry)
+			entry = directory.get_next()
+		directory.list_dir_end()
+	return bare
 
 # 内蔵テンプレートと対応Godotが揃う場合だけExportを許可する。
 func _has_valid_export_configuration(preset: EditorExportPreset, _debug: bool) -> bool:
