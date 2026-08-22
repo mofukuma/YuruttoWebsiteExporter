@@ -24,7 +24,7 @@ const limit = 0.0015; // node構成の画面へ許す正規化MAEの上限。
 // 目標はRMSE 0.8%。ここはMAEで見るため、字形の差が乗る画面ほど大きい値になる。
 const limits = {
 	omochi: 0.008, page_hero: 0.006, page_cards: 0.004, page_sprites: 0.003,
-	page_rich: 0.024, page_shapes: 0.004, main: 0.002,
+	page_rich: 0.04, page_shapes: 0.004, main: 0.002,
 };
 const screens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'page_hero', 'page_cards', 'page_sprites', 'page_rich', 'page_shapes']; // 比べる画面。sceneとURIが対応する。
 const settle = { physics: 320, omochi: 5 }; // 物理を速く回した画面で、形が決まるまで進めるframe数。

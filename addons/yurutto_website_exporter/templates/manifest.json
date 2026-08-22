@@ -22,14 +22,14 @@
     "templateOptionsSha256": "2393dbe60a9c7dd90f04a42daf25f0998e78d45638eb4282f71ae453488d9220",
     "levelsOptionsSha256": "5c275e6c7d103813e2ed5d43d0f2953e9ad894c607b92afcd2cc36a17ee887fa",
     "patchSha256": "71f1229d7177cc257ef7c9f00131ce2cb3a9aa5dcf42ce72b68e511cc3b66e7f",
-    "overlaySha256": "20fee05a065311eaf7442eb5217e9e85730558172bab189617f8dbfb886d0cc6",
+    "overlaySha256": "ee9ec50ff5f119461dd194076d1ab8ba5d773c60528a748f196063cef200eba5",
     "buildSha256": "833c59ad1a6d81b443de15710bf388185c3bcbb4f57233290b8b89b66d4dd401"
   },
   "templates": {
     "dom": {
       "file": "yweb-dom.zip",
-      "bytes": 13236917,
-      "sha256": "0b24b8f1e58acd9b503e4c7ad8def0fd8d0094a33d3f4055ab68f686d7e18757",
+      "bytes": 13236306,
+      "sha256": "b1a920de443c8b9af6bb50743010ccf175fc633a10f6c4c0a4dd8e74dd1e97c8",
       "entries": [
         {
           "file": "godot.js",
@@ -38,8 +38,8 @@
         },
         {
           "file": "godot.wasm",
-          "bytes": 23042178,
-          "sha256": "da9966ce592e2336682951ec4f976613a196b8ffbb69c3c64e84d18cbcba251e"
+          "bytes": 23042321,
+          "sha256": "19dd59db89d2d73adab29f0580fa5ecccea0223096fd76c23430cf6215b40339"
         },
         {
           "file": "godot.audio.worklet.js",
@@ -68,8 +68,8 @@
         },
         {
           "file": "godot.wasm.br",
-          "bytes": 5939137,
-          "sha256": "39e3fd69c114f21c5760779fcaf24d67ccfbb00f8b5ea94f5c2b2b92b0894ef9"
+          "bytes": 5938739,
+          "sha256": "789bff3a34e1914b36597ed3af9d60b4d7368ca83ec0839c9079d452aa46ff4c"
         },
         {
           "file": "godot.audio.worklet.js.br",
@@ -145,11 +145,11 @@
           },
           {
             "file": "godot.wasm",
-            "originalBytes": 23042178,
-            "brotliBytes": 5939137,
-            "ratio": 0.2578,
-            "sha256": "da9966ce592e2336682951ec4f976613a196b8ffbb69c3c64e84d18cbcba251e",
-            "brotliSha256": "39e3fd69c114f21c5760779fcaf24d67ccfbb00f8b5ea94f5c2b2b92b0894ef9"
+            "originalBytes": 23042321,
+            "brotliBytes": 5938739,
+            "ratio": 0.2577,
+            "sha256": "19dd59db89d2d73adab29f0580fa5ecccea0223096fd76c23430cf6215b40339",
+            "brotliSha256": "789bff3a34e1914b36597ed3af9d60b4d7368ca83ec0839c9079d452aa46ff4c"
           }
         ]
       }

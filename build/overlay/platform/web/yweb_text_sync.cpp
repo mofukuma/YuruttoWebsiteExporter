@@ -257,10 +257,17 @@ void yweb_rich_glyph(const Control *p_control, const Vector2 &p_at, int32_t p_gl
 	Vector<TextState> &items = rich_glyphs[object];
 	TextState state;
 	state.text = body;
-	// 描く基準は文字の下端。DOMは上端で置くため、font sizeぶん持ち上げる。
+	// 描く基準は文字の基準線。DOMは行の上端で置くため、書体が持つascentぶん持ち上げる。
+	// font sizeで代用すると一、二画素ずれる。
 	// 幅はその字の送り幅に合わせる。広く取ると隣とぶつかり、字の並びが崩れる。
 	const Vector2 advance = TS->font_get_glyph_advance(p_font, p_font_size, p_glyph);
-	state.rect = Rect2(p_at - Vector2(0, p_font_size), Size2(advance.x > 0.0f ? advance.x : p_font_size, p_font_size * 1.4f));
+	// 箱の高さは、行送りをそのまま使う。DOMは行の高さで字を上下へ寄せるため、
+	// ここを広く取ると字が箱の中で沈み、Godotより下へずれる。
+	const float ascent = TS->font_get_ascent(p_font, p_font_size);
+	const float descent = TS->font_get_descent(p_font, p_font_size);
+	const float lift = ascent > 0.0f ? ascent : p_font_size;
+	const float height = ascent + descent > 0.0f ? ascent + descent : p_font_size;
+	state.rect = Rect2(p_at - Vector2(0, lift), Size2(advance.x > 0.0f ? advance.x : p_font_size, height));
 	state.kind = TEXT_LABEL;
 	state.horizontal = HORIZONTAL_ALIGNMENT_LEFT;
 	state.vertical = VERTICAL_ALIGNMENT_TOP;
