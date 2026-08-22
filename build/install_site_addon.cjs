@@ -5,6 +5,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -13,11 +14,28 @@ const project = path.resolve(process.argv[2] || '.'); // 導入先Godot project�
 const source = path.join(repo, 'addons/yurutto_website_exporter'); // 単体配布する正本addon。
 const target = path.join(project, 'addons/yurutto_website_exporter'); // project内addon。
 const file = path.join(project, 'project.godot'); // 有効化するproject設定。
+const replacement = process.env.YWEB_TEMPLATE || ''; // 開発検査で使う一時template。
+const level = process.env.YWEB_LEVEL || ''; // 一時templateを書き込むlevel。
 
 assert.ok(fs.existsSync(file), `project.godotなし: ${project}`);
 fs.rmSync(target, { recursive: true, force: true });
 fs.mkdirSync(path.dirname(target), { recursive: true });
 fs.cpSync(source, target, { recursive: true, force: true });
+
+// 開発build指定時は、配布物を変えず検査project内の対象levelを差し替える。
+if (replacement) {
+	assert.ok(['dom', '2d', '3d'].includes(level), `YWEB_LEVELが不正: ${level}`);
+	assert.ok(fs.existsSync(replacement), `開発templateなし: ${replacement}`);
+	const manifestFile = path.join(target, 'templates/manifest.json');
+	const manifest = JSON.parse(fs.readFileSync(manifestFile));
+	const item = manifest.templates[level];
+	assert.ok(item, `manifestのlevelなし: ${level}`);
+	const template = path.join(target, 'templates', item.file);
+	fs.copyFileSync(replacement, template);
+	item.sha256 = crypto.createHash('sha256').update(fs.readFileSync(template)).digest('hex');
+	item.bytes = fs.statSync(template).size;
+	fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+}
 
 let text = fs.readFileSync(file, 'utf8');
 
@@ -40,4 +58,4 @@ if (!/^\[editor_plugins\]$/m.test(text)) {
 }
 
 fs.writeFileSync(file, text.replace(/\n{3,}/g, '\n\n'));
-console.log(JSON.stringify({ project, addon: 'res://addons/yurutto_website_exporter', platform: 'Yurutto Website' }));
+console.log(JSON.stringify({ project, addon: 'res://addons/yurutto_website_exporter', platform: 'Yurutto Website', level: level || 'bundled' }));

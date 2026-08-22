@@ -2,9 +2,8 @@
 /*  yweb_text_sync.cpp                                                   */
 /**************************************************************************/
 
-// 対応Controlの文字と入力状態だけを意味に合うDOMへ同期する。
-// ObjectIDで対象を保持し、配置と確定値はGodotを唯一の正本にする。
-// 背景、icon、物理、2D描画はGodot標準Canvasへ残す。
+// Control、2D描画、平面3Dを意味と見た目に合うDOMへ同期する。
+// ObjectIDで対象を保持し、配置、形、文字、画像の確定値はGodotを唯一の正本にする設計。
 
 #include "yweb_text_sync.h"
 
@@ -24,14 +23,25 @@
 #include "core/io/image.h"
 #include "scene/2d/sprite_2d.h"
 #include "scene/2d/line_2d.h"
+#include "scene/2d/animated_sprite_2d.h"
+#include "scene/2d/polygon_2d.h"
 #include "scene/gui/color_rect.h"
 #include "scene/gui/progress_bar.h"
 #include "scene/gui/slider.h"
 #include "scene/gui/nine_patch_rect.h"
 #include "scene/gui/texture_rect.h"
+#include "scene/gui/texture_button.h"
+#include "scene/gui/texture_progress_bar.h"
 #include "scene/resources/style_box.h"
 #include "scene/resources/style_box_flat.h"
+#include "scene/resources/sprite_frames.h"
 #include "scene/resources/texture.h"
+#ifndef _3D_DISABLED
+#include "scene/3d/camera_3d.h"
+#include "scene/3d/label_3d.h"
+#include "scene/3d/sprite_3d.h"
+#include "scene/main/viewport.h"
+#endif
 
 typedef void (*YWebTextEvent)(const char *, int, const char *, int, int);
 typedef void (*YWebSiteEvent)(const char *);
@@ -46,8 +56,12 @@ void yweb_text_sync(const char *p_uid, const char *p_text, const char *p_aux, co
 void yweb_text_remove(const char *p_uid);
 void yweb_image_data(const char *p_key, const char *p_data);
 void yweb_draw_reset(const char *p_prefix);
+void yweb_draw_touch(const char *p_prefix);
 void yweb_image_sync(const char *p_uid, const char *p_key, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_z, float p_red, float p_green, float p_blue, float p_alpha);
+void yweb_image_region_sync(const char *p_uid, const char *p_key, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, float p_image_width, float p_image_height, float p_src_x, float p_src_y, float p_src_width, float p_src_height, int p_z, float p_red, float p_green, float p_blue, float p_alpha);
 void yweb_box_sync(const char *p_uid, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_z, float p_red, float p_green, float p_blue, float p_alpha, float p_left, float p_top, float p_right, float p_bottom, float p_border_red, float p_border_green, float p_border_blue, float p_border_alpha, float p_top_left, float p_top_right, float p_bottom_right, float p_bottom_left);
+void yweb_polygon_sync(const char *p_uid, const char *p_points, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_z, float p_red, float p_green, float p_blue, float p_alpha);
+void yweb_plane_sync(const char *p_uid, const char *p_key, const char *p_text, float p_x0, float p_y0, float p_x1, float p_y1, float p_x2, float p_y2, float p_x3, float p_y3, float p_width, float p_height, int p_z, int p_kind, float p_red, float p_green, float p_blue, float p_alpha, float p_font_size);
 void yweb_text_end();
 }
 
@@ -103,6 +117,10 @@ struct OutlineState {
 	int size = 0; // 次の通常文字描画へ付ける縁幅。
 };
 
+#ifndef GLES3_ENABLED
+void yweb_draw_polygon(CanvasItem *p_item, const Vector<Point2> &p_points, const Vector<Color> &p_colors);
+#endif
+
 static HashSet<ObjectID> dirty; // 登録状態を見直すControl識別子。
 static HashSet<ObjectID> tracked; // 毎frame追従するDOM指定Control。
 static HashMap<ObjectID, TextState> states; // draw時に確定したButton系文字状態。
@@ -110,7 +128,7 @@ static HashMap<ObjectID, Vector<TextState>> parts; // 一Control内の複数文�
 static HashMap<RID, ObjectID> canvas_owners; // 文字描画canvasとControlの対応。
 static HashMap<ObjectID, Vector<RID>> owner_canvases; // Control解放時に回収するCanvas RID一覧。
 static HashMap<ObjectID, OutlineState> outlines; // outline直後の通常文字へ渡す状態。
-static int paint_order = -1; // 木を辿る間だけ使う重なり順。-1は走査の外。
+static int paint_order = -1; // 木を辿る間に使う重なり順。-1は走査の外。
 static HashMap<ObjectID, int> node_orders; // nodeごとの重なり順。描画命令は別timingで走るためここから引く。
 static HashSet<String> sent_images; // Browserへ渡し終えた画像の識別値。
 static bool event_ready = false; // Browser入力callbackの登録状態。
@@ -129,7 +147,7 @@ static bool capture_control(const Control *p_control) {
 			p_control->is_class(SNAME("FoldableContainer")) || p_control->is_class(SNAME("ProgressBar"));
 }
 
-// 標準文字Controlを既定DOM対象にし、明示falseだけを除外する。
+// 標準文字Controlを既定DOM対象にし、明示falseを除外する。
 static bool text_requested(const Control *p_control) {
 	if (!p_control) return false;
 	if (p_control->has_meta(SNAME("yweb_dom_text"))) return (bool)p_control->get_meta(SNAME("yweb_dom_text"));
@@ -187,7 +205,7 @@ static String font_path(const Control *p_control) {
 	return font.is_valid() ? font->get_path() : String();
 }
 
-// DOMで正確に再現できるControl文字だけを所有する。
+// DOMで正確に再現できるControl文字を所有する。
 bool yweb_text_dom_owns(const Control *p_control) {
 	if (!text_requested(p_control)) return false;
 	const bool prefer_dom = yweb_text_prefer_dom() != 0;
@@ -222,7 +240,7 @@ bool yweb_text_dom_owns(const Control *p_control) {
 	if (const TextEdit *edit = Object::cast_to<TextEdit>(p_control)) {
 		if (p_control->get_class() != SNAME("TextEdit")) return false;
 		if (edit->get_caret_count() != 1 || edit->get_gutter_count() != 0 || edit->is_drawing_minimap() || edit->get_syntax_highlighter().is_valid()) {
-			WARN_PRINT_ONCE("TextEditの補助表示をtextarea標準表示へ置き換えます。primary caretだけを同期します。");
+			WARN_PRINT_ONCE("TextEditの補助表示をtextarea標準表示へ置き換えます。primary caretを同期します。");
 		}
 		return true;
 	}
@@ -364,7 +382,7 @@ static void register_canvas(ObjectID p_owner, RID p_canvas) {
 	if (canvases.find(p_canvas) < 0) canvases.push_back(p_canvas);
 }
 
-// 解放Controlがまだ所有するCanvas RIDだけを対応表から回収する。
+// 解放Controlがまだ所有するCanvas RIDを対応表から回収する。
 static void remove_canvases(ObjectID p_owner) {
 	const Vector<RID> *canvases = owner_canvases.getptr(p_owner);
 	if (!canvases) return;
@@ -516,7 +534,7 @@ void yweb_text_sync_queue(ObjectID p_object) {
 
 #ifndef GLES3_ENABLED
 // Canvasを持たないDOM onlyで、Controlの面と枠をDOMの箱へ写す。
-// StyleBoxFlatはCSSの背景、border、角丸へ素直に対応するため、その値だけを渡す設計。
+// StyleBoxFlatはCSSの背景、border、角丸へ素直に対応するため、必要な値を渡す設計。
 static void sync_box(Control *p_control, int p_order) {
 	if (!p_control->is_visible_in_tree()) {
 		return;
@@ -526,7 +544,7 @@ static void sync_box(Control *p_control, int p_order) {
 	Rect2 widths;
 	Rect2 radius; // 左上、右上、右下、左下の順で持つ。
 	Rect2 area = Rect2(Vector2(), p_control->get_size()); // 面を置く範囲。
-	// Sliderはcontrol全体でなく、themeが決めた細いtrackだけを描く。
+	// Sliderはcontrol全体でなく、themeが決めた細いtrackを描く。
 	if (const Slider *slider = Object::cast_to<Slider>(p_control)) {
 		const Ref<StyleBox> track = slider->get_theme_stylebox(SNAME("slider"));
 		if (track.is_valid()) {
@@ -542,7 +560,7 @@ static void sync_box(Control *p_control, int p_order) {
 		background = rect->get_color();
 	} else {
 		// 種別ごとに面を持つstylebox名が違うため、持っているものを順に探す。
-		// StringNameの構築は表引きでlockを取るため、一度だけ作って使い回す。
+		// StringNameの構築は表引きでlockを取るため、一度作って使い回す。
 		static const StringName names[] = { SNAME("panel"), SNAME("normal"), SNAME("bg"), SNAME("slider"), SNAME("separator"), SNAME("background") };
 		Ref<StyleBoxFlat> flat;
 		for (const StringName &name : names) {
@@ -592,6 +610,7 @@ static void sync_button_text(Control *p_control, const String &p_text, int p_kin
 
 
 #ifndef GLES3_ENABLED
+static void emit_polygon(CanvasItem *p_item, const Vector<Point2> &p_points, const Vector<Color> &p_colors, const CharString &p_uid);
 
 // 二点を結ぶ線を、太さぶんの細い面として置く。線を出す処理はここへ集める。
 static void emit_line(const Transform2D &p_basis, const Vector2 &p_from, const Vector2 &p_to, float p_width, const Color &p_color, const CharString &p_uid, int p_order) {
@@ -606,7 +625,7 @@ static void emit_line(const Transform2D &p_basis, const Vector2 &p_from, const V
 			length, width, p_order, p_color.r, p_color.g, p_color.b, p_color.a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }
 
-// textureを一度だけPNGとしてBrowserへ渡し、以後は識別値で参照させる。
+// textureを一度PNGとしてBrowserへ渡し、以後は識別値で参照させる。
 // 画素を毎frame送らないための入口で、識別値はresource pathかRIDから作る。
 static String image_key(const Ref<Texture2D> &p_texture) {
 	if (p_texture.is_null()) {
@@ -637,16 +656,16 @@ static String image_key(const Ref<Texture2D> &p_texture) {
 	return key;
 }
 
-// 画像を持つControlとSprite2Dを、矩形と重なり順だけでDOMへ写す。
-static void sync_image(CanvasItem *p_item, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, int p_order) {
+// 画像を持つControlとSprite2Dを、確定矩形と重なり順でDOMへ写す。
+static void sync_image(CanvasItem *p_item, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, int p_order, const char *p_tag = "img", const Color &p_tint = Color(1, 1, 1, 1)) {
 	const String key = image_key(p_texture);
 	if (key.is_empty()) {
 		return;
 	}
 	Transform2D transform = p_item->get_global_transform_with_canvas();
 	transform[2] = transform.xform(p_rect.position);
-	const Color modulate = p_item->get_modulate() * p_item->get_self_modulate();
-	const CharString uid = (String::num_uint64((uint64_t)p_item->get_instance_id()) + "-img").utf8();
+	const Color modulate = p_item->get_modulate() * p_item->get_self_modulate() * p_tint;
+	const CharString uid = (String::num_uint64((uint64_t)p_item->get_instance_id()) + "-" + p_tag).utf8();
 	const CharString key_utf8 = key.utf8();
 	yweb_image_sync(uid.get_data(), key_utf8.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
 			p_rect.size.width, p_rect.size.height, p_order, modulate.r, modulate.g, modulate.b, modulate.a);
@@ -657,7 +676,20 @@ static void sync_image_node(CanvasItem *p_item, int p_order) {
 	if (!p_item->is_visible_in_tree()) {
 		return;
 	}
-	if (TextureRect *rect = Object::cast_to<TextureRect>(p_item)) {
+	if (TextureButton *button = Object::cast_to<TextureButton>(p_item)) {
+		Ref<Texture2D> texture = button->get_texture_normal();
+		if (button->is_disabled() && button->get_texture_disabled().is_valid()) texture = button->get_texture_disabled();
+		else if (button->is_pressed() && button->get_texture_pressed().is_valid()) texture = button->get_texture_pressed();
+		else if (button->is_hovered() && button->get_texture_hover().is_valid()) texture = button->get_texture_hover();
+		sync_image(button, texture, Rect2(Vector2(), button->get_size()), p_order);
+	} else if (TextureProgressBar *bar = Object::cast_to<TextureProgressBar>(p_item)) {
+		const Size2 size = bar->get_size();
+		const double span = bar->get_max() - bar->get_min();
+		const float ratio = span > 0 ? (bar->get_value() - bar->get_min()) / span : 0;
+		sync_image(bar, bar->get_under_texture(), Rect2(Vector2(), size), p_order, "under", bar->get_tint_under());
+		sync_image(bar, bar->get_progress_texture(), Rect2(bar->get_progress_offset(), Size2(size.x * ratio, size.y)), p_order + 1, "progress", bar->get_tint_progress());
+		sync_image(bar, bar->get_over_texture(), Rect2(Vector2(), size), p_order + 2, "over", bar->get_tint_over());
+	} else if (TextureRect *rect = Object::cast_to<TextureRect>(p_item)) {
 		sync_image(rect, rect->get_texture(), Rect2(Vector2(), rect->get_size()), p_order);
 	} else if (NinePatchRect *patch = Object::cast_to<NinePatchRect>(p_item)) {
 		sync_image(patch, patch->get_texture(), Rect2(Vector2(), patch->get_size()), p_order);
@@ -666,6 +698,14 @@ static void sync_image_node(CanvasItem *p_item, int p_order) {
 		if (texture.is_valid()) {
 			const Size2 size = texture->get_size();
 			const Vector2 offset = sprite->get_offset() - (sprite->is_centered() ? size * 0.5 : Vector2());
+			sync_image(sprite, texture, Rect2(offset, size), p_order);
+		}
+	} else if (AnimatedSprite2D *sprite = Object::cast_to<AnimatedSprite2D>(p_item)) {
+		const Ref<SpriteFrames> frames = sprite->get_sprite_frames();
+		const Ref<Texture2D> texture = frames.is_valid() ? frames->get_frame_texture(sprite->get_animation(), sprite->get_frame()) : Ref<Texture2D>();
+		if (texture.is_valid()) {
+			const Size2 size = texture->get_size();
+			const Vector2 offset = sprite->get_offset() - (sprite->is_centered() ? size * 0.5f : Vector2());
 			sync_image(sprite, texture, Rect2(offset, size), p_order);
 		}
 	}
@@ -741,18 +781,87 @@ static void sync_ranged(Control *p_control, int p_order) {
 
 // 図形を描くNode2Dを、線の集まりとしてCSSへ写す。
 static void sync_shape(CanvasItem *p_item, int p_order) {
-	Line2D *line = Object::cast_to<Line2D>(p_item);
-	if (line == nullptr) {
-		return;
-	}
-	const PackedVector2Array points = line->get_points();
-	const Color color = line->get_default_color() * p_item->get_modulate();
-	const Transform2D basis = p_item->get_global_transform_with_canvas();
-	for (int index = 0; index + 1 < points.size(); index++) {
-		const CharString uid = (String::num_uint64((uint64_t)p_item->get_instance_id()) + "-line" + itos(index)).utf8();
-		emit_line(basis, points[index], points[index + 1], line->get_width(), color, uid, p_order);
+	if (Line2D *line = Object::cast_to<Line2D>(p_item)) {
+		const PackedVector2Array points = line->get_points();
+		const Color color = line->get_default_color() * p_item->get_modulate();
+		const Transform2D basis = p_item->get_global_transform_with_canvas();
+		for (int index = 0; index + 1 < points.size(); index++) {
+			const CharString uid = (String::num_uint64((uint64_t)p_item->get_instance_id()) + "-line" + itos(index)).utf8();
+			emit_line(basis, points[index], points[index + 1], line->get_width(), color, uid, p_order);
+		}
+	} else if (Polygon2D *polygon = Object::cast_to<Polygon2D>(p_item)) {
+		const Vector<Vector2> points = polygon->get_polygon();
+		const Vector<Color> colors = { polygon->get_color() };
+		const CharString uid = (String::num_uint64((uint64_t)p_item->get_instance_id()) + "-polygon").utf8();
+		emit_polygon(p_item, points, colors, uid);
 	}
 }
+
+#ifndef _3D_DISABLED
+// 3D平面のlocal座標をSprite3Dと同じ軸規則でworld座標へ直す。
+static Vector3 sprite_point(SpriteBase3D *p_sprite, const Vector2 &p_point) {
+	Vector2 point = p_point * p_sprite->get_pixel_size();
+	const int axis = p_sprite->get_axis();
+	int x_axis = (axis + 1) % 3;
+	int y_axis = (axis + 2) % 3;
+	if (axis != Vector3::AXIS_Z) {
+		SWAP(x_axis, y_axis);
+		if (axis == Vector3::AXIS_Y) point.y = -point.y;
+		else if (axis == Vector3::AXIS_X) point.x = -point.x;
+	}
+	Vector3 local;
+	local[x_axis] = point.x;
+	local[y_axis] = point.y;
+	return p_sprite->get_global_transform().xform(local);
+}
+
+// world上の三点をCamera3Dで投影し、平面一枚のmatrix3dとしてBrowserへ渡す。
+static void sync_plane(Node3D *p_node, Camera3D *p_camera, const Vector3 &p_top_left, const Vector3 &p_top_right, const Vector3 &p_bottom_left, const Vector3 &p_bottom_right, const Size2 &p_size, const String &p_key, const String &p_text, const Color &p_color, float p_font_size, int p_order) {
+	if (!p_node->is_visible_in_tree() || p_size.x <= 0 || p_size.y <= 0 || p_camera->is_position_behind(p_top_left)) return;
+	const Vector2 top_left = p_camera->unproject_position(p_top_left);
+	const Vector2 top_right = p_camera->unproject_position(p_top_right);
+	const Vector2 bottom_left = p_camera->unproject_position(p_bottom_left);
+	const Vector2 bottom_right = p_camera->unproject_position(p_bottom_right);
+	const float depth = p_camera->get_global_position().distance_to(p_node->get_global_position());
+	const CharString uid = (String::num_uint64((uint64_t)p_node->get_instance_id()) + "-3d").utf8();
+	const CharString key = p_key.utf8();
+	const CharString text = p_text.utf8();
+	yweb_plane_sync(uid.get_data(), key.get_data(), text.get_data(), top_left.x, top_left.y, top_right.x, top_right.y, bottom_left.x, bottom_left.y, bottom_right.x, bottom_right.y, p_size.x, p_size.y,
+			(int)(100000.0f - depth * 100.0f) + p_order, p_text.is_empty() ? 0 : 1,
+			p_color.r, p_color.g, p_color.b, p_color.a, p_font_size);
+}
+
+// Sprite3DとLabel3Dを、Godotの実際の矩形とCamera投影から平面DOMへ同期する。
+static void sync_3d(Node *p_node, int p_order) {
+	Node3D *node = Object::cast_to<Node3D>(p_node);
+	Viewport *viewport = node ? node->get_viewport() : nullptr;
+	Camera3D *camera = viewport ? viewport->get_camera_3d() : nullptr;
+	if (!node || !camera) return;
+	if (Sprite3D *sprite = Object::cast_to<Sprite3D>(node)) {
+		const Ref<Texture2D> texture = sprite->get_texture();
+		const Rect2 rect = sprite->get_item_rect();
+		const String key = image_key(texture);
+		if (key.is_empty()) return;
+		const Vector2 top_left(rect.position.x, rect.position.y + rect.size.y);
+		const Vector2 top_right = top_left + Vector2(rect.size.x, 0);
+		const Vector2 bottom_left(rect.position.x, rect.position.y);
+		const Vector2 bottom_right = bottom_left + Vector2(rect.size.x, 0);
+		sync_plane(sprite, camera, sprite_point(sprite, top_left), sprite_point(sprite, top_right), sprite_point(sprite, bottom_left), sprite_point(sprite, bottom_right), rect.size, key, String(), sprite->get_modulate(), 0, p_order);
+	} else if (Label3D *label = Object::cast_to<Label3D>(node)) {
+		const AABB box = label->get_aabb();
+		const float pixel = label->get_pixel_size();
+		if (pixel <= 0 || box.size.x <= 0 || box.size.y <= 0) return;
+		const Transform3D world = label->get_global_transform();
+		const Vector3 top_left = world.xform(Vector3(box.position.x, box.position.y + box.size.y, 0));
+		const Vector3 top_right = world.xform(Vector3(box.position.x + box.size.x, box.position.y + box.size.y, 0));
+		const Vector3 bottom_left = world.xform(Vector3(box.position.x, box.position.y, 0));
+		const Vector3 bottom_right = world.xform(Vector3(box.position.x + box.size.x, box.position.y, 0));
+		const Ref<Font> font = label->get_font();
+		const String key = font.is_valid() ? font->get_path() : String();
+		sync_plane(label, camera, top_left, top_right, bottom_left, bottom_right, Size2(box.size.x / pixel, box.size.y / pixel), key, label->get_text(), label->get_modulate(), label->get_font_size(), p_order);
+	}
+}
+#endif
 
 
 #ifndef GLES3_ENABLED
@@ -792,7 +901,7 @@ void yweb_draw_transform(CanvasItem *p_item, const Transform2D &p_transform) {
 	draw_transforms[p_item->get_instance_id()] = p_transform;
 }
 
-// 塗りつぶした矩形を面としてDOMへ出す。枠だけの指定はborderで表す。
+// 塗りつぶした矩形を面としてDOMへ出す。枠の指定はborderで表す。
 void yweb_draw_rect(CanvasItem *p_item, const Rect2 &p_rect, const Color &p_color, bool p_filled, real_t p_width) {
 	Transform2D transform = draw_basis(p_item);
 	transform[2] = transform.xform(p_rect.position);
@@ -826,11 +935,68 @@ void yweb_draw_line(CanvasItem *p_item, const Point2 &p_from, const Point2 &p_to
 	emit_line(draw_basis(p_item), p_from, p_to, (float)p_width, color, draw_uid(p_item, "l"), draw_order(p_item));
 }
 
+// 点列を連続線または二点ずつの独立線としてDOMへ出す。
+void yweb_draw_polyline(CanvasItem *p_item, const Vector<Point2> &p_points, const Vector<Color> &p_colors, real_t p_width, bool p_pairs) {
+	const Transform2D basis = draw_basis(p_item);
+	const int step = p_pairs ? 2 : 1;
+	for (int index = 0; index + 1 < p_points.size(); index += step) {
+		const Color base = p_colors.is_empty() ? Color(1, 1, 1) : p_colors[MIN(index, p_colors.size() - 1)];
+		const Color color = base * p_item->get_modulate() * p_item->get_self_modulate();
+		emit_line(basis, p_points[index], p_points[index + 1], (float)p_width, color, draw_uid(p_item, "p"), draw_order(p_item));
+	}
+}
+
+// 楕円をCSSの角丸矩形として出す。
+void yweb_draw_ellipse(CanvasItem *p_item, const Point2 &p_pos, real_t p_major, real_t p_minor, const Color &p_color, bool p_filled, real_t p_width) {
+	Transform2D transform = draw_basis(p_item);
+	transform[2] = transform.xform(p_pos - Vector2(p_major, p_minor));
+	const Color color = p_color * p_item->get_modulate() * p_item->get_self_modulate();
+	const CharString uid = draw_uid(p_item, "e");
+	const float edge = p_filled ? 0.0f : MAX((float)p_width, 1.0f);
+	const float radius = MAX((float)p_major, (float)p_minor);
+	yweb_box_sync(uid.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
+			p_major * 2.0f, p_minor * 2.0f, draw_order(p_item),
+			p_filled ? color.r : 0.0f, p_filled ? color.g : 0.0f, p_filled ? color.b : 0.0f, p_filled ? color.a : 0.0f,
+			edge, edge, edge, edge, color.r, color.g, color.b, p_filled ? 0.0f : color.a,
+			radius, radius, radius, radius);
+}
+
+// 多角形をGodotのlocal座標と色から固定DOM IDのCSS clip-pathへ変換する。
+static void emit_polygon(CanvasItem *p_item, const Vector<Point2> &p_points, const Vector<Color> &p_colors, const CharString &p_uid) {
+	if (p_points.size() < 3) {
+		return;
+	}
+	Rect2 bounds(p_points[0], Vector2());
+	for (int index = 1; index < p_points.size(); index++) bounds = bounds.expand(p_points[index]);
+	if (bounds.size.x <= 0 || bounds.size.y <= 0) {
+		return;
+	}
+	String points;
+	for (int index = 0; index < p_points.size(); index++) {
+		if (index > 0) points += ",";
+		const Vector2 local = p_points[index] - bounds.position;
+		points += String::num_real(local.x) + "px " + String::num_real(local.y) + "px";
+	}
+	Transform2D transform = draw_basis(p_item);
+	transform[2] = transform.xform(bounds.position);
+	const Color base = p_colors.is_empty() ? Color(1, 1, 1) : p_colors[0];
+	const Color color = base * p_item->get_modulate() * p_item->get_self_modulate();
+	const CharString polygon = points.utf8();
+	yweb_polygon_sync(p_uid.get_data(), polygon.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
+			bounds.size.x, bounds.size.y, draw_order(p_item), color.r, color.g, color.b, color.a);
+}
+
+// _draw命令の多角形は描画順に一意なDOM IDを割り当てる。
+void yweb_draw_polygon(CanvasItem *p_item, const Vector<Point2> &p_points, const Vector<Color> &p_colors) {
+	emit_polygon(p_item, p_points, p_colors, draw_uid(p_item, "g"));
+}
+
 // 文字の描画命令を、DOMの文字要素として出す。基準線から上端へ寄せて矩形に合わせる。
-void yweb_draw_string(const CanvasItem *p_item, const Point2 &p_pos, const String &p_text, int p_alignment, float p_width, int p_font_size, const Color &p_color) {
+void yweb_draw_string(const CanvasItem *p_item, const Point2 &p_pos, const String &p_text, int p_alignment, float p_width, int p_font_size, int p_lines, const Color &p_color, const Color &p_outline, int p_outline_size) {
 	CanvasItem *item = const_cast<CanvasItem *>(p_item);
 	const Color color = p_color * item->get_modulate() * item->get_self_modulate();
-	const float height = p_font_size * 1.25f; // 基準線を含む行の高さの目安。
+	const Color outline = p_outline * item->get_modulate() * item->get_self_modulate();
+	const float height = p_font_size * 1.25f * MAX(p_lines, 1); // 基準線を含む行の高さの目安。
 	Transform2D transform = draw_basis(item);
 	transform[2] = transform.xform(p_pos - Vector2(0, p_font_size));
 	const CharString uid = draw_uid(item, "s");
@@ -838,10 +1004,14 @@ void yweb_draw_string(const CanvasItem *p_item, const Point2 &p_pos, const Strin
 	const CharString empty = String().utf8();
 	yweb_text_sync(uid.get_data(), text.get_data(), empty.get_data(), empty.get_data(),
 			transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
-			p_width > 0 ? p_width : p_text.length() * p_font_size, height, TEXT_VISIBLE, draw_order(item),
+			p_width > 0 ? p_width : p_text.length() * p_font_size, height, TEXT_VISIBLE | (p_lines > 1 ? TEXT_WRAP : 0), draw_order(item),
 			p_alignment, VERTICAL_ALIGNMENT_TOP, TEXT_LABEL, 0, 0, 0,
 			color.r, color.g, color.b, color.a, p_font_size, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+			outline.r, outline.g, outline.b, outline.a, p_outline_size,
+			0, 0, 0, 0, 0, 0,
+			0, 0,
+			0, 0, 0, 0,
+			0, 0);
 }
 
 // 画像命令は、既存の画像同期へそのまま渡す。
@@ -858,6 +1028,42 @@ void yweb_draw_texture(CanvasItem *p_item, const Ref<Texture2D> &p_texture, cons
 	yweb_image_sync(uid.get_data(), key_utf8.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
 			p_rect.size.width, p_rect.size.height, draw_order(p_item), color.r, color.g, color.b, color.a);
 }
+
+// 画像の一領域をCSS backgroundの位置と寸法で切り出す。
+void yweb_draw_texture_region(CanvasItem *p_item, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, const Rect2 &p_src_rect, const Color &p_modulate) {
+	const String key = image_key(p_texture);
+	if (key.is_empty() || p_src_rect.size.x <= 0 || p_src_rect.size.y <= 0) {
+		return;
+	}
+	Transform2D transform = draw_basis(p_item);
+	transform[2] = transform.xform(p_rect.position);
+	const Color color = p_modulate * p_item->get_modulate() * p_item->get_self_modulate();
+	const CharString uid = draw_uid(p_item, "u");
+	const CharString key_utf8 = key.utf8();
+	const Size2 image_size = p_texture->get_size();
+	yweb_image_region_sync(uid.get_data(), key_utf8.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
+			p_rect.size.x, p_rect.size.y, image_size.x, image_size.y, p_src_rect.position.x, p_src_rect.position.y, p_src_rect.size.x, p_src_rect.size.y,
+			draw_order(p_item), color.r, color.g, color.b, color.a);
+}
+
+// StyleBoxFlatをGodotが確定した背景、枠、角丸の値でDOMへ出す。
+void yweb_draw_style_box(CanvasItem *p_item, const Ref<StyleBox> &p_style, const Rect2 &p_rect) {
+	const Ref<StyleBoxFlat> flat = p_style;
+	if (flat.is_null()) {
+		return;
+	}
+	Transform2D transform = draw_basis(p_item);
+	transform[2] = transform.xform(p_rect.position);
+	const Color modulate = p_item->get_modulate() * p_item->get_self_modulate();
+	const Color background = flat->get_bg_color() * modulate;
+	const Color border = flat->get_border_color() * modulate;
+	const CharString uid = draw_uid(p_item, "b");
+	yweb_box_sync(uid.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
+			p_rect.size.x, p_rect.size.y, draw_order(p_item), background.r, background.g, background.b, background.a,
+			flat->get_border_width(SIDE_LEFT), flat->get_border_width(SIDE_TOP), flat->get_border_width(SIDE_RIGHT), flat->get_border_width(SIDE_BOTTOM),
+			border.r, border.g, border.b, border.a,
+			flat->get_corner_radius(CORNER_TOP_LEFT), flat->get_corner_radius(CORNER_TOP_RIGHT), flat->get_corner_radius(CORNER_BOTTOM_RIGHT), flat->get_corner_radius(CORNER_BOTTOM_LEFT));
+}
 #endif
 
 // Scene全体のControlを順に辿り、表示順のまま箱と文字を出す。
@@ -870,9 +1076,15 @@ static void sync_boxes(Node *p_node, int &r_order) {
 	}
 	if (CanvasItem *item = Object::cast_to<CanvasItem>(p_node)) {
 		node_orders[item->get_instance_id()] = r_order * 2 + 1;
+		item->yweb_dom_redraw();
+		const CharString prefix = (String::num_uint64((uint64_t)item->get_instance_id()) + "-d").utf8();
+		yweb_draw_touch(prefix.get_data());
 		sync_image_node(item, r_order * 2 + 1);
 		sync_shape(item, r_order * 2 + 1);
 	}
+#ifndef _3D_DISABLED
+	sync_3d(p_node, r_order * 2 + 1);
+#endif
 	if (Control *control = Object::cast_to<Control>(p_node)) {
 		const int order = r_order++;
 		sync_box(control, order * 2);
@@ -887,8 +1099,8 @@ static void sync_boxes(Node *p_node, int &r_order) {
 		}
 		paint_order = -1;
 	}
-	for (int index = 0; index < p_node->get_child_count(); index++) {
-		sync_boxes(p_node->get_child(index), r_order);
+	for (int index = 0; index < p_node->get_child_count(true); index++) {
+		sync_boxes(p_node->get_child(index, true), r_order);
 	}
 }
 #endif
@@ -900,7 +1112,7 @@ void yweb_text_sync_process() {
 		yweb_site_set_event_cb(&site_event);
 		event_ready = true;
 	}
-	// current sceneが変わったframeだけをBrowser routeへ通知する。
+	// current sceneが変わったframeをBrowser routeへ通知する。
 	SceneTree *tree = SceneTree::get_singleton();
 	Node *scene = tree ? tree->get_current_scene() : nullptr;
 	if (scene && scene->get_instance_id() != site_scene) {

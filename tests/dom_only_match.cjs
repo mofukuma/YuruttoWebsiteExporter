@@ -1,5 +1,5 @@
-// DOM onlyの見た目が、Godotの画面とどれだけ一致するかを画素で測る。
-// 同じsceneをGodotとBrowserで同じ寸法へ描き、正規化MAEで差を数値にする。
+// DOM onlyの見た目とGodot画面の一致度を画素で測る。
+// 同じsceneをGodotとBrowserで同じ寸法へ描き、8bit RGBのRMSEで差を数値にする。
 
 'use strict';
 
@@ -18,9 +18,8 @@ const project = path.join(work, 'project'); // 書き出す検査project。
 const site = path.join(work, 'site'); // DOM only成果物。
 const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const size = { width: 800, height: 600 }; // 両者で揃える画面寸法。
-const limit = 0.0015; // node構成の画面へ許す正規化MAEの上限。
-const limits = { omochi: 0.05 }; // 描画命令だけで作る画面は再現が届いていないため、現状値を上限として記録する。
-const screens = ['main', 'widgets', 'motion', 'physics', 'omochi']; // 比べる画面。sceneとURIが対応する。
+const limit = 1; // 各画面へ許す8bit RGBのRMSE上限。
+const screens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d']; // 比べる画面。sceneとURIが対応する。
 const settle = { physics: 320, omochi: 950 }; // 物理を速く回した画面で、形が決まるまで進めるframe数。
 
 // 全画面をGodot側で順に撮る一度きりのscript。
@@ -38,7 +37,7 @@ func _init() -> void:
 		var screen: Node = load("res://%s.tscn" % name).instantiate()
 		root.add_child(screen)
 		# 物理で形が決まる画面は物理frameを待つ。process frameでは物理時計が進まない。
-		var steps: int = SETTLE.get(name, 2)
+		var steps: int = SETTLE.get(name, 6)
 		var wait_physics: bool = SETTLE.has(name)
 		for _index in range(steps):
 			if wait_physics:
@@ -54,10 +53,8 @@ func _init() -> void:
 
 // 検査projectを組み立てる。
 fs.rmSync(work, { recursive: true, force: true });
-fs.mkdirSync(path.join(project, 'addons'), { recursive: true });
-fs.cpSync(path.join(repo, 'addons/yurutto_website_exporter'), path.join(project, 'addons/yurutto_website_exporter'), { recursive: true });
 fs.cpSync(path.join(repo, 'tests/fixtures/dom_only'), project, { recursive: true });
-fs.appendFileSync(path.join(project, 'project.godot'), '\n[editor_plugins]\n\nenabled=PackedStringArray("res://addons/yurutto_website_exporter/plugin.cfg")\n');
+child.execFileSync(process.execPath, [path.join(repo, 'build/install_site_addon.cjs'), project], { stdio: 'pipe' });
 fs.writeFileSync(path.join(project, 'export_presets.cfg'), '[preset.0]\n\nname="Web"\nplatform="Yurutto Website"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\nexport_path=""\n\n[preset.0.options]\n\nyweb/level=0\n');
 fs.writeFileSync(path.join(project, 'capture.gd'), capture);
 fs.writeFileSync(path.join(project, 'yweb-site.json'), `${JSON.stringify({ version: 1, scenes: Object.fromEntries(screens.map((name, index) => [name, { scene: `res://${name}.tscn`, uri: index === 0 ? '/' : `/${name}/` }])) }, null, 2)}\n`);
@@ -76,7 +73,7 @@ for (const name of screens) {
 fs.mkdirSync(site, { recursive: true });
 child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe', timeout: 300000 });
 
-// Browser側で画面ごとに撮り、Godotとの差を調和平均でまとめる。
+// Browser側で画面ごとに撮り、Godotとの差を個別にまとめる。
 (async () => {
 	const server = createServer(site);
 	await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -90,6 +87,23 @@ child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 
 			await page.waitForFunction(() => document.querySelectorAll('[data-yweb-box]').length > 0, { timeout: 20000 });
 			await page.evaluate(() => document.fonts.ready);
 			await page.waitForTimeout(settle[name] ? 2500 : 400);
+			if (name === 'draw_all') {
+				const dom = await page.evaluate(() => ({
+					polygons: document.querySelectorAll('[data-yweb-polygon]').length,
+					regions: document.querySelectorAll('[data-yweb-image-region]').length,
+					transient: [...document.querySelectorAll('[data-yweb-box]')].filter((element) => getComputedStyle(element).backgroundColor === 'rgb(255, 0, 255)').length,
+				}));
+				assert.ok(dom.polygons >= 2, '描画命令とPolygon2DをDOMへ置けていない');
+				assert.ok(dom.regions >= 1, '画像領域をDOMへ置けていない');
+				assert.equal(dom.transient, 0, '解放済みCanvasItemの描画がDOMへ残っている');
+				await page.waitForTimeout(250);
+				assert.equal(await page.locator('[data-yweb-polygon]').count(), dom.polygons, 'Polygon2DのDOM要素がframeごとに増えている');
+			}
+			if (name === 'plane_3d') {
+				const planes = await page.evaluate(() => [...document.querySelectorAll('[data-yweb-plane3d]')].map((element) => element.style.transform));
+				assert.equal(planes.length, 2, '3D平面を2件DOMへ置けていない');
+				assert.ok(planes.every((value) => value.startsWith('matrix3d(')), '3D平面へmatrix3dを設定できていない');
+			}
 			const shot = path.join(work, `browser-${name}.png`);
 			await page.screenshot({ path: shot });
 			await page.close();
@@ -102,11 +116,11 @@ child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 
 			const reference = flat(path.join(work, `godot-${name}.png`), path.join(work, `flat-godot-${name}.png`));
 			const compared = flat(shot, path.join(work, `flat-browser-${name}.png`));
 
-			// 画素差を正規化MAEで測る。compareは差があると終了値1を返すため出力だけを読む。
-			const measure = child.spawnSync('magick', ['compare', '-metric', 'MAE', reference, compared, path.join(work, `diff-${name}.png`)], { encoding: 'utf8' });
+			// 画素差をRMSEで測る。compareは差があると終了値1を返すため出力を読む。
+			const measure = child.spawnSync('magick', ['compare', '-metric', 'RMSE', reference, compared, path.join(work, `diff-${name}.png`)], { encoding: 'utf8' });
 			const matched = /\(([0-9.eE+-]+)\)/.exec(measure.stderr || '');
-			assert.ok(matched, `MAEを測れない: ${name} ${measure.stderr}`);
-			measured[name] = Number(matched[1]);
+			assert.ok(matched, `RMSEを測れない: ${name} ${measure.stderr}`);
+			measured[name] = Number((Number(matched[1]) * 255).toFixed(4));
 		}
 	} finally {
 		await browser.close();
@@ -114,9 +128,9 @@ child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 
 	}
 
 	// 画面ごとに上限を当てる。平均では、良い画面が悪い画面を隠してしまう。
-	const over = Object.entries(measured).filter(([name, value]) => value >= (limits[name] ?? limit));
-	fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ measured, limit, limits }, null, 2)}\n`);
-	console.log(JSON.stringify({ ok: over.length === 0, measured, limit, limits }));
+	const over = Object.entries(measured).filter(([, value]) => value > limit);
+	fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ unit: 'RGB 0..255', measured, limit }, null, 2)}\n`);
+	console.log(JSON.stringify({ ok: over.length === 0, unit: 'RGB 0..255', measured, limit }));
 	assert.deepEqual(over, [], `Godot画面との差が大きい: ${over.map(([name, value]) => `${name} ${value}`).join(', ')}`);
 })().catch((error) => {
 	console.error(error);

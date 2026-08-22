@@ -28,6 +28,9 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
+// CanvasItemの公開描画命令をGodot標準描画とDOM同期へ同じ引数で送る。
+// 通常版の動作を保ち、DOM版では確定した座標、色、画像、文字を平坦な要素へ渡す設計。
+
 #include "canvas_item.h"
 #include "canvas_item.compat.inc"
 
@@ -46,6 +49,7 @@ STATIC_ASSERT_INCOMPLETE_TYPE(class, RenderingServer);
 #include "scene/resources/mesh.h"
 #include "scene/resources/multimesh.h"
 #include "scene/resources/style_box.h"
+#include "scene/resources/style_box_flat.h"
 #include "scene/resources/world_2d.h"
 #include "servers/display/accessibility_server.h"
 #include "servers/rendering/rendering_server.h"
@@ -56,9 +60,14 @@ void yweb_draw_begin(CanvasItem *p_item);
 void yweb_draw_rect(CanvasItem *p_item, const Rect2 &p_rect, const Color &p_color, bool p_filled, real_t p_width);
 void yweb_draw_circle(CanvasItem *p_item, const Point2 &p_pos, real_t p_radius, const Color &p_color, bool p_filled, real_t p_width);
 void yweb_draw_line(CanvasItem *p_item, const Point2 &p_from, const Point2 &p_to, const Color &p_color, real_t p_width);
+void yweb_draw_polyline(CanvasItem *p_item, const Vector<Point2> &p_points, const Vector<Color> &p_colors, real_t p_width, bool p_pairs = false);
+void yweb_draw_ellipse(CanvasItem *p_item, const Point2 &p_pos, real_t p_major, real_t p_minor, const Color &p_color, bool p_filled, real_t p_width);
+void yweb_draw_polygon(CanvasItem *p_item, const Vector<Point2> &p_points, const Vector<Color> &p_colors);
 void yweb_draw_texture(CanvasItem *p_item, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, const Color &p_modulate);
+void yweb_draw_texture_region(CanvasItem *p_item, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, const Rect2 &p_src_rect, const Color &p_modulate);
+void yweb_draw_style_box(CanvasItem *p_item, const Ref<StyleBox> &p_style, const Rect2 &p_rect);
 void yweb_draw_transform(CanvasItem *p_item, const Transform2D &p_transform);
-void yweb_draw_string(const CanvasItem *p_item, const Point2 &p_pos, const String &p_text, int p_alignment, float p_width, int p_font_size, const Color &p_color);
+void yweb_draw_string(const CanvasItem *p_item, const Point2 &p_pos, const String &p_text, int p_alignment, float p_width, int p_font_size, int p_lines, const Color &p_color, const Color &p_outline = Color(), int p_outline_size = 0);
 #define YWEB_DRAW(m_call) m_call
 #else
 #define YWEB_DRAW(m_call)
@@ -195,6 +204,17 @@ void CanvasItem::_redraw_callback() {
 	}
 	pending_update = false; // Don't change to false until finished drawing (avoid recursive update).
 }
+
+#ifdef YWEB_TEXT_DOM_ENABLED
+// 描画処理を外したDOM版でも、変更時に標準通知と_drawを同じ順番で実行する。
+void CanvasItem::yweb_dom_redraw() {
+	if (!yweb_dom_dirty) {
+		return;
+	}
+	yweb_dom_dirty = false;
+	_redraw_callback();
+}
+#endif
 
 Transform2D CanvasItem::get_global_transform_with_canvas() const {
 	ERR_READ_THREAD_GUARD_V(Transform2D());
@@ -571,6 +591,9 @@ void CanvasItem::queue_redraw() {
 	if (!is_inside_tree()) {
 		return;
 	}
+	#ifdef YWEB_TEXT_DOM_ENABLED
+	yweb_dom_dirty = true;
+	#endif
 	if (pending_update) {
 		return;
 	}
@@ -865,6 +888,7 @@ void CanvasItem::draw_dashed_line(const Point2 &p_from, const Point2 &p_to, cons
 	}
 
 	Vector<Color> colors = { p_color };
+	YWEB_DRAW(yweb_draw_polyline(this, points, colors, p_width, true));
 
 	RenderingServer::get_singleton()->canvas_item_add_multiline(canvas_item, points, colors, p_width, p_antialiased);
 }
@@ -882,6 +906,7 @@ void CanvasItem::draw_polyline(const Vector<Point2> &p_points, const Color &p_co
 	ERR_DRAW_GUARD;
 
 	Vector<Color> colors = { p_color };
+	YWEB_DRAW(yweb_draw_polyline(this, p_points, colors, p_width));
 	RenderingServer::get_singleton()->canvas_item_add_polyline(canvas_item, p_points, colors, p_width, p_antialiased);
 }
 
@@ -889,6 +914,7 @@ void CanvasItem::draw_polyline_colors(const Vector<Point2> &p_points, const Vect
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 
+	YWEB_DRAW(yweb_draw_polyline(this, p_points, p_colors, p_width));
 	RenderingServer::get_singleton()->canvas_item_add_polyline(canvas_item, p_points, p_colors, p_width, p_antialiased);
 }
 
@@ -922,6 +948,7 @@ void CanvasItem::draw_multiline(const Vector<Point2> &p_points, const Color &p_c
 	ERR_DRAW_GUARD;
 
 	Vector<Color> colors = { p_color };
+	YWEB_DRAW(yweb_draw_polyline(this, p_points, colors, p_width, true));
 	RenderingServer::get_singleton()->canvas_item_add_multiline(canvas_item, p_points, colors, p_width, p_antialiased);
 }
 
@@ -929,6 +956,7 @@ void CanvasItem::draw_multiline_colors(const Vector<Point2> &p_points, const Vec
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 
+	YWEB_DRAW(yweb_draw_polyline(this, p_points, p_colors, p_width, true));
 	RenderingServer::get_singleton()->canvas_item_add_multiline(canvas_item, p_points, p_colors, p_width, p_antialiased);
 }
 
@@ -966,6 +994,7 @@ void CanvasItem::draw_ellipse(const Point2 &p_pos, real_t p_major, real_t p_mino
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 
+	YWEB_DRAW(yweb_draw_ellipse(this, p_pos, p_major, p_minor, p_color, p_filled, p_width));
 	if (p_filled) {
 		if (p_width != -1.0) {
 			WARN_PRINT("The \"width\" argument has no effect when \"filled\" is \"true\".");
@@ -1002,7 +1031,6 @@ void CanvasItem::draw_circle(const Point2 &p_pos, real_t p_radius, const Color &
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 
-	YWEB_DRAW(yweb_draw_circle(this, p_pos, p_radius, p_color, p_filled, p_width));
 	draw_ellipse(p_pos, p_radius, p_radius, p_color, p_filled, p_width, p_antialiased);
 }
 
@@ -1029,6 +1057,7 @@ void CanvasItem::draw_texture_rect_region(RequiredParam<Texture2D> rp_texture, c
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 	EXTRACT_PARAM_OR_FAIL(p_texture, rp_texture);
+	YWEB_DRAW(yweb_draw_texture_region(this, p_texture, p_rect, p_src_rect, p_modulate));
 	p_texture->draw_rect_region(canvas_item, p_rect, p_src_rect, p_modulate, p_transpose, p_clip_uv);
 }
 
@@ -1036,6 +1065,7 @@ void CanvasItem::draw_msdf_texture_rect_region(RequiredParam<Texture2D> rp_textu
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 	EXTRACT_PARAM_OR_FAIL(p_texture, rp_texture);
+	YWEB_DRAW(yweb_draw_texture_region(this, p_texture, p_rect, p_src_rect, p_modulate));
 	RenderingServer::get_singleton()->canvas_item_add_msdf_texture_rect_region(canvas_item, p_rect, p_texture->get_rid(), p_src_rect, p_modulate, p_outline, p_pixel_range, p_scale);
 }
 
@@ -1043,6 +1073,7 @@ void CanvasItem::draw_lcd_texture_rect_region(RequiredParam<Texture2D> rp_textur
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 	EXTRACT_PARAM_OR_FAIL(p_texture, rp_texture);
+	YWEB_DRAW(yweb_draw_texture_region(this, p_texture, p_rect, p_src_rect, p_modulate));
 	RenderingServer::get_singleton()->canvas_item_add_lcd_texture_rect_region(canvas_item, p_rect, p_texture->get_rid(), p_src_rect, p_modulate);
 }
 
@@ -1052,6 +1083,7 @@ void CanvasItem::draw_style_box(RequiredParam<StyleBox> rp_style_box, const Rect
 
 	EXTRACT_PARAM_OR_FAIL(p_style_box, rp_style_box);
 
+	YWEB_DRAW(yweb_draw_style_box(this, p_style_box, p_rect));
 	p_style_box->draw(canvas_item, p_rect);
 }
 
@@ -1060,6 +1092,7 @@ void CanvasItem::draw_primitive(const Vector<Point2> &p_points, const Vector<Col
 	ERR_DRAW_GUARD;
 
 	RID rid = p_texture.is_valid() ? p_texture->get_rid() : RID();
+	YWEB_DRAW(yweb_draw_polygon(this, p_points, p_colors));
 	RenderingServer::get_singleton()->canvas_item_add_primitive(canvas_item, p_points, p_colors, p_uvs, rid);
 }
 
@@ -1076,6 +1109,7 @@ void CanvasItem::draw_set_transform_matrix(const Transform2D &p_matrix) {
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 
+	YWEB_DRAW(yweb_draw_transform(this, p_matrix));
 	RenderingServer::get_singleton()->canvas_item_add_set_transform(canvas_item, p_matrix);
 }
 void CanvasItem::draw_animation_slice(double p_animation_length, double p_slice_begin, double p_slice_end, double p_offset) {
@@ -1096,6 +1130,7 @@ void CanvasItem::draw_polygon(const Vector<Point2> &p_points, const Vector<Color
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 
+	YWEB_DRAW(yweb_draw_polygon(this, p_points, p_colors));
 	const Ref<AtlasTexture> atlas = p_texture;
 	if (atlas.is_valid() && atlas->get_atlas().is_valid()) {
 		const Ref<Texture2D> &texture = atlas->get_atlas();
@@ -1140,7 +1175,7 @@ void CanvasItem::draw_string(RequiredParam<Font> rp_font, const Point2 &p_pos, c
 	ERR_DRAW_GUARD;
 	EXTRACT_PARAM_OR_FAIL(p_font, rp_font);
 
-	YWEB_DRAW(yweb_draw_string(this, p_pos, p_text, (int)p_alignment, p_width, p_font_size, p_modulate));
+	YWEB_DRAW(yweb_draw_string(this, p_pos, p_text, (int)p_alignment, p_width, p_font_size, 1, p_modulate));
 	p_font->draw_string(canvas_item, p_pos, p_text, p_alignment, p_width, p_font_size, p_modulate, p_jst_flags, p_direction, p_orientation, p_oversampling);
 }
 
@@ -1149,6 +1184,7 @@ void CanvasItem::draw_multiline_string(RequiredParam<Font> rp_font, const Point2
 	ERR_DRAW_GUARD;
 	EXTRACT_PARAM_OR_FAIL(p_font, rp_font);
 
+	YWEB_DRAW(yweb_draw_string(this, p_pos, p_text, (int)p_alignment, p_width, p_font_size, p_max_lines > 0 ? MIN(p_text.count("\n") + 1, p_max_lines) : p_text.count("\n") + 1, p_modulate));
 	p_font->draw_multiline_string(canvas_item, p_pos, p_text, p_alignment, p_width, p_font_size, p_max_lines, p_modulate, p_brk_flags, p_jst_flags, p_direction, p_orientation, p_oversampling);
 }
 
@@ -1157,6 +1193,7 @@ void CanvasItem::draw_string_outline(RequiredParam<Font> rp_font, const Point2 &
 	ERR_DRAW_GUARD;
 	EXTRACT_PARAM_OR_FAIL(p_font, rp_font);
 
+	YWEB_DRAW(yweb_draw_string(this, p_pos, p_text, (int)p_alignment, p_width, p_font_size, 1, Color(0, 0, 0, 0), p_modulate, p_size));
 	p_font->draw_string_outline(canvas_item, p_pos, p_text, p_alignment, p_width, p_font_size, p_size, p_modulate, p_jst_flags, p_direction, p_orientation, p_oversampling);
 }
 
@@ -1165,6 +1202,7 @@ void CanvasItem::draw_multiline_string_outline(RequiredParam<Font> rp_font, cons
 	ERR_DRAW_GUARD;
 	EXTRACT_PARAM_OR_FAIL(p_font, rp_font);
 
+	YWEB_DRAW(yweb_draw_string(this, p_pos, p_text, (int)p_alignment, p_width, p_font_size, p_max_lines > 0 ? MIN(p_text.count("\n") + 1, p_max_lines) : p_text.count("\n") + 1, Color(0, 0, 0, 0), p_modulate, p_size));
 	p_font->draw_multiline_string_outline(canvas_item, p_pos, p_text, p_alignment, p_width, p_font_size, p_max_lines, p_size, p_modulate, p_brk_flags, p_jst_flags, p_direction, p_orientation, p_oversampling);
 }
 
@@ -1174,6 +1212,7 @@ void CanvasItem::draw_char(RequiredParam<Font> rp_font, const Point2 &p_pos, con
 	ERR_FAIL_COND(p_char.length() != 1);
 	EXTRACT_PARAM_OR_FAIL(p_font, rp_font);
 
+	YWEB_DRAW(yweb_draw_string(this, p_pos, p_char, HORIZONTAL_ALIGNMENT_LEFT, p_font_size, p_font_size, 1, p_modulate));
 	p_font->draw_char(canvas_item, p_pos, p_char[0], p_font_size, p_modulate, p_oversampling);
 }
 
@@ -1183,6 +1222,7 @@ void CanvasItem::draw_char_outline(RequiredParam<Font> rp_font, const Point2 &p_
 	ERR_FAIL_COND(p_char.length() != 1);
 	EXTRACT_PARAM_OR_FAIL(p_font, rp_font);
 
+	YWEB_DRAW(yweb_draw_string(this, p_pos, p_char, HORIZONTAL_ALIGNMENT_LEFT, p_font_size, p_font_size, 1, Color(0, 0, 0, 0), p_modulate, p_size));
 	p_font->draw_char_outline(canvas_item, p_pos, p_char[0], p_font_size, p_size, p_modulate, p_oversampling);
 }
 

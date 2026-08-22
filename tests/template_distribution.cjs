@@ -9,13 +9,17 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { sha, lock, treeHash, filesHash, BUILD_FILES } = require('../build/manifest_hash.cjs');
+const { artifactKey, compileKey, levelLine } = require('../build/template_key.cjs');
 const zlib = require('node:zlib');
 
 const root = path.resolve(__dirname, '..'); // yweb project root。
 const build = path.join(root, 'build'); // 配布build定義。
 const templateDir = path.join(root, 'addons/yurutto_website_exporter/templates'); // addon内テンプレート。
 const manifest = JSON.parse(fs.readFileSync(path.join(templateDir, 'manifest.json'))); // 配布物の由来正本。
-const levels = Object.entries(manifest.templates); // level別の検査対象ZIP。
+const requested = process.argv.slice(2); // 指定時に検査する書き出しlevel。
+for (const level of requested) levelLine(level);
+const allLevels = Object.entries(manifest.templates); // addonが持つ全level。
+const levels = allLevels.filter(([level]) => requested.length === 0 || requested.includes(level)); // 今回の検査対象ZIP。
 const work = path.join(root, 'tmp/template-distribution'); // 検査結果保存先。
 const buffer = { maxBuffer: 32 * 1024 * 1024 }; // WASM展開に必要な上限。
 
@@ -46,6 +50,7 @@ assert.match(dockerfile, new RegExp(`UV_VERSION=${distribution.UV_VERSION.replac
 assert.equal(dockerfile.includes('python3 -m pip'), false, 'Python道具の導入がuv以外');
 assert.match(distributionScript, /--platform "\$BUILDER_PLATFORM"/);
 assert.match(distributionScript, /tests\/template_distribution\.cjs/);
+assert.ok(levels.length > 0, '検査するtemplateがない');
 
 // build入力fileの内容が、manifestへ記録したhashと一致するかを見る。
 assert.equal(manifest.inputs.sourceLockSha256, sha(path.join(build, 'source.lock')));
@@ -55,13 +60,15 @@ assert.equal(manifest.inputs.patchSha256, sha(path.join(build, 'patches/web_yweb
 assert.equal(manifest.inputs.overlaySha256, treeHash(path.join(build, 'overlay')));
 assert.equal(manifest.inputs.buildSha256, filesHash(BUILD_FILES.map((file) => path.join(root, file))));
 
-assert.equal(fs.readdirSync(templateDir).filter((name) => name.endsWith('.zip')).length, levels.length, `テンプレートZIP数がlevel数と違う`);
+assert.equal(fs.readdirSync(templateDir).filter((name) => name.endsWith('.zip')).length, allLevels.length, `テンプレートZIP数がlevel数と違う`);
 const notice = ['GODOT-MIT.txt', 'GODOT-COPYRIGHT.txt'].map((file) => fs.readFileSync(path.join(root, 'LICENSES', file), 'utf8').replace(/\n*$/, '\n')).join('\n');
 const counts = {}; // level別のentry数。
 
 // level別に、ZIPの中身がmanifestの記録と一致することを見る。
 for (const [level, item] of levels) {
 	const template = path.join(templateDir, item.file);
+	assert.equal(item.compileKey, compileKey(level), `compile入力が古い: ${level}`);
+	assert.equal(item.artifactKey, artifactKey(level), `配布入力が古い: ${level}`);
 	assert.equal(item.sha256, sha(template), `template hash不一致: ${level}`);
 	assert.equal(item.bytes, fs.statSync(template).size, `template容量不一致: ${level}`);
 	const names = child.execFileSync('unzip', ['-Z1', template], { encoding: 'utf8' }).trim().split('\n');
@@ -85,7 +92,7 @@ for (const [level, item] of levels) {
 // levelごとの機能境界が、選んだbuild optionと合っていることを見る。
 for (const [level, item] of levels) {
 	assert.equal(item.features.canvas, level !== 'dom', `canvas境界が不正: ${level}`);
-	assert.equal(item.features.threeD, level === '3d', `3D境界が不正: ${level}`);
+	assert.equal(item.features.threeD, level !== '2d', `3D境界が不正: ${level}`);
 	assert.equal(item.options.opengl3, level === 'dom' ? 'no' : 'yes', `描画option不一致: ${level}`);
 }
 

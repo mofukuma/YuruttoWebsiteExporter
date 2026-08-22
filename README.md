@@ -89,11 +89,13 @@ Rebuilding the export template. It is assembled inside Docker so everyone ends u
 sh build/build_distribution.sh
 ```
 
-While working on the template itself, build it on your own Mac instead. It skips the Docker emulation and rebuilds only what you changed, so the second run takes seconds.
+While working on the template itself, build the level you are changing on your own Mac. The source, SDK, and compiled objects stay cached under `tmp/`.
 
 ```sh
-sh build/dev_template.sh
+sh build/check_template.sh dom
 ```
+
+Use `2d` or `3d` in place of `dom` to build and test that level. `sh build/build_distribution.sh dom` does the same targeted build in the fixed Docker environment and keeps its result under `tmp/`. Run it without a level when preparing all three release templates.
 
 The browser tests need Chromium. Install it with this.
 
@@ -199,11 +201,13 @@ URLの見せかたを選べるよ。最初は`/#about`みたいな感じにな�
 sh build/build_distribution.sh
 ```
 
-テンプレート自体をいじっている間は、手元のMacで組むほうが速いよ。Dockerの真似っこを通さず、変えたところを中心に組み直すから、二回目からは数秒で終わる。
+テンプレート自体をいじっている間は、変更中の段を手元のMacで組もう。source、SDK、コンパイル済みの部品は`tmp/`へ残り、同じ入力なら再利用されるよ。
 
 ```sh
-sh build/dev_template.sh
+sh build/check_template.sh dom
 ```
+
+2Dなら`dom`を`2d`へ、3Dなら`3d`へ変えよう。固定Docker環境でDOM用を検証するときは`sh build/build_distribution.sh dom`。結果は`tmp/`に残るよ。三段すべての配布物を揃えるときは、段を付けずに実行しよう。
 
 ブラウザを見るテストにはChromiumが要る。入れるのはこれ。
 

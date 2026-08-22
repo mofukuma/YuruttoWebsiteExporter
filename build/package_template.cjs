@@ -11,6 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { compressSite } = require('./compress_web.cjs');
 const { sha, lock, treeHash, filesHash, BUILD_FILES } = require('./manifest_hash.cjs');
+const { artifactKey, compileKey, imageKey } = require('./template_key.cjs');
 
 const repo = path.resolve(__dirname, '..'); // 配布定義を持つproject root。
 const archive = path.resolve(process.argv[2] || ''); // Godotが生成したWeb template。
@@ -71,6 +72,7 @@ function pack() {
 		for (const name of [...packed, 'yweb-compression.json']) fs.copyFileSync(path.join(stage, name), path.join(out, name));
 		if (publish) fs.copyFileSync(built, template);
 		const previous = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')) : {};
+		const environment = process.env.YWEB_COMPILE_ENV || imageKey(); // コンパイル環境の識別値。
 		const manifest = {
 			schema: 1,
 			profile: distribution.TEMPLATE_PROFILE,
@@ -103,9 +105,11 @@ function pack() {
 				[level]: {
 					file: path.basename(template), bytes: fs.statSync(built).size,
 					sha256: sha(built), entries: packed.map((name) => entry(stage, name)),
+					compileKey: compileKey(level, environment),
+					artifactKey: artifactKey(level, environment),
 					features: {
 						domText: true, threads: false, gdextension: false,
-						canvas: level !== 'dom', threeD: level === '3d',
+						canvas: level !== 'dom', threeD: level !== '2d',
 						webfont: 'external-project-asset',
 					},
 					options: profile,
@@ -122,4 +126,5 @@ function pack() {
 
 const result = pack();
 const made = result.templates[level];
+fs.writeFileSync(path.join(out, `yweb-${level}-manifest.json`), `${JSON.stringify({ level, ...made }, null, 2)}\n`);
 console.log(JSON.stringify({ level, godot: result.godot.version, template: made.sha256, entries: made.entries.length }));

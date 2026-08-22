@@ -1,69 +1,39 @@
-# Godotの全nodeを、文字をDOMへ出す対象かどうかで仕分ける。
-# 対応状況を数で示すために、実際のClassDBから一覧を作る。
+# Godotが実体化できる全NodeをClassDBから取り出す。
+# 分類の正本と突き合わせるため、名前、直系親、描画系統を機械可読な形で返す。
 
 extends SceneTree
 
-# 文字をDOMへ出せることを確かめたControl。
-const COVERED := [
-	"Label", "Button", "CheckBox", "CheckButton", "LinkButton", "OptionButton", "MenuButton",
-	"LineEdit", "TextEdit", "CodeEdit", "ItemList", "Tree", "TabBar", "TabContainer",
-	"ProgressBar", "MenuBar", "FoldableContainer", "SpinBox",
-]
-# 文字を持たないので、絵のまま出るのが正しいControl。
-const CANVAS_ONLY := [
-	"ColorRect", "TextureRect", "NinePatchRect", "Panel", "PanelContainer", "ReferenceRect",
-	"TextureButton", "TextureProgressBar", "HSeparator", "VSeparator",
-	"HScrollBar", "VScrollBar", "HSlider", "VSlider", "Range", "Control", "Container",
-	"BoxContainer", "HBoxContainer", "VBoxContainer", "GridContainer", "CenterContainer",
-	"MarginContainer", "AspectRatioContainer", "FlowContainer", "HFlowContainer", "VFlowContainer",
-	"ScrollContainer", "SplitContainer", "HSplitContainer", "VSplitContainer",
-	"SubViewportContainer", "BaseButton", "VirtualJoystick",
-]
-# 今は文字をDOMへ出さないControl。理由も添える。
-const PENDING := {
-	"RichTextLabel": "BBCodeの一部が再現できない",
-	"ColorPicker": "見た目が複雑で対応していない",
-	"ColorPickerButton": "見た目が複雑で対応していない",
-	"GraphEdit": "編集器向けで対応していない",
-	"GraphElement": "編集器向けで対応していない",
-	"GraphFrame": "編集器向けで対応していない",
-	"GraphNode": "編集器向けで対応していない",
-	"VideoStreamPlayer": "動画は対応していない",
-}
+# Nodeの描画系統を、棚卸し表で使う四群へ分ける。
+func _group(name: StringName) -> String:
+	if ClassDB.is_parent_class(name, &"Control"):
+		return "control"
+	if ClassDB.is_parent_class(name, &"Node2D"):
+		return "node2d"
+	if ClassDB.is_parent_class(name, &"Node3D"):
+		return "node3d"
+	return "other"
 
-# 全nodeを仕分けて、数と一覧をまとめて返す。
+# 実行中のGodotが持つ全Nodeを漏れなく列挙する。
 func _initialize() -> void:
+	var nodes: Array[Dictionary] = []
 	var groups := {"control": [], "node2d": [], "node3d": [], "other": []}
+	var constructed: Array[String] = [] # ClassDBから実体を作れたNode名。
 	for name in ClassDB.get_class_list():
-		if not ClassDB.can_instantiate(name):
+		if not ClassDB.can_instantiate(name) or not ClassDB.is_parent_class(name, &"Node"):
 			continue
-		if ClassDB.is_parent_class(name, "Control"):
-			groups["control"].append(name)
-		elif ClassDB.is_parent_class(name, "Node2D"):
-			groups["node2d"].append(name)
-		elif ClassDB.is_parent_class(name, "Node3D"):
-			groups["node3d"].append(name)
-		elif ClassDB.is_parent_class(name, "Node"):
-			groups["other"].append(name)
-	for key in groups:
-		groups[key].sort()
-	# Controlを、文字を出すもの、絵のままのもの、未対応のものへ分ける。
-	var text_dom: Array[String] = []
-	var canvas: Array[String] = []
-	var pending: Array[String] = []
-	var unknown: Array[String] = []
-	for name in groups["control"]:
-		if name in COVERED:
-			text_dom.append(name)
-		elif name in CANVAS_ONLY:
-			canvas.append(name)
-		elif PENDING.has(name):
-			pending.append(name)
-		else:
-			unknown.append(name)
-	print(JSON.stringify({
-		"groups": groups,
-		"control": {"text_dom": text_dom, "canvas": canvas, "pending": pending, "unknown": unknown},
-		"pending_reasons": PENDING,
-	}))
+		# 共通設定で外すXRとOS表示を除き、各Nodeの生成経路も一括で通す。
+		var value := String(name)
+		if not value.begins_with("XR") and not value.begins_with("OpenXR") and value != "StatusIndicator":
+			var instance := ClassDB.instantiate(name) as Node
+			if instance != null:
+				constructed.append(value)
+				instance.free()
+		var group := _group(name)
+		nodes.append({"name": value, "parent": String(ClassDB.get_parent_class(name)), "group": group})
+		groups[group].append(value)
+	nodes.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return left.name < right.name)
+	for group in groups:
+		groups[group].sort()
+	constructed.sort()
+	print(JSON.stringify({"nodes": nodes, "groups": groups, "constructed": constructed}))
 	quit(0)

@@ -12,7 +12,7 @@ const BUILD_FILES = [
 	'build/distribution/Dockerfile', 'build/build_distribution.sh',
 	'build/prepare_template.sh', 'build/build_template.sh',
 	'build/apply_overlay.sh', 'build/package_template.cjs',
-	'build/compress_web.cjs',
+	'build/compress_web.cjs', 'build/template_key.cjs',
 ]; // buildSha256の対象。
 
 // fileまたはBufferのSHA-256を返す。

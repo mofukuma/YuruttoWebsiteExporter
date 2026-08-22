@@ -11,13 +11,14 @@ template_out=${YWEB_TEMPLATE_OUT:-$repo/tmp/minimum/template-proof} # 配布前�
 archive=$build_root/godot-$GODOT_VERSION.tar.xz # Godot公式source archive。
 source_root=$build_root/godot-minimum-source # overlay適用済みsource。
 emsdk=$build_root/emsdk # 固定Emscripten SDK。
+cache=$build_root/scons-cache # 三段のコンパイル成果物を共有する場所。
 mkdir -p "$build_root"
 work=$(mktemp -d "$build_root/template-source.XXXXXX") # source展開用一時領域。
 trap 'rm -rf "$work"' EXIT
 
-# sourceを作り直す必要がある入力だけを識別値にする。
-# overlayは既存treeへ上書きするだけで足りるため、ここへ混ぜると差分compileが毎回捨てられる。
-stamp=$(cd "$repo" && shasum -a 256 build/source.lock build/patches/web_yweb_text.patch | shasum -a 256 | awk '{print $1}')
+# source構成が変わる入力を識別値にする。
+# overlayはfile名の追加、削除、名前変更時に再展開し、内容更新時は差分compileを保つ。
+stamp=$(cd "$repo" && { shasum -a 256 build/source.lock build/patches/web_yweb_text.patch; find build/overlay -type f | LC_ALL=C sort; } | shasum -a 256 | awk '{print $1}')
 
 # Godot archiveを公式releaseから取得してhashを検証する。
 if test ! -f "$archive"; then
@@ -40,19 +41,26 @@ if test ! -f "$source_root/version.py"; then
 	mv "$work/source/godot-$GODOT_VERSION" "$source_root"
 fi
 
-# Emscripten SDKを固定commitとreleaseで準備する。
+# Emscripten SDKを固定commitとreleaseで一度準備する。
 if test ! -x "$emsdk/emsdk"; then
 	git clone https://github.com/emscripten-core/emsdk.git "$emsdk"
 fi
-git -C "$emsdk" checkout --detach "$EMSDK_COMMIT"
-"$emsdk/emsdk" install "$EMSDK_VERSION"
-"$emsdk/emsdk" activate "$EMSDK_VERSION"
+sdk_key=$EMSDK_COMMIT:$EMSDK_VERSION # 導入済みtoolchainを判断する識別値。
+sdk_stamp=$emsdk/.yweb-sdk-key # 同じSDKの再導入を省く記録。
+if test "$(cat "$sdk_stamp" 2>/dev/null || true)" != "$sdk_key" || test ! -f "$emsdk/emsdk_env.sh"; then
+	git -C "$emsdk" checkout --detach "$EMSDK_COMMIT"
+	"$emsdk/emsdk" install "$EMSDK_VERSION"
+	"$emsdk/emsdk" activate "$EMSDK_VERSION"
+	printf '%s\n' "$sdk_key" > "$sdk_stamp"
+fi
 
 sh "$repo/build/apply_overlay.sh" "$source_root"
 printf '%s\n' "$stamp" > "$source_root/.yweb-source-stamp"
 cmp "$repo/LICENSES/GODOT-MIT.txt" "$source_root/LICENSE.txt"
 cmp "$repo/LICENSES/GODOT-COPYRIGHT.txt" "$source_root/COPYRIGHT.txt"
-# 同じsourceから三段のlevelを順に作る。
-for level in $(awk '!/^#/ && NF { print $1 }' "$repo/build/levels.options"); do
-	sh "$repo/build/build_template.sh" "$level" "$source_root" "$emsdk" "$template_out/$level"
+# 指定時は関係するlevelを、無指定時は配布用の三段を作る。
+if test "$#" -eq 0; then set -- $(awk '!/^#/ && NF { print $1 }' "$repo/build/levels.options"); fi
+for level in "$@"; do
+	awk -v want="$level" '!/^#/ && $1 == want { found = 1 } END { exit !found }' "$repo/build/levels.options"
+	YWEB_SCONS_CACHE=$cache sh "$repo/build/build_template.sh" "$level" "$source_root" "$emsdk" "$template_out/$level"
 done

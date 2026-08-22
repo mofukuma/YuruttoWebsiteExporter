@@ -13,6 +13,14 @@ var _yweb_ticks := 0 # 経過した物理frame。
 func _yweb_settle() -> void:
 	_yweb_ticks += 1
 	if _yweb_ticks == YWEB_FREEZE:
+		# nativeとWebAssemblyの物理丸め差を画面比較へ持ち込まない。
+		var bodies := get_tree().get_nodes_in_group("omochi")
+		bodies.sort_custom(func(left: Node, right: Node) -> bool: return left.name < right.name)
+		for index in bodies.size():
+			var body := bodies[index] as RigidBody2D
+			body.freeze = true
+			body.position = Vector2(210 + index % 8 * 78, 125 + index / 8 * 74)
+			body.rotation = (index % 5 - 2) * 0.12
 		get_tree().paused = true
 
 const BG := Color("07101f") # 物理盤の背景色。

@@ -134,8 +134,8 @@ func _export_project(preset: EditorExportPreset, debug: bool, path: String, flag
 		return _fail(I18n.t("topic_export"), I18n.t("no_out_dir", [directory]), made)
 	var level := _level(preset)
 	var blocked: Array[String] = []
-	# 3Dを持たないlevelでは、対応外resourceを書き出す前に止める。
-	if level != "3d":
+	# Canvas 2D版では、3D resourceを書き出す前に止める。
+	if level == "2d":
 		blocked = ProjectCheck.new().inspect(ProjectSettings.globalize_path("res://"))
 	if not blocked.is_empty():
 		return _fail(I18n.t("topic_project"), "\n".join(blocked), ERR_UNAVAILABLE)
