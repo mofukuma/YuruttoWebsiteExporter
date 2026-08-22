@@ -17,6 +17,7 @@
 #include "scene/gui/line_edit.h"
 #include "scene/gui/link_button.h"
 #include "scene/gui/rich_text_label.h"
+#include "servers/text/text_server.h"
 #include "scene/gui/text_edit.h"
 #include "scene/main/scene_tree.h"
 #include "scene/resources/font.h"
@@ -119,6 +120,7 @@ static HashMap<ObjectID, Vector<TextState>> parts; // 一Control内の複数文�
 static HashMap<RID, ObjectID> canvas_owners; // 文字描画canvasとControlの対応。
 static HashMap<ObjectID, Vector<RID>> owner_canvases; // Control解放時に回収するCanvas RID一覧。
 static HashMap<ObjectID, OutlineState> outlines; // outline直後の通常文字へ渡す状態。
+static HashMap<ObjectID, Vector<TextState>> rich_glyphs; // RichTextLabelが描いた一文字ずつの記録。
 static int paint_order = -1; // 木を辿る間だけ使う重なり順。-1は走査の外。
 static HashMap<ObjectID, int> node_orders; // nodeごとの重なり順。描画命令は別timingで走るためここから引く。
 static HashSet<String> sent_images; // Browserへ渡し終えた画像の識別値。
@@ -238,6 +240,35 @@ bool yweb_text_dom_owns(const Control *p_control) {
 	return capture_control(p_control);
 }
 
+// RichTextLabelが一文字を描く直前に呼ばれ、その一文字をDOMへ置く。
+// 位置と色はGodotが揺れや薄れを計算し終えた後の値なので、DOM側では計算し直さない。
+// 行ごとに置いた文字は透明にしておき、この一文字ずつの要素を上へ重ねる。
+void yweb_rich_glyph(const Control *p_control, const Vector2 &p_at, int32_t p_glyph, int p_font_size, const Color &p_color, const RID &p_font) {
+	if (!p_control || !p_control->is_inside_tree()) {
+		return;
+	}
+	const String body = TS->font_get_glyph_texture_rid(p_font, Vector2i(p_font_size, 0), p_glyph).is_valid()
+			? String::chr(TS->font_get_char_from_glyph_index(p_font, p_font_size, p_glyph))
+			: String();
+	if (body.is_empty() || body == " ") {
+		return;
+	}
+	const ObjectID object = p_control->get_instance_id();
+	Vector<TextState> &items = rich_glyphs[object];
+	TextState state;
+	state.text = body;
+	// 描く基準は文字の下端。DOMは上端で置くため、font sizeぶん持ち上げる。
+	// 幅はその字の送り幅に合わせる。広く取ると隣とぶつかり、字の並びが崩れる。
+	const Vector2 advance = TS->font_get_glyph_advance(p_font, p_font_size, p_glyph);
+	state.rect = Rect2(p_at - Vector2(0, p_font_size), Size2(advance.x > 0.0f ? advance.x : p_font_size, p_font_size * 1.4f));
+	state.kind = TEXT_LABEL;
+	state.horizontal = HORIZONTAL_ALIGNMENT_LEFT;
+	state.vertical = VERTICAL_ALIGNMENT_TOP;
+	state.color = p_color;
+	state.font_size = p_font_size;
+	items.push_back(state);
+}
+
 // 一つの文字状態を現在の画面transformと合成してDOMへ送る。
 static void sync_text(Control *p_control, const TextState &p_state, const CharString &p_uid = CharString()) {
 	const ObjectID object = p_control->get_instance_id();
@@ -347,6 +378,17 @@ static void sync_rich_text(RichTextLabel *p_rich) {
 	}
 	const float size = p_rich->get_theme_font_size(SNAME("normal_font_size"));
 	const Color color = p_rich->get_theme_color(SNAME("default_color"));
+	// 一文字ずつの記録があれば、そちらを使う。waveやfadeの揺れはGodotが計算した
+	// 後の位置と色なので、DOMはそこへ置くだけでよい。
+	if (const Vector<TextState> *glyphs = rich_glyphs.getptr(p_rich->get_instance_id())) {
+		if (!glyphs->is_empty()) {
+			for (int index = 0; index < glyphs->size() && index < 2048; index++) {
+				const CharString uid = (String::num_uint64((uint64_t)p_rich->get_instance_id()) + "-rg" + itos(index)).utf8();
+				sync_text(p_rich, (*glyphs)[index], uid);
+			}
+			return;
+		}
+	}
 	// 折り返しも含めた行ごとに置く。位置と範囲はGodotが確定した値をそのまま使い、
 	// DOM側では並べ直さない。行の高さは次の行との差から求める。
 	const int lines = p_rich->get_line_count();
@@ -1172,5 +1214,7 @@ void yweb_text_sync_process() {
 		remove_canvases(object);
 	}
 	outlines.clear();
+	// 使い終えた一文字ずつの記録を捨てる。次のframeの描画で入れ直される。
+	rich_glyphs.clear();
 	yweb_text_end();
 }

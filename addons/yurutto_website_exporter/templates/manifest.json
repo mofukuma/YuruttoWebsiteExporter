@@ -22,14 +22,14 @@
     "templateOptionsSha256": "2393dbe60a9c7dd90f04a42daf25f0998e78d45638eb4282f71ae453488d9220",
     "levelsOptionsSha256": "5c275e6c7d103813e2ed5d43d0f2953e9ad894c607b92afcd2cc36a17ee887fa",
     "patchSha256": "71f1229d7177cc257ef7c9f00131ce2cb3a9aa5dcf42ce72b68e511cc3b66e7f",
-    "overlaySha256": "3377bf62b53824f3c549c573208f1defacacfa48b3303c0512c5a600b1ccb8e9",
+    "overlaySha256": "20fee05a065311eaf7442eb5217e9e85730558172bab189617f8dbfb886d0cc6",
     "buildSha256": "833c59ad1a6d81b443de15710bf388185c3bcbb4f57233290b8b89b66d4dd401"
   },
   "templates": {
     "dom": {
       "file": "yweb-dom.zip",
-      "bytes": 13233395,
-      "sha256": "dbdfa1409de642ff3efaa06278416b6c0d2b4299baf78147f69e51fb10fcdf6f",
+      "bytes": 13236917,
+      "sha256": "0b24b8f1e58acd9b503e4c7ad8def0fd8d0094a33d3f4055ab68f686d7e18757",
       "entries": [
         {
           "file": "godot.js",
@@ -38,8 +38,8 @@
         },
         {
           "file": "godot.wasm",
-          "bytes": 23040803,
-          "sha256": "165b77c1222831dc55f703d8f4c7e277d5998761d72ee3cd0588a505de5cc583"
+          "bytes": 23042178,
+          "sha256": "da9966ce592e2336682951ec4f976613a196b8ffbb69c3c64e84d18cbcba251e"
         },
         {
           "file": "godot.audio.worklet.js",
@@ -68,8 +68,8 @@
         },
         {
           "file": "godot.wasm.br",
-          "bytes": 5935863,
-          "sha256": "8511789cc5308f3eb6e9a0ab7bd3b29be795277c4e483c478752a115305afa20"
+          "bytes": 5939137,
+          "sha256": "39e3fd69c114f21c5760779fcaf24d67ccfbb00f8b5ea94f5c2b2b92b0894ef9"
         },
         {
           "file": "godot.audio.worklet.js.br",
@@ -145,11 +145,11 @@
           },
           {
             "file": "godot.wasm",
-            "originalBytes": 23040803,
-            "brotliBytes": 5935863,
-            "ratio": 0.2576,
-            "sha256": "165b77c1222831dc55f703d8f4c7e277d5998761d72ee3cd0588a505de5cc583",
-            "brotliSha256": "8511789cc5308f3eb6e9a0ab7bd3b29be795277c4e483c478752a115305afa20"
+            "originalBytes": 23042178,
+            "brotliBytes": 5939137,
+            "ratio": 0.2578,
+            "sha256": "da9966ce592e2336682951ec4f976613a196b8ffbb69c3c64e84d18cbcba251e",
+            "brotliSha256": "39e3fd69c114f21c5760779fcaf24d67ccfbb00f8b5ea94f5c2b2b92b0894ef9"
           }
         ]
       }

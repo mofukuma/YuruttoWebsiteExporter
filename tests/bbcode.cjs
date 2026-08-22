@@ -96,16 +96,16 @@ async function main() {
 		assert.ok(canvas.lit > 3000, `2DでBBCodeが描かれていない: 明るい画素${canvas.lit}`);
 		assert.match(canvas.text, /PLAIN LABEL/, '2Dで比べる相手のLabelが出ていない');
 
-		// DOM onlyはCanvasを積まない。RichTextLabelへ段ごとの文字を出す処理は入れたが、
-		// いまはまだ画面へ出ない。出るようになった時にここが落ちるので、その時点で
-		// 記法ごとの言葉が読めることへ検査を切り替える。
+		// DOM onlyはCanvasを積まない。RichTextLabelは行ごとの文字としてDOMへ出る。
+		// 飾りそのものは行を丸ごと一つの要素にする作りでは表せないが、中身の文字は残る。
+		// 記法ごとに置いた言葉が読めることを見て、文字が落ちていないことを固定する。
 		const dom = await observe(browser, build(0));
 		assert.equal(dom.visible, false, 'DOM onlyでCanvasが残っている');
 		assert.match(dom.text, /PLAIN LABEL/, 'DOM onlyで比べる相手のLabelが出ていない');
-		const readable = WORDS.filter((word) => dom.text.includes(word));
-		assert.deepEqual(readable, [], `BBCodeが読めるようになった。検査をWORDSの照合へ切り替える: ${readable.join(' ')}`);
+		const missing = WORDS.filter((word) => !dom.text.includes(word));
+		assert.deepEqual(missing, [], `DOM onlyで読めないBBCodeがある: ${missing.join(' ')}`);
 
-		const result = { ok: true, tags: TAGS.length, words: WORDS.length, canvas: { lit: canvas.lit }, domOnlyReadable: readable.length };
+		const result = { ok: true, tags: TAGS.length, words: WORDS.length, canvas: { lit: canvas.lit } };
 		fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
 		console.log(JSON.stringify(result));
 	} finally {
