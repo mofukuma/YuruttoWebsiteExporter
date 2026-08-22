@@ -268,6 +268,35 @@ const YWebText = {
 			element.style.transform = `matrix(${transform})`;
 		}
 	},
+	yweb_poly_sync__sig: 'vpp' + 'f'.repeat(6) + 'ff' + 'i' + 'f'.repeat(4),
+	// 多角形を、頂点の並びをそのままclip-pathへ渡してDOMへ写す。
+	// 箱を一枚置き、そこから形を切り抜く。頂点はGodotが決めた座標をそのまま使う。
+	yweb_poly_sync: function (pUid, pPoints, xx, xy, yx, yy, x, y, width, height, z, red, green, blue, alpha) {
+		const uid = GodotRuntime.parseString(pUid);
+		YWebText.seen.add(uid);
+		if (uid.includes('-d')) YWebText.drawn.add(uid);
+		YWebText.hideCanvas();
+		let element = YWebText.elements.get(uid);
+		if (!element) {
+			element = document.createElement('div');
+			element.dataset.ywebPoly = uid;
+			element.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0';
+			YWebText.getRoot().appendChild(element);
+			YWebText.elements.set(uid, element);
+		}
+		const style = `width:${width}px;height:${height}px;z-index:${z}`
+			+ `;background-color:${YWebText.color(red, green, blue, alpha)}`
+			+ `;clip-path:polygon(${GodotRuntime.parseString(pPoints)})`;
+		if (element.dataset.ywebStyle !== style) {
+			element.dataset.ywebStyle = style;
+			element.style.cssText = `position:absolute;left:0;top:0;transform-origin:0 0;${style}`;
+		}
+		const transform = [xx, xy, yx, yy, x, y].join(',');
+		if (element.dataset.ywebTransform !== transform) {
+			element.dataset.ywebTransform = transform;
+			element.style.transform = `matrix(${transform})`;
+		}
+	},
 	yweb_image_data__sig: 'vpp',
 	// 画像の中身を識別値へ一度だけ覚える。以後は同じ識別値で参照する。
 	yweb_image_data: function (pKey, pData) {

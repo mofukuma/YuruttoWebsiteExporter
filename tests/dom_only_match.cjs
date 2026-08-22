@@ -23,8 +23,10 @@ const limit = 0.0015; // node構成の画面へ許す正規化MAEの上限。
 // 再現が目標へ届いていない画面は、いまの値を上限として記録する。下げるのが次の仕事。
 // 目標はRMSE 0.8%。ここはMAEで見るため、字形の差が乗る画面ほど大きい値になる。
 const limits = { omochi: 0.018, page_hero: 0.02, page_cards: 0.012 };
-const screens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'page_hero', 'page_cards']; // 比べる画面。sceneとURIが対応する。
+const screens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'page_hero', 'page_cards', 'page_sprites', 'page_rich', 'page_shapes']; // 比べる画面。sceneとURIが対応する。
 const settle = { physics: 320, omochi: 5 }; // 物理を速く回した画面で、形が決まるまで進めるframe数。
+// Themeを二種で撮り、平均で見る。一つの見た目へ合わせ込んだだけの一致を避ける。
+const themes = ['base', 'alt'];
 
 // 全画面をGodot側で順に撮る一度きりのscript。
 const capture = `@tool
@@ -32,27 +34,51 @@ extends SceneTree
 
 const SCREENS := ${JSON.stringify(screens)} # 撮る画面の名前。
 const SETTLE := ${JSON.stringify(settle)} # 撮る前に進めるframe数。
+const THEMES := ${JSON.stringify(themes)} # 撮るThemeの名前。二種を続けて撮る。
 
-# 画面ごとに2 frame進めてから撮り、名前を付けて保存する。
+# 画面ごとにThemeを替えて二度撮り、名前を付けて保存する。
 func _init() -> void:
-	for name in SCREENS:
-		# 前の画面が止めた状態を持ち越さない。
-		paused = false
-		var screen: Node = load("res://%s.tscn" % name).instantiate()
-		root.add_child(screen)
-		# 物理で形が決まる画面は物理frameを待つ。process frameでは物理時計が進まない。
-		var steps: int = SETTLE.get(name, 2)
-		var wait_physics: bool = SETTLE.has(name)
-		for _index in range(steps):
-			if wait_physics:
-				await physics_frame
-			else:
-				await process_frame
-		var image := root.get_texture().get_image()
-		image.save_png("res://../godot-%s.png" % name)
-		screen.queue_free()
-		await process_frame
+	for theme_name in THEMES:
+		for name in SCREENS:
+			# 前の画面が止めた状態を持ち越さない。
+			paused = false
+			var screen: Node = load("res://%s.tscn" % name).instantiate()
+			root.add_child(screen)
+			# 一枚目を撮ったあとにThemeを替える。替えた形でも同じ結果になるかを見る。
+			_apply_theme(screen, theme_name)
+			# 物理で形が決まる画面は物理frameを待つ。process frameでは物理時計が進まない。
+			var steps: int = SETTLE.get(name, 2)
+			var wait_physics: bool = SETTLE.has(name)
+			for _index in range(steps):
+				if wait_physics:
+					await physics_frame
+				else:
+					await process_frame
+			var image := root.get_texture().get_image()
+			image.save_png("res://../godot-%s-%s.png" % [theme_name, name])
+			screen.queue_free()
+			await process_frame
 	quit()
+
+# 指定のThemeを画面へ当てる。baseは各画面が自分で決めた見た目のまま。
+# altは字の大きさと行の間を変え、寸法の決まりかたが変わっても揃うかを見る。
+func _apply_theme(screen: Node, theme_name: String) -> void:
+	if theme_name == "base":
+		return
+	var control := screen as Control
+	if control == null:
+		return
+	var theme: Theme = control.theme if control.theme != null else Theme.new()
+	var changed := Theme.new()
+	changed.merge_with(theme)
+	if changed.default_font == null:
+		var font := load("res://fonts/Match.ttf") as FontFile
+		if font != null:
+			font.hinting = TextServer.HINTING_NONE
+			font.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+			changed.default_font = font
+	changed.default_font_size = 19
+	control.theme = changed
 `;
 
 // 検査projectを組み立てる。
@@ -71,8 +97,10 @@ runGodot(['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout
 
 // Godot側の基準画面を撮る。画面外へ出した窓で描き、結果だけを取り出す。
 runGodot(['--path', project, '--script', 'res://capture.gd', '--resolution', `${size.width}x${size.height}`, '--position', '10000,10000'], { stdio: 'pipe', timeout: 60000 });
-for (const name of screens) {
-	assert.ok(fs.existsSync(path.join(work, `godot-${name}.png`)), `Godot画面を撮れていない: ${name}`);
+for (const theme of themes) {
+	for (const name of screens) {
+		assert.ok(fs.existsSync(path.join(work, `godot-${theme}-${name}.png`)), `Godot画面を撮れていない: ${theme} ${name}`);
+	}
 }
 
 // 同じsceneをDOM onlyで書き出す。
@@ -118,23 +146,36 @@ async function settleDom(page, name) {
 		await page.goto(`http://127.0.0.1:${server.address().port}/#/`, { waitUntil: 'domcontentloaded' });
 		await page.waitForFunction(() => document.querySelectorAll('[data-yweb-box]').length > 0, { timeout: 20000 });
 		await page.evaluate(() => document.fonts.ready);
-		for (const [index, name] of screens.entries()) {
-			if (index > 0) {
+		let moved = false;
+		for (const theme of themes) {
+			// Browser側もThemeを替える。Godot側が替えたのと同じ形をここでも作る。
+			await page.evaluate((name) => { globalThis.YWEB_THEME = name; }, theme);
+			for (const name of screens) {
 				// URLを変えるとruntimeがGodotへ伝え、Godotがsceneを入れ替える。
 				// 入れ替わりは、前の画面の文字が消えて次の画面の要素が出そろった時に終わる。
-				const before = await page.evaluate(() => document.body.innerText);
-				await page.evaluate((uri) => { location.hash = uri; }, `#/${name}/`);
-				await page.waitForFunction((was) => document.body.innerText !== was
-					&& document.querySelectorAll('[data-yweb-box]').length > 0, before, { timeout: 20000, polling: 'raf' });
-			}
-			await settleDom(page, name);
-			const shot = path.join(work, `browser-${name}.png`);
-			await page.screenshot({ path: shot });
+				if (moved) {
+					const before = await page.evaluate(() => document.body.innerText);
+					await page.evaluate((uri) => { location.hash = uri; }, `#/${name}/`);
+					await page.waitForFunction((was) => document.body.innerText !== was
+						&& document.querySelectorAll('[data-yweb-box]').length > 0, before, { timeout: 20000, polling: 'raf' });
+				}
+				moved = true;
+				await settleDom(page, name);
+				const shot = path.join(work, `browser-${theme}-${name}.png`);
+				await page.screenshot({ path: shot });
 
-			// Godot側はalphaを持つため、両方を黒へ重ねてから測る。透明画素が差から外れると値が実態より小さく出る。
-			const reference = flatten(decode(fs.readFileSync(path.join(work, `godot-${name}.png`))));
-			const compared = flatten(decode(fs.readFileSync(shot)));
-			measured[name] = { mae: meanAbsoluteError(reference, compared), rmse: rootMeanSquareError(reference, compared) };
+				// Godot側はalphaを持つため、両方を黒へ重ねてから測る。透明画素が差から外れると値が実態より小さく出る。
+				const reference = flatten(decode(fs.readFileSync(path.join(work, `godot-${theme}-${name}.png`))));
+				const compared = flatten(decode(fs.readFileSync(shot)));
+				const seen = measured[name] || (measured[name] = { themes: {} });
+				seen.themes[theme] = { mae: meanAbsoluteError(reference, compared), rmse: rootMeanSquareError(reference, compared) };
+			}
+		}
+		// Themeごとの結果を平均する。片方の見た目へ寄せただけの一致を、これで見分ける。
+		for (const value of Object.values(measured)) {
+			const each = Object.values(value.themes);
+			value.mae = each.reduce((sum, item) => sum + item.mae, 0) / each.length;
+			value.rmse = each.reduce((sum, item) => sum + item.rmse, 0) / each.length;
 		}
 	} finally {
 		await browser.close();

@@ -36,6 +36,7 @@ console.log(JSON.stringify({
 	ok: true,
 	nodes: { control: data.groups.control.length, node2d: data.groups.node2d.length, node3d: data.groups.node3d.length, other: data.groups.other.length },
 	control: { textDom: data.control.text_dom.length, canvas: data.control.canvas.length, pending: data.control.pending.length },
+	node2dDrawn: data.node2d.drawn,
 	textControlRate: `${rate.toFixed(1)}%`,
 	pending: data.control.pending,
 }));

@@ -31,6 +31,9 @@ const PENDING := {
 	"VideoStreamPlayer": "動画は対応していない",
 }
 
+# DOM onlyで絵としてDOMへ写せるNode2D。
+const DRAWN_2D := ["Sprite2D", "AnimatedSprite2D", "Line2D"]
+
 # 全nodeを仕分けて、数と一覧をまとめて返す。
 func _initialize() -> void:
 	var groups := {"control": [], "node2d": [], "node3d": [], "other": []}
@@ -61,9 +64,15 @@ func _initialize() -> void:
 			pending.append(name)
 		else:
 			unknown.append(name)
+	# Node2Dのうち、DOM onlyで絵として出せるものを数える。
+	var drawn: Array[String] = []
+	for name in groups["node2d"]:
+		if name in DRAWN_2D:
+			drawn.append(name)
 	print(JSON.stringify({
 		"groups": groups,
 		"control": {"text_dom": text_dom, "canvas": canvas, "pending": pending, "unknown": unknown},
+		"node2d": {"drawn": drawn},
 		"pending_reasons": PENDING,
 	}))
 	quit(0)

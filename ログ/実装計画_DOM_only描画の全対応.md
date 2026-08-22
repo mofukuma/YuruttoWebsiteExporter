@@ -174,6 +174,24 @@ fixtureへ同じfontを入れて初めて、字形の比較として成り立つ
 まずやるのは、字形以外の食い違いを消しきること。図形と画像と配置を合わせ、
 残差が字の縁へ寄った状態を作る。そのうえで、字形の差をどこまで詰められるかを見る。
 
+## Node2Dの棚卸し
+
+Controlのほかに、絵を出すNode2Dがある。DOM onlyでDOMへ写せているのは三つ。
+
+| 状態 | node |
+| --- | --- |
+| 写せる | `Sprite2D` `AnimatedSprite2D` `Line2D` |
+| 未対応 | `Polygon2D` `MeshInstance2D` `MultiMeshInstance2D` `TileMapLayer` `CPUParticles2D` `GPUParticles2D` ほか |
+
+`AnimatedSprite2D`は今回足した。いま見せているコマのtextureを取り出して写す。
+コマが変わればDOMの絵も入れ替わる。
+
+## Themeを二種で測る
+
+一つの見た目へ合わせ込んだだけの一致を、本当の一致と取り違えないようにする。
+`base`は各画面が自分で決めた見た目のまま。`alt`は撮ったあとにThemeを差し替え、
+既定の字の大きさを変えてもう一度撮る。二つのRMSEを平均して結果とする。
+
 ## 目標
 
 | 対象 | いま | 目標 |

@@ -22,6 +22,9 @@
 #include "scene/resources/label_settings.h"
 #include "core/crypto/crypto_core.h"
 #include "core/io/image.h"
+#include "scene/2d/animated_sprite_2d.h"
+#include "scene/2d/polygon_2d.h"
+#include "scene/2d/physics/touch_screen_button.h"
 #include "scene/2d/sprite_2d.h"
 #include "scene/2d/line_2d.h"
 #include "scene/gui/color_rect.h"
@@ -46,6 +49,7 @@ void yweb_text_sync(const char *p_uid, const char *p_text, const char *p_aux, co
 void yweb_text_remove(const char *p_uid);
 void yweb_image_data(const char *p_key, const char *p_data);
 void yweb_draw_reset(const char *p_prefix);
+void yweb_poly_sync(const char *p_uid, const char *p_points, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_z, float p_red, float p_green, float p_blue, float p_alpha);
 void yweb_image_sync(const char *p_uid, const char *p_key, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_z, float p_red, float p_green, float p_blue, float p_alpha);
 void yweb_box_sync(const char *p_uid, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_z, float p_red, float p_green, float p_blue, float p_alpha, float p_left, float p_top, float p_right, float p_bottom, float p_border_red, float p_border_green, float p_border_blue, float p_border_alpha, float p_top_left, float p_top_right, float p_bottom_right, float p_bottom_left);
 void yweb_text_end();
@@ -653,6 +657,52 @@ static void sync_image(CanvasItem *p_item, const Ref<Texture2D> &p_texture, cons
 }
 
 // 画像を持つnodeから、texureと表示矩形を取り出して同期する。
+// 頂点の並びを、囲む矩形からの割合へ直してclip-pathへ渡す。
+// 割合にすると、要素の寸法が変わっても形が崩れない。
+static void sync_polygon(CanvasItem *p_item, const PackedVector2Array &p_points, const Color &p_color, int p_order) {
+	if (p_points.size() < 3) {
+		return;
+	}
+	Rect2 bounds(p_points[0], Size2());
+	for (int index = 1; index < p_points.size(); index++) {
+		bounds = bounds.expand(p_points[index]);
+	}
+	if (bounds.size.width <= 0.0f || bounds.size.height <= 0.0f) {
+		return;
+	}
+	String list;
+	for (int index = 0; index < p_points.size(); index++) {
+		const Vector2 ratio = (p_points[index] - bounds.position) / bounds.size;
+		if (index > 0) {
+			list += ",";
+		}
+		list += String::num(ratio.x * 100.0, 3) + "% " + String::num(ratio.y * 100.0, 3) + "%";
+	}
+	Transform2D transform = p_item->get_global_transform_with_canvas();
+	transform[2] = transform.xform(bounds.position);
+	const Color color = p_color * p_item->get_modulate() * p_item->get_self_modulate();
+	const CharString uid = (String::num_uint64((uint64_t)p_item->get_instance_id()) + "-poly").utf8();
+	const CharString points = list.utf8();
+	yweb_poly_sync(uid.get_data(), points.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y,
+			transform[2].x, transform[2].y, bounds.size.width, bounds.size.height, p_order,
+			color.r, color.g, color.b, color.a);
+}
+
+// 多角形を持つnodeを、形と色だけでDOMへ写す。
+static void sync_polygon_node(CanvasItem *p_item, int p_order) {
+	if (!p_item->is_visible_in_tree()) {
+		return;
+	}
+	if (Polygon2D *poly = Object::cast_to<Polygon2D>(p_item)) {
+		sync_polygon(poly, poly->get_polygon(), poly->get_color(), p_order);
+	} else if (TouchScreenButton *touch = Object::cast_to<TouchScreenButton>(p_item)) {
+		const Ref<Texture2D> texture = touch->get_texture_normal();
+		if (texture.is_valid()) {
+			sync_image(touch, texture, Rect2(Vector2(), texture->get_size()), p_order);
+		}
+	}
+}
+
 static void sync_image_node(CanvasItem *p_item, int p_order) {
 	if (!p_item->is_visible_in_tree()) {
 		return;
@@ -667,6 +717,21 @@ static void sync_image_node(CanvasItem *p_item, int p_order) {
 			const Size2 size = texture->get_size();
 			const Vector2 offset = sprite->get_offset() - (sprite->is_centered() ? size * 0.5 : Vector2());
 			sync_image(sprite, texture, Rect2(offset, size), p_order);
+		}
+	} else if (AnimatedSprite2D *animated = Object::cast_to<AnimatedSprite2D>(p_item)) {
+		// 今見せているコマのtextureを取り出して写す。コマが変わればkeyも変わり、DOMの絵も入れ替わる。
+		const Ref<SpriteFrames> frames = animated->get_sprite_frames();
+		if (frames.is_valid()) {
+			const StringName animation = animated->get_animation();
+			const int frame = animated->get_frame();
+			if (frames->has_animation(animation) && frame < frames->get_frame_count(animation)) {
+				const Ref<Texture2D> texture = frames->get_frame_texture(animation, frame);
+				if (texture.is_valid()) {
+					const Size2 size = texture->get_size();
+					const Vector2 offset = animated->get_offset() - (animated->is_centered() ? size * 0.5 : Vector2());
+					sync_image(animated, texture, Rect2(offset, size), p_order);
+				}
+			}
 		}
 	}
 }
@@ -871,6 +936,7 @@ static void sync_boxes(Node *p_node, int &r_order) {
 	if (CanvasItem *item = Object::cast_to<CanvasItem>(p_node)) {
 		node_orders[item->get_instance_id()] = r_order * 2 + 1;
 		sync_image_node(item, r_order * 2 + 1);
+		sync_polygon_node(item, r_order * 2 + 1);
 		sync_shape(item, r_order * 2 + 1);
 	}
 	if (Control *control = Object::cast_to<Control>(p_node)) {

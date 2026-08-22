@@ -18,7 +18,7 @@ const cost = {
 	'webfont.cjs': 12, 'aa_invaders.cjs': 9, 'rotate_label.cjs': 9, 'site_export.cjs': 8,
 	'scene_3d.cjs': 6, 'form_controls.cjs': 6, 'native_route.cjs': 6, 'first_export.cjs': 5, 'site_runtime.cjs': 5,
 	'bbcode.cjs': 10,
-	'project_boundary.cjs': 3, 'text_lab_compare.cjs': 3, 'yweb_exporter.cjs': 2, 'text_config.cjs': 2,
+	'node_inventory.cjs': 4, 'project_boundary.cjs': 3, 'text_lab_compare.cjs': 3, 'yweb_exporter.cjs': 2, 'text_config.cjs': 2,
 };
 // GodotとChromiumはどちらも重い。さらにGodotは書き出し中に共有のeditor dataを触るため、
 // 同時に走らせすぎると書き出し自体が失敗する。実測で安定する数へ抑える。
