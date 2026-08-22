@@ -1,0 +1,13 @@
+; BBCodeの出かたを段ごとに見るための検査project。
+
+config_version=5
+
+[application]
+
+config/name="BBCode Lab"
+run/main_scene="res://main.tscn"
+
+[display]
+
+window/size/viewport_width=900
+window/size/viewport_height=700

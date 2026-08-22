@@ -82,7 +82,8 @@ Pick a level on the export screen: DOM only, 2D, or 3D. DOM only draws everythin
 2D keeps canvas drawing and 2D physics. 3D adds 3D drawing and 3D physics, and the file you ship gets bigger.
 
 DOM only and 2D can't export a project containing 3D, and they say so before writing anything.
-GDExtension doesn't run at any level. Some of `RichTextLabel`'s BBCode can't be reproduced.
+GDExtension doesn't run at any level.
+`RichTextLabel` still draws on the canvas, so 2D and 3D show it while DOM only leaves it out. Use `Label` when you want the text in the page.
 
 ## For people working on the addon
 
@@ -208,7 +209,8 @@ DOM onlyはCanvasを積まず、全部HTMLで描くよ。2DはCanvasの描画と
 3Dは3Dの描画と物理まで入るぶん、配るファイルは大きくなるよ。
 
 DOM onlyと2Dは3Dの入ったプロジェクトを書き出せない。書き出す前に教えてくれるよ。
-GDExtensionはどの段でも動かないよ。`RichTextLabel`のBBCodeは一部再現できないよ。
+GDExtensionはどの段でも動かないよ。
+`RichTextLabel`はまだCanvasに描く形なので、2Dと3Dでは見えるけどDOM onlyでは出ないよ。ページの中に文字として置きたいときは`Label`を使ってね。
 
 ## アドオン自体をいじる人へ
 
