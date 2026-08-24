@@ -562,6 +562,7 @@ static void sync_code(CodeEdit *p_edit, float p_line_height) {
 	state["gutter"] = p_edit->get_total_gutter_width();
 	// 行番号と記号をGodotが確定した各gutterの位置へ置く。
 	int gutter_x = 0;
+	int number_gutter = -1;
 	for (int index = 0; index < p_edit->get_gutter_count(); index++) {
 		if (!p_edit->is_gutter_drawn(index)) continue;
 		const String name = p_edit->get_gutter_name(index);
@@ -569,6 +570,7 @@ static void sync_code(CodeEdit *p_edit, float p_line_height) {
 			state[name + "_x"] = gutter_x;
 			state[name + "_width"] = p_edit->get_gutter_width(index);
 		}
+		if (name == "line_numbers") number_gutter = index;
 		gutter_x += p_edit->get_gutter_width(index);
 	}
 	state["tab"] = p_edit->get_tab_size();
@@ -576,6 +578,11 @@ static void sync_code(CodeEdit *p_edit, float p_line_height) {
 	state["line_height"] = p_line_height;
 	state["line_numbers"] = p_edit->is_draw_line_numbers_enabled();
 	state["line_color"] = String("#") + p_edit->get_theme_color(SNAME("line_number_color")).to_html();
+	state["breakpoint_color"] = String("#") + p_edit->get_theme_color(SNAME("breakpoint_color")).to_html();
+	state["bookmark_color"] = String("#") + p_edit->get_theme_color(SNAME("bookmark_color")).to_html();
+	state["executing_color"] = String("#") + p_edit->get_theme_color(SNAME("executing_line_color")).to_html();
+	state["fold_color"] = String("#") + p_edit->get_theme_color(SNAME("code_folding_color")).to_html();
+	state["guide_color"] = String("#") + p_edit->get_theme_color(SNAME("line_length_guideline_color")).to_html();
 	state["current_color"] = p_edit->is_highlight_current_line_enabled() ? String("#") + p_edit->get_theme_color(SNAME("current_line_color")).to_html() : "transparent";
 	state["selection_color"] = String("#") + p_edit->get_theme_color(SNAME("selection_color")).to_html();
 	state["caret_color"] = String("#") + p_edit->get_theme_color(SNAME("caret_color")).to_html();
@@ -592,11 +599,14 @@ static void sync_code(CodeEdit *p_edit, float p_line_height) {
 		const String number = String::num_int64(line + 1).lpad(digits, p_edit->is_line_numbers_zero_padded() ? "0" : " ");
 		row["line"] = line;
 		row["number"] = number;
+		Color line_color = number_gutter >= 0 ? p_edit->get_line_gutter_item_color(line, number_gutter) : Color(1, 1, 1);
+		if (line_color == Color(1, 1, 1)) line_color = p_edit->get_theme_color(SNAME("line_number_color"));
+		row["line_color"] = String("#") + line_color.to_html();
 		row["y"] = p_edit->get_scroll_pos_for_line(line) * p_line_height;
 		row["fold"] = p_edit->is_line_folded(line) ? "closed" : p_edit->can_fold_line(line) ? "open" : "";
-		row["breakpoint"] = p_edit->is_line_breakpointed(line);
-		row["bookmark"] = p_edit->is_line_bookmarked(line);
-		row["executing"] = p_edit->is_line_executing(line);
+		row["breakpoint"] = p_edit->is_drawing_breakpoints_gutter() && p_edit->is_line_breakpointed(line);
+		row["bookmark"] = p_edit->is_drawing_bookmarks_gutter() && p_edit->is_line_bookmarked(line);
+		row["executing"] = p_edit->is_drawing_executing_lines_gutter() && p_edit->is_line_executing(line);
 		row["segments"] = code_segments(p_edit, line, p_edit->get_font_color());
 		lines.push_back(row);
 	}

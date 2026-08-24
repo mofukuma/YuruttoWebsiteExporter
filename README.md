@@ -46,7 +46,7 @@ On export, on-screen text becomes HTML and rides on top of the picture. That is 
 
 - text of `Label`, `Button`, and `LinkButton`
 - text of tabs, lists, trees, foldable containers, progress bars, and menu bars
-- `LineEdit` and `TextEdit` connect to the browser's own input. IME, caret, and selection come along
+- `LineEdit`, `TextEdit`, and `CodeEdit` connect to the browser's own input. IME, caret, selection, syntax colors, gutters, and guides come along
 - text keeps up when you change the theme, rotate it, or move it with physics
 - `LinkButton` comes out as a link, `Button` as a button
 
@@ -158,7 +158,7 @@ Godotで作った作品を、そのままWebサイトにするアドオン。
 
 - `Label`、`Button`、`LinkButton`の文字
 - タブ、リスト、ツリー、折りたたみ、進捗バー、メニューバーの文字
-- `LineEdit`と`TextEdit`はブラウザの入力欄につながる。日本語入力、カーソル、選択もそのまま
+- `LineEdit`、`TextEdit`、`CodeEdit`はブラウザの入力欄につながる。日本語入力、カーソル、選択、構文色、gutter、ガイドもそのまま
 - テーマを変えても、回しても、物理で動かしても、文字はちゃんとついてくる
 - `LinkButton`はリンク、`Button`はボタンとして出る
 

@@ -108,6 +108,14 @@ const YWebText = {
 					const main = document.createElement('span');
 					main.dataset.ywebCodeMain = key;
 					main.style.cssText = 'position:absolute;text-align:center;white-space:pre';
+					const breakpoint = document.createElement('b');
+					breakpoint.dataset.ywebCodeBreakpoint = key;
+					const bookmark = document.createElement('b');
+					bookmark.dataset.ywebCodeBookmark = key;
+					const executing = document.createElement('b');
+					executing.dataset.ywebCodeExecuting = key;
+					for (const mark of [breakpoint, bookmark, executing]) mark.style.cssText = 'position:absolute;inset:0;font:inherit';
+					main.append(breakpoint, bookmark, executing);
 					const fold = document.createElement('span');
 					fold.dataset.ywebCodeFold = key;
 					fold.style.cssText = 'position:absolute;text-align:center;white-space:pre';
@@ -117,6 +125,9 @@ const YWebText = {
 					row.append(number, main, fold, code);
 					row.ywebNumber = number;
 					row.ywebMain = main;
+					row.ywebBreakpoint = breakpoint;
+					row.ywebBookmark = bookmark;
+					row.ywebExecuting = executing;
 					row.ywebFold = fold;
 					row.ywebCode = code;
 					owner.ywebLayer.appendChild(row);
@@ -126,10 +137,12 @@ const YWebText = {
 				row.style.height = `${state.line_height}px`;
 				row.style.lineHeight = `${state.line_height}px`;
 				row.style.background = line.line === state.current ? state.current_color : 'transparent';
-				const marks = `${line.executing ? '▶' : ''}${line.breakpoint ? '●' : ''}${line.bookmark ? '◆' : ''}`;
 				const number = state.line_numbers ? line.number : '';
 				if (row.ywebNumber.textContent !== number) row.ywebNumber.textContent = number;
-				if (row.ywebMain.textContent !== marks) row.ywebMain.textContent = marks;
+				row.ywebBreakpoint.textContent = line.breakpoint ? '●' : '';
+				row.ywebBreakpoint.style.opacity = line.breakpoint ? '.55' : '1';
+				row.ywebBookmark.textContent = line.bookmark ? '◆' : '';
+				row.ywebExecuting.textContent = line.executing ? '▶' : '';
 				const fold = line.fold === 'closed' ? '▸' : line.fold === 'open' ? '▾' : '';
 				if (row.ywebFold.textContent !== fold) row.ywebFold.textContent = fold;
 				row.ywebNumber.style.left = `${state.line_numbers_x || 0}px`;
@@ -138,9 +151,11 @@ const YWebText = {
 				row.ywebMain.style.width = `${state.main_gutter_width || 0}px`;
 				row.ywebFold.style.left = `${state.fold_gutter_x || 0}px`;
 				row.ywebFold.style.width = `${state.fold_gutter_width || 0}px`;
-				row.ywebNumber.style.color = state.line_color;
-				row.ywebMain.style.color = state.line_color;
-				row.ywebFold.style.color = state.line_color;
+				row.ywebNumber.style.color = line.line_color || state.line_color;
+				row.ywebBreakpoint.style.color = state.breakpoint_color;
+				row.ywebBookmark.style.color = state.bookmark_color;
+				row.ywebExecuting.style.color = state.executing_color;
+				row.ywebFold.style.color = state.fold_color;
 				const signature = JSON.stringify(line.segments);
 				if (row.ywebCode.dataset.ywebSegments !== signature) {
 					row.ywebCode.dataset.ywebSegments = signature;
@@ -158,10 +173,10 @@ const YWebText = {
 				owner.ywebRows.delete(key);
 			}
 			for (const guide of owner.ywebGuides || []) guide.remove();
-			owner.ywebGuides = (state.guides || []).map((column) => {
+			owner.ywebGuides = (state.guides || []).map((column, index) => {
 				const guide = document.createElement('i');
 				guide.dataset.ywebColumn = String(column);
-				guide.style.cssText = 'position:absolute;top:0;bottom:0;border-left:1px solid currentColor;opacity:.3;pointer-events:none';
+				guide.style.cssText = `position:absolute;top:0;bottom:0;border-left:1px solid ${state.guide_color};opacity:${index ? .6 : 1};pointer-events:none`;
 				owner.ywebLayer.appendChild(guide);
 				return guide;
 			});

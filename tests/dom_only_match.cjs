@@ -22,7 +22,7 @@ const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const size = { width: 800, height: 600 }; // 両者で揃える画面寸法。
 const limit = 10; // 各画面へ許す8bit RGBのRMSE上限。10は不合格にする。
 const containerTypes = JSON.parse(fs.readFileSync(path.join(repo, 'tests/fixtures/dom_only/container_types.json'), 'utf8')); // ClassDBとfixtureで共有するContainer派生型。
-const allScreens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d', 'animated_sprite', 'mesh_3d', 'themes', 'particles_2d', 'controls_extended', 'nodes_2d_extended', 'windows_media', 'affects_extended', 'scroll_layout', 'container_overflow', 'input_3d', 'code_edit', 'canvas_inputs']; // 比べられる全画面。
+const allScreens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d', 'animated_sprite', 'mesh_3d', 'themes', 'particles_2d', 'controls_extended', 'nodes_2d_extended', 'windows_media', 'affects_extended', 'scroll_layout', 'container_overflow', 'input_3d', 'code_edit', 'code_edit_light', 'canvas_inputs']; // 比べられる全画面。
 const selected = (process.env.YWEB_SCREEN || '').split(',').filter(Boolean); // 変更箇所へ絞る画面名。
 const screens = selected.length ? selected : allScreens; // 未指定時は全画面を一括検査する。
 const comparedScreens = screens.filter((name) => name !== 'canvas_inputs'); // 画素比較する画面。操作fixtureはBrowser往復へ専念する。
@@ -112,7 +112,7 @@ for (const name of comparedScreens) {
 			await page.evaluate(() => document.fonts.ready);
 			await page.waitForTimeout(settle[name] ? 2500 : 400);
 			const shot = path.join(work, `browser-${name}.png`);
-			const shotBeforeInteraction = name === 'themes' || name === 'scroll_layout' || name === 'container_overflow' || name === 'input_3d' || name === 'code_edit'; // 操作前の初期画面をGodot基準と比べる。
+			const shotBeforeInteraction = name === 'themes' || name === 'scroll_layout' || name === 'container_overflow' || name === 'input_3d' || name.startsWith('code_edit'); // 操作前の初期画面をGodot基準と比べる。
 			if (shotBeforeInteraction) await page.screenshot({ path: shot });
 			if (name === 'draw_all') {
 				const dom = await page.evaluate(() => ({
@@ -595,6 +595,44 @@ for (const name of comparedScreens) {
 				}));
 				assert.deepEqual(stable, { wrapper: true, input: true, connected: true }, 'CodeEditのNode UID DOMを入力やscrollで再生成している');
 				await page.screenshot({ path: path.join(work, 'browser-code_edit-ime.png') });
+			}
+			if (name === 'code_edit_light') {
+				const editor = page.locator('textarea[data-yweb-code-input]');
+				const wrapper = page.locator('div[data-yweb-kind="CodeEdit"]');
+				await editor.waitFor();
+				const options = await wrapper.evaluate((element) => {
+					const input = element.ywebInput;
+					const rows = [...element.querySelectorAll('[data-yweb-code-line]')];
+					const current = rows.find((row) => row.dataset.ywebCodeLine === '0');
+					const box = document.querySelector(`[data-yweb-box="${element.dataset.ywebUid}-box"]`);
+					return {
+						indent: input.dataset.ywebIndent, tab: input.style.tabSize,
+						numbers: rows.map((row) => row.querySelector('[data-yweb-code-number]').textContent),
+						numberColor: getComputedStyle(rows[0].querySelector('[data-yweb-code-number]')).color,
+						syntax: [...new Set([...element.querySelectorAll('code span')].map((span) => getComputedStyle(span).color))],
+						folds: [...element.querySelectorAll('[data-yweb-code-fold]')].filter((mark) => mark.textContent).length,
+						breakpoints: [...element.querySelectorAll('[data-yweb-code-breakpoint]')].filter((mark) => mark.textContent).map((mark) => getComputedStyle(mark).color),
+						guides: [...element.querySelectorAll('[data-yweb-column]')].map((guide) => ({ column: guide.dataset.ywebColumn, color: getComputedStyle(guide).borderLeftColor, opacity: getComputedStyle(guide).opacity })),
+						current: getComputedStyle(current).backgroundColor,
+						panel: box ? [getComputedStyle(box).backgroundColor, getComputedStyle(box).borderColor] : [],
+						caret: getComputedStyle(element).getPropertyValue('--yweb-caret').trim(), selection: getComputedStyle(element).getPropertyValue('--yweb-selection').trim(),
+					};
+				});
+				assert.equal(options.indent, '\t', '白Themeのtab indentを反映していない');
+				assert.equal(options.tab, '8', '白Themeのtab幅を反映していない');
+				assert.ok(options.numbers.includes(' 1') && options.folds === 0, '空白埋め行番号またはfold gutter無効を反映していない');
+				assert.equal(options.numberColor, 'rgb(71, 85, 105)', '白Themeの行番号色を反映していない');
+				assert.ok(options.syntax.includes('rgb(4, 120, 87)') && options.syntax.includes('rgb(126, 34, 206)'), '白Themeの構文色を反映していない');
+				assert.deepEqual(options.breakpoints, ['rgb(220, 38, 38)'], 'breakpointとTheme色を反映していない');
+				assert.deepEqual(options.guides, [{ column: '24', color: 'rgb(203, 213, 225)', opacity: '1' }], '白Themeの行長guideを反映していない');
+				assert.equal(options.current, 'rgba(0, 0, 0, 0)', '現在行highlight無効を反映していない');
+				assert.deepEqual(options.panel, ['rgb(255, 255, 255)', 'rgb(203, 213, 225)'], '白Themeの背景と枠を反映していない');
+				assert.deepEqual([options.caret, options.selection], ['#0f172aff', '#bfdbfeff'], '白Themeのcaretまたは選択色を反映していない');
+				await editor.focus();
+				await editor.evaluate((input) => input.setSelectionRange(input.value.length, input.value.length));
+				await editor.press('Tab');
+				await page.getByText(/^CHANGES 1 /).waitFor();
+				assert.ok((await editor.inputValue()).endsWith('\t'), '白ThemeのTab入力をGodotへ返していない');
 			}
 			if (name === 'canvas_inputs') {
 				await exerciseUi(page, 'dom-canvas_inputs');
