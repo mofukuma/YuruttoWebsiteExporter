@@ -7,7 +7,7 @@ extends "res://code_edit.gd"
 func _ready() -> void:
 	super._ready()
 	(editor.get_parent().get_child(0) as ColorRect).color = Color("f8fafc")
-	editor.size.y = 110
+	editor.size.y = 170
 	editor.set_line_numbers_min_digits(2)
 	editor.set_line_numbers_zero_padded(false)
 	editor.set_highlight_current_line(false)
@@ -28,7 +28,7 @@ func _ready() -> void:
 	var panel := editor.get_theme_stylebox("normal") as StyleBoxFlat
 	panel.bg_color = Color("ffffff")
 	panel.border_color = Color("cbd5e1")
-	result.position.y = 158
+	result.position.y = 222
 	result.add_theme_color_override("font_color", Color("172033"))
 
 # tab文字と日本語を含む明色向けのコードを作る。

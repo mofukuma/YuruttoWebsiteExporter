@@ -557,7 +557,7 @@ static Array code_segments(CodeEdit *p_edit, int p_line, const Color &p_default)
 }
 
 // CodeEditの見えている行と補助表示を、再利用可能なDOM行へまとめて渡す。
-static void sync_code(CodeEdit *p_edit, float p_line_height) {
+static void sync_code(CodeEdit *p_edit, const Rect2 &p_text_rect, float p_line_height, const Ref<Font> &p_font, int p_font_size) {
 	Dictionary state;
 	state["gutter"] = p_edit->get_total_gutter_width();
 	// 行番号と記号をGodotが確定した各gutterの位置へ置く。
@@ -576,6 +576,8 @@ static void sync_code(CodeEdit *p_edit, float p_line_height) {
 	state["tab"] = p_edit->get_tab_size();
 	state["indent"] = p_edit->is_indent_using_spaces() ? String(" ").repeat(p_edit->get_indent_size()) : String("\t");
 	state["line_height"] = p_line_height;
+	state["font_ascent"] = p_font.is_valid() ? p_font->get_ascent(p_font_size) : p_font_size;
+	state["font_descent"] = p_font.is_valid() ? p_font->get_descent(p_font_size) : 0;
 	state["line_numbers"] = p_edit->is_draw_line_numbers_enabled();
 	state["line_color"] = String("#") + p_edit->get_theme_color(SNAME("line_number_color")).to_html();
 	state["breakpoint_color"] = String("#") + p_edit->get_theme_color(SNAME("breakpoint_color")).to_html();
@@ -588,8 +590,31 @@ static void sync_code(CodeEdit *p_edit, float p_line_height) {
 	state["caret_color"] = String("#") + p_edit->get_theme_color(SNAME("caret_color")).to_html();
 	state["text_color"] = String("#") + p_edit->get_font_color().to_html();
 	state["current"] = p_edit->get_caret_line();
+	// 内蔵VScrollBarの確定矩形とThemeを、OS依存の見た目を持たない表示層へ渡す。
+	ScrollBar *bar = p_edit->get_v_scroll_bar();
+	const Ref<StyleBoxFlat> track = bar->get_theme_stylebox(SNAME("scroll"));
+	const Ref<StyleBoxFlat> grabber = bar->get_theme_stylebox(SNAME("grabber"));
+	if (track.is_valid() && grabber.is_valid() && bar->get_size().x > 0 && bar->get_size().y > 0) {
+		const Size2 size = bar->get_size();
+		const float range = bar->get_max() - bar->get_min();
+		const float knob_min = grabber->get_minimum_size().y;
+		const float travel = MAX(0.0f, size.y - track->get_minimum_size().y - knob_min);
+		const float knob_size = range > 0 ? knob_min + MAX(0.0, bar->get_page()) / range * travel : knob_min;
+		Dictionary scroll;
+		scroll["x"] = bar->get_position().x - p_text_rect.position.x;
+		scroll["y"] = bar->get_position().y - p_text_rect.position.y;
+		scroll["width"] = size.x;
+		scroll["height"] = size.y;
+		scroll["knob"] = knob_size;
+		scroll["track_color"] = String("#") + track->get_bg_color().to_html();
+		scroll["grabber_color"] = String("#") + grabber->get_bg_color().to_html();
+		scroll["track_radius"] = track->get_corner_radius(CORNER_TOP_LEFT);
+		scroll["grabber_radius"] = grabber->get_corner_radius(CORNER_TOP_LEFT);
+		state["scroll"] = scroll;
+	}
 
 	Array lines;
+	const String uid_text = String::num_uint64((uint64_t)p_edit->get_instance_id());
 	const int first = MAX(0, p_edit->get_first_visible_line());
 	const int last = MIN(p_edit->get_line_count() - 1, p_edit->get_last_full_visible_line() + 1);
 	const int digits = MAX(p_edit->get_line_numbers_min_digits(), String::num_int64(p_edit->get_line_count()).length());
@@ -602,6 +627,14 @@ static void sync_code(CodeEdit *p_edit, float p_line_height) {
 		Color line_color = number_gutter >= 0 ? p_edit->get_line_gutter_item_color(line, number_gutter) : Color(1, 1, 1);
 		if (line_color == Color(1, 1, 1)) line_color = p_edit->get_theme_color(SNAME("line_number_color"));
 		row["line_color"] = String("#") + line_color.to_html();
+		const GlyphState glyph = glyph_state(uid_text + "-code-" + itos(line), p_edit->get_line(line), p_font, p_font_size);
+		row["glyph_ascent"] = glyph.ascent;
+		row["glyph_top"] = glyph.top;
+		row["glyph_bottom"] = glyph.bottom;
+		const GlyphState number_glyph = glyph_state(uid_text + "-code-number-" + itos(line), number, p_font, p_font_size);
+		row["number_ascent"] = number_glyph.ascent;
+		row["number_top"] = number_glyph.top;
+		row["number_bottom"] = number_glyph.bottom;
 		row["y"] = p_edit->get_scroll_pos_for_line(line) * p_line_height;
 		row["fold"] = p_edit->is_line_folded(line) ? "closed" : p_edit->can_fold_line(line) ? "open" : "";
 		row["breakpoint"] = p_edit->is_drawing_breakpoints_gutter() && p_edit->is_line_breakpointed(line);
@@ -612,7 +645,7 @@ static void sync_code(CodeEdit *p_edit, float p_line_height) {
 	}
 	state["lines"] = lines;
 	state["guides"] = p_edit->get_line_length_guidelines();
-	const CharString uid = text_uid(p_edit->get_instance_id());
+	const CharString uid = uid_text.utf8();
 	const CharString json = JSON::stringify(state).utf8();
 	yweb_code_sync(uid.get_data(), json.get_data());
 }
@@ -646,7 +679,7 @@ static void sync_text_area(TextEdit *p_edit) {
 	state.outline_size = p_edit->get_theme_constant(SNAME("outline_size"));
 	state.rect = input_rect(p_edit, p_edit->get_theme_stylebox(p_edit->is_editable() ? SNAME("normal") : SNAME("read_only")));
 	sync_text(p_edit, state);
-	if (code) sync_code(code, MAX(1.0f, state.font_size + state.line_spacing));
+	if (code) sync_code(code, state.rect, MAX(1.0f, state.font_size + state.line_spacing), control_font(code), state.font_size);
 }
 
 // Canvas RIDを所有Controlへ一意に登録し、解放用の逆索引も保つ。

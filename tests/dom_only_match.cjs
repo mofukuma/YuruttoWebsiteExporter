@@ -18,6 +18,8 @@ const work = path.join(repo, 'tmp/dom-only-match'); // 比較用projectと画像
 const project = path.join(work, 'project'); // 書き出す検査project。
 const site = path.join(work, 'site'); // DOM only成果物。
 const importCache = path.join(repo, 'tmp/dom-only-import-cache'); // 同じ素材の再importと既知の初回import不安定を避けるGodot cache。
+const godotCache = path.join(importCache, 'godot'); // import済みGodot内部状態。
+const fontCache = path.join(importCache, 'fonts'); // fontとimport成果物を結ぶ対応表。
 const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const size = { width: 800, height: 600 }; // 両者で揃える画面寸法。
 const limit = 10; // 各画面へ許す8bit RGBのRMSE上限。10は不合格にする。
@@ -61,18 +63,24 @@ func _init() -> void:
 // 検査projectを組み立てる。
 fs.rmSync(work, { recursive: true, force: true });
 fs.cpSync(path.join(repo, 'tests/fixtures/dom_only'), project, { recursive: true, filter: (source) => path.basename(source) !== '.godot' });
-if (fs.existsSync(importCache)) fs.cpSync(importCache, path.join(project, '.godot'), { recursive: true });
+if (fs.existsSync(godotCache)) fs.cpSync(godotCache, path.join(project, '.godot'), { recursive: true });
 child.execFileSync(process.execPath, [path.join(repo, 'build/install_site_addon.cjs'), project], { stdio: 'pipe' });
 fs.writeFileSync(path.join(project, 'export_presets.cfg'), '[preset.0]\n\nname="Web"\nplatform="Yurutto Website"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\nexport_path=""\n\n[preset.0.options]\n\nyweb/level=0\n');
 fs.writeFileSync(path.join(project, 'capture.gd'), capture);
 fs.writeFileSync(path.join(project, 'yweb-site.json'), `${JSON.stringify({ version: 1, scenes: Object.fromEntries(screens.map((name, index) => [name, { scene: `res://${name}.tscn`, uri: index === 0 ? '/' : `/${name}/` }])) }, null, 2)}\n`);
 install(path.join(project, 'fonts'), 'Match'); // Godotとブラウザで同じ字形を使う。
+if (fs.existsSync(fontCache)) fs.cpSync(fontCache, path.join(project, 'fonts'), { recursive: true });
 
 // 書き出し時の取込を撮影と次回へ共有し、不安定な独立import起動を省く。
 fs.mkdirSync(site, { recursive: true });
+// 初回はfont対応表を先に確定し、export中の並行importを避ける。次回から保存済み対応表を使う。
+if (!fs.existsSync(path.join(project, 'fonts/Match.ttf.import'))) child.execFileSync(godot, ['--headless', '--path', project, '--editor', '--quit-after', '2'], { stdio: 'pipe', timeout: 60000 });
 child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe', timeout: 300000 });
 fs.rmSync(importCache, { recursive: true, force: true });
-fs.cpSync(path.join(project, '.godot'), importCache, { recursive: true });
+fs.mkdirSync(importCache, { recursive: true });
+fs.cpSync(path.join(project, '.godot'), godotCache, { recursive: true });
+fs.mkdirSync(fontCache, { recursive: true });
+for (const name of fs.readdirSync(path.join(project, 'fonts')).filter((name) => name.endsWith('.import'))) fs.copyFileSync(path.join(project, 'fonts', name), path.join(fontCache, name));
 
 // Godot側の基準画面を撮る。画面外へ出した窓で描き、結果を取り出す。
 if (comparedScreens.length) child.execFileSync(godot, ['--path', project, '--script', 'res://capture.gd', '--resolution', `${size.width}x${size.height}`, '--position', '10000,10000'], { stdio: 'pipe', timeout: 60000 });
@@ -615,6 +623,8 @@ for (const name of comparedScreens) {
 						guides: [...element.querySelectorAll('[data-yweb-column]')].map((guide) => ({ column: guide.dataset.ywebColumn, color: getComputedStyle(guide).borderLeftColor, opacity: getComputedStyle(guide).opacity })),
 						current: getComputedStyle(current).backgroundColor,
 						panel: box ? [getComputedStyle(box).backgroundColor, getComputedStyle(box).borderColor] : [],
+						size: box ? [box.getBoundingClientRect().width, box.getBoundingClientRect().height] : [],
+						scroll: element.ywebBar ? [element.ywebBar.getBoundingClientRect().width, element.ywebBar.getBoundingClientRect().height] : [],
 						caret: getComputedStyle(element).getPropertyValue('--yweb-caret').trim(), selection: getComputedStyle(element).getPropertyValue('--yweb-selection').trim(),
 					};
 				});
@@ -627,6 +637,8 @@ for (const name of comparedScreens) {
 				assert.deepEqual(options.guides, [{ column: '24', color: 'rgb(203, 213, 225)', opacity: '1' }], '白Themeの行長guideを反映していない');
 				assert.equal(options.current, 'rgba(0, 0, 0, 0)', '現在行highlight無効を反映していない');
 				assert.deepEqual(options.panel, ['rgb(255, 255, 255)', 'rgb(203, 213, 225)'], '白Themeの背景と枠を反映していない');
+				assert.deepEqual(options.size, [736, 170], 'CodeEditの比較領域を縮めている');
+				assert.deepEqual(options.scroll, [8, 146], 'CodeEdit内蔵scrollbarの確定範囲を表示していない');
 				assert.deepEqual([options.caret, options.selection], ['#0f172aff', '#bfdbfeff'], '白Themeのcaretまたは選択色を反映していない');
 				await editor.focus();
 				await editor.evaluate((input) => input.setSelectionRange(input.value.length, input.value.length));

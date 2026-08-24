@@ -11,6 +11,9 @@ CodeEditの編集機能をBrowser標準入力へ接続し、Canvasを使わな�
 - [UI Events](https://www.w3.org/TR/uievents/) ではIMEを`compositionstart`、複数回の`compositionupdate`、`compositionend`で表す。確定値は1文字とは限らず、日本語文章や絵文字をまとめて受け取る。
 - [Input Events Level 2](https://www.w3.org/TR/input-events-2/) では変換中を`insertCompositionText`、貼り付けを`insertFromPaste`として扱う。どちらもkey列ではなく、更新後の入力値を正本にする必要がある。
 - UI Eventsの実装メモでは、Chrome系は最終`input`を`compositionend`より前、Firefox系は後へ送る場合がある。両方を1回へ畳む必要がある。
+- [HTML StandardのTextMetrics](https://html.spec.whatwg.org/multipage/canvas.html#textmetrics) はBrowser字形の実上端と実下端を返す。Godotの字形輪郭と比べれば、書体名や固定倍率へ依存せず縦寸法を補正できる。
+- [CSS Transforms](https://drafts.csswg.org/css-transforms-1/#transform-origin-property) の原点を左上へ固定すると、行位置を動かさず構文span全体へ縦倍率と基線移動を適用できる。
+- 白Themeの同じWeb fontでは横幅が一致し、Godot 13 pxの字形がBrowserで15〜16 pxになっていた。CodeEditも通常文字と同じ輪郭補正の対象にする。
 
 ## 採用する境界
 

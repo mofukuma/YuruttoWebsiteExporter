@@ -79,6 +79,21 @@ const YWebText = {
 				row.ywebCode.style.left = `${gutter - input.scrollLeft}px`;
 			}
 			for (const guide of owner.ywebGuides || []) guide.style.left = `calc(${gutter - input.scrollLeft}px + ${guide.dataset.ywebColumn}ch)`;
+			if (owner.ywebBar) {
+				const range = Math.max(0, input.scrollHeight - input.clientHeight);
+				owner.ywebBar.ywebKnob.style.top = `${range ? input.scrollTop / range * owner.ywebBar.ywebTravel : 0}px`;
+			}
+		},
+		// CodeEditの文字矩形外にある内蔵barを、同じGodot行列でrootへ置く。
+		placeCodeBar: function (owner) {
+			const bar = owner?.ywebBar;
+			const matrix = YWebText.scrollMatrix(owner?.dataset.ywebUid, owner?.dataset.ywebMatrix).split(',').map(Number);
+			if (!bar || matrix.length !== 6 || matrix.some((value) => !Number.isFinite(value))) return;
+			const [x, y] = bar.ywebLocal;
+			matrix[4] += matrix[0] * x + matrix[2] * y;
+			matrix[5] += matrix[1] * x + matrix[3] * y;
+			bar.style.transform = `matrix(${matrix})`;
+			bar.style.zIndex = owner.style.zIndex;
 		},
 		// SyntaxHighlighterの可視行を、同じ行DOMを保ったまま色付きspanへ反映する。
 		code: function (owner, source) {
@@ -90,6 +105,30 @@ const YWebText = {
 			owner.style.setProperty('--yweb-caret', state.caret_color);
 			owner.style.setProperty('--yweb-selection', state.selection_color);
 			owner.style.setProperty('--yweb-code-color', state.text_color);
+			if (state.scroll) {
+				if (!owner.ywebBar) {
+					const bar = document.createElement('i');
+					const knob = document.createElement('i');
+					bar.dataset.ywebCodeScroll = owner.dataset.ywebUid;
+					bar.style.pointerEvents = 'none';
+					knob.style.cssText = 'position:absolute;left:0;right:0;pointer-events:none';
+					bar.appendChild(knob);
+					YWebText.getRoot().appendChild(bar);
+					owner.ywebBar = bar;
+					bar.ywebKnob = knob;
+				}
+				const bar = owner.ywebBar;
+				bar.style.cssText = `position:absolute;left:0;top:0;transform-origin:0 0;width:${state.scroll.width}px;height:${state.scroll.height}px;background:${state.scroll.track_color};border-radius:${state.scroll.track_radius}px;pointer-events:none`;
+				bar.ywebLocal = [state.scroll.x, state.scroll.y];
+				bar.ywebKnob.style.height = `${state.scroll.knob}px`;
+				bar.ywebKnob.style.background = state.scroll.grabber_color;
+				bar.ywebKnob.style.borderRadius = `${state.scroll.grabber_radius}px`;
+				bar.ywebTravel = state.scroll.height - state.scroll.knob;
+				YWebText.placeCodeBar(owner);
+			} else if (owner.ywebBar) {
+				owner.ywebBar.remove();
+				owner.ywebBar = null;
+			}
 			input.style.paddingLeft = `${state.gutter}px`;
 			input.style.tabSize = String(state.tab);
 			input.dataset.ywebIndent = state.indent || '\t';
@@ -104,7 +143,7 @@ const YWebText = {
 					row.style.cssText = 'position:absolute;left:0;right:0;pointer-events:none;white-space:pre';
 					const number = document.createElement('span');
 					number.dataset.ywebCodeNumber = key;
-					number.style.cssText = 'position:absolute;text-align:left;white-space:pre';
+					number.style.cssText = 'position:absolute;text-align:left;white-space:pre;transform-origin:0 0';
 					const main = document.createElement('span');
 					main.dataset.ywebCodeMain = key;
 					main.style.cssText = 'position:absolute;text-align:center;white-space:pre';
@@ -121,7 +160,7 @@ const YWebText = {
 					fold.style.cssText = 'position:absolute;text-align:center;white-space:pre';
 					const code = document.createElement('code');
 					code.dataset.ywebCodeText = key;
-					code.style.cssText = 'position:absolute;top:0;white-space:pre;font:inherit;line-height:inherit';
+					code.style.cssText = 'position:absolute;top:0;white-space:pre;font:inherit;line-height:inherit;transform-origin:0 0';
 					row.append(number, main, fold, code);
 					row.ywebNumber = number;
 					row.ywebMain = main;
@@ -166,6 +205,9 @@ const YWebText = {
 						return span;
 					}));
 				}
+				const baseline = Math.max(0, state.line_height - state.font_ascent - state.font_descent) / 2 + state.font_ascent;
+				YWebText.glyphNode(row.ywebCode, row.ywebCode.textContent, Number(line.glyph_top), Number(line.glyph_bottom), Number(line.glyph_ascent), false, baseline);
+				YWebText.glyphNode(row.ywebNumber, number, Number(line.number_top), Number(line.number_bottom), Number(line.number_ascent), false, baseline);
 			}
 			for (const [key, row] of owner.ywebRows) {
 				if (seen.has(key)) continue;
@@ -181,6 +223,17 @@ const YWebText = {
 				return guide;
 			});
 			YWebText.codeScroll(input);
+			// Web fontの読込後に同じGodot輪郭から補正を再計算する。
+			const font = getComputedStyle(owner).font;
+			const fontKey = `${font}\n${state.lines.map((line) => line.number + line.segments.map((part) => part.text).join('')).join('\n')}`;
+			if (owner.dataset.ywebCodeFont !== fontKey) {
+				owner.dataset.ywebCodeFont = fontKey;
+				document.fonts.load(font, input.value).then(() => {
+					if (!owner.isConnected || owner.dataset.ywebCodeFont !== fontKey) return;
+					delete owner.dataset.ywebCodeState;
+					YWebText.code(owner, source);
+				});
+			}
 		},
 		// DOM onlyでは描画しないCanvasを画面から外す。寸法はrootの基準として残す。
 		hideCanvas: function () {
@@ -230,18 +283,12 @@ const YWebText = {
 			element.style.transform = `matrix(${matrix}) scaleX(${scale})`;
 		},
 		// GodotとBrowserの実字形範囲を対応させ、外側の配置と操作領域は動かさない。
-		glyph: function (element) {
-			const glyph = element.ywebGlyph;
-			if (!glyph) return;
-			const top = Number(element.dataset.ywebGlyphTop);
-			const bottom = Number(element.dataset.ywebGlyphBottom);
-			const ascent = Number(element.dataset.ywebFontAscent);
-			const text = glyph.textContent;
-			if (!text || text.includes('\n') || element.dataset.ywebWrap === '1' || element.dataset.ywebDecorated === '1' || !(bottom > top)) {
+		glyphNode: function (glyph, text, top, bottom, ascent, blocked = false, baseline = NaN) {
+			if (!text || text.includes('\n') || blocked || !(bottom > top)) {
 				glyph.style.transform = 'none';
 				return;
 			}
-			const style = getComputedStyle(element);
+			const style = getComputedStyle(glyph);
 			const context = YWebText.metricsContext || (YWebText.metricsContext = document.createElement('canvas').getContext('2d'));
 			context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
 			const metrics = context.measureText(text);
@@ -259,8 +306,22 @@ const YWebText = {
 				return;
 			}
 			const scale = Math.max(0.5, Math.min(2, (bottom - top) / height));
+			if (Number.isFinite(baseline)) {
+				glyph.style.transformOrigin = '0 0';
+				// 両rendererの輪郭座標を画素中心へ揃え、整数画素化で一段長くなるのを防ぐ。
+				const shift = baseline + top - browserTop * scale + 0.5 / devicePixelRatio;
+				glyph.style.transform = `matrix(1,0,0,${scale},0,${shift})`;
+				return;
+			}
+			glyph.style.transformOrigin = '0 0';
 			const shift = ascent + top - browserTop * scale;
 			glyph.style.transform = `matrix(1,0,0,${scale},0,${shift})`;
+		},
+		// 通常文字の内側spanへ、共有した字形補正を適用する。
+		glyph: function (element) {
+			const glyph = element.ywebGlyph;
+			if (!glyph) return;
+			YWebText.glyphNode(glyph, glyph.textContent, Number(element.dataset.ywebGlyphTop), Number(element.dataset.ywebGlyphBottom), Number(element.dataset.ywebFontAscent), element.dataset.ywebWrap === '1' || element.dataset.ywebDecorated === '1');
 		},
 		// 四隅へ一致する射影変換をCSSの列優先matrix3dへ組み立てる。
 		perspective: function (width, height, x0, y0, x1, y1, x2, y2, x3, y3) {
@@ -360,6 +421,7 @@ const YWebText = {
 					element.style.transform = `matrix(${matrix})${scale ? ` scaleX(${scale})` : ''}`;
 					const values = matrix.split(',').map(Number);
 					YWebText.clip(element, uid, ...values);
+					YWebText.placeCodeBar(element);
 				}
 			}
 		},
@@ -426,6 +488,7 @@ const YWebText = {
 		// 画像要素と一対の色filterを同じ時機に回収する。
 		drop: function (element) {
 			for (const image of [element, ...element.querySelectorAll('img')]) image.ywebTint?.svg.remove();
+			element.ywebBar?.remove();
 			element.remove();
 		},
 		// 親clipをBrowserスクロール後の画面矩形へまとめ、表示とhit判定で共有する。
@@ -1192,6 +1255,7 @@ const YWebText = {
 			YWebText.place(element);
 		}
 		YWebText.clip(element, uid, ...YWebText.scrollMatrix(uid, transform).split(',').map(Number));
+		YWebText.placeCodeBar(element);
 		let textChanged = false;
 		if (form.tagName === 'INPUT' || form.tagName === 'TEXTAREA') {
 			form.tabIndex = flags & 1024 ? 0 : -1;
