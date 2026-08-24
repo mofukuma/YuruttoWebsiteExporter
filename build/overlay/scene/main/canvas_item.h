@@ -122,6 +122,7 @@ private:
 	bool pending_update = false;
 	#ifdef YWEB_TEXT_DOM_ENABLED
 	bool yweb_dom_dirty = true;
+	bool yweb_dom_synced = false; // DOM同期開始後に描画命令を一度収集したか。
 	#endif
 	bool draw_commands_dirty = false;
 	bool top_level = false;
@@ -248,8 +249,9 @@ public:
 	};
 
 	#ifdef YWEB_TEXT_DOM_ENABLED
-	// 描画処理を外したDOM版でも_drawを実行する。
+	// DOM版でも標準描画と利用者の_drawを用途別に実行する。
 	void yweb_dom_redraw();
+	void yweb_dom_custom_redraw();
 	#endif
 
 	/* EDITOR AND DEBUGGING */

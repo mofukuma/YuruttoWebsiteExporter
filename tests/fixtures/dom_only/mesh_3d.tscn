@@ -1,0 +1,8 @@
+; 描画を持つ3D NodeのDOM面を一括検査するscene。
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://mesh_3d.gd" type="Script" id="1"]
+
+[node name="Mesh3D" type="Node3D"]
+script = ExtResource("1")

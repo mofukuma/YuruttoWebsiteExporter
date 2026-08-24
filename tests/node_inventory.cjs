@@ -25,8 +25,7 @@ PopupPanel ProgressBar ReferenceRect RichTextLabel ScrollContainer SpinBox Split
 SubViewportContainer TabBar TabContainer TextEdit TextureButton TextureProgressBar TextureRect TileMap TileMapLayer
 TouchScreenButton Tree VideoStreamPlayer VirtualJoystick VScrollBar VSeparator VSlider VSplitContainer
 AnimatedSprite3D CPUParticles3D CSGBox3D CSGCombiner3D CSGCylinder3D CSGMesh3D CSGPolygon3D CSGSphere3D
-CSGTorus3D Decal FogVolume GPUParticles3D GridMap ImporterMeshInstance3D Label3D MeshInstance3D
-MultiMeshInstance3D RootMotionView Sprite3D
+CSGTorus3D Decal FogVolume GPUParticles3D GridMap Label3D MeshInstance3D MultiMeshInstance3D Sprite3D
 `); // 描画対応率の分母。
 
 // 子の配置、可視性、描画先、光などを変えて最終画面へ影響するNode。
@@ -48,7 +47,7 @@ SpringArm3D SpringBoneSimulator3D TwoBoneIK3D VisibleOnScreenEnabler3D VoxelGI W
 // DOM onlyビルドで機能を積んでいないため、現levelでは利用できないNode。
 const unavailable = names(`
 OpenXRCompositionLayerCylinder OpenXRCompositionLayerEquirect OpenXRCompositionLayerQuad OpenXRHand OpenXRRenderModel
-OpenXRRenderModelManager OpenXRVisibilityMask StatusIndicator XRAnchor3D
+OpenXRRenderModelManager OpenXRVisibilityMask StatusIndicator XRAnchor3D ImporterMeshInstance3D RootMotionView
 XRBodyModifier3D XRCamera3D XRController3D XRFaceModifier3D XRHandModifier3D XRNode3D XROrigin3D
 `); // 現levelの対象外を明示する一覧。
 
@@ -69,9 +68,11 @@ VisibleOnScreenNotifier3D VisualInstance3D
 
 // 現rendererにNode専用または継承先のDOM描画経路がある描画Node。
 const supported = new Set(names(`
-Button CheckBox CheckButton ColorRect FoldableContainer HSlider ItemList Label Line2D LineEdit LinkButton MenuBar
-MenuButton NinePatchRect OptionButton Panel ProgressBar SpinBox Sprite2D TabBar TabContainer TextEdit TextureRect Tree VSlider
-AnimatedSprite2D Polygon2D TextureButton TextureProgressBar Label3D Sprite3D
+AcceptDialog Button CheckBox CheckButton CodeEdit ColorPicker ColorPickerButton ColorRect ConfirmationDialog CPUParticles2D FileDialog FoldableContainer GPUParticles2D GraphEdit GraphElement GraphFrame GraphNode HScrollBar HSeparator HSlider HSplitContainer ItemList Label Line2D LineEdit LinkButton MenuBar
+MenuButton MeshInstance2D MultiMeshInstance2D NinePatchRect OptionButton Panel PanelContainer ProgressBar ReferenceRect ScrollContainer SpinBox SplitContainer Sprite2D TabBar TabContainer TextEdit TextureRect TileMap TileMapLayer TouchScreenButton Tree VScrollBar VSeparator VSlider VSplitContainer
+AnimatedSprite2D Polygon2D PopupMenu PopupPanel RichTextLabel SubViewportContainer TextureButton TextureProgressBar VideoStreamPlayer VirtualJoystick
+AnimatedSprite3D CSGBox3D CSGCombiner3D CSGCylinder3D CSGMesh3D CSGPolygon3D CSGSphere3D CSGTorus3D
+CPUParticles3D Decal GPUParticles3D GridMap Label3D MeshInstance3D MultiMeshInstance3D Sprite3D
 `)); // 描画対象率の分子。
 
 // CanvasItemが公開する全描画命令。
@@ -87,8 +88,8 @@ draw_char_outline
 // 現overlayが引数をDOM同期へ渡す描画命令。
 const drawSupported = new Set(names(`
 draw_dashed_line draw_line draw_polyline draw_polyline_colors draw_multiline draw_multiline_colors draw_rect draw_ellipse
-draw_ellipse_arc draw_arc draw_circle draw_texture draw_texture_rect draw_texture_rect_region draw_style_box draw_primitive
-draw_set_transform draw_set_transform_matrix draw_polygon
+draw_ellipse_arc draw_arc draw_circle draw_texture draw_texture_rect draw_texture_rect_region draw_msdf_texture_rect_region draw_lcd_texture_rect_region draw_style_box draw_primitive
+draw_set_transform draw_set_transform_matrix draw_animation_slice draw_end_animation draw_polygon draw_mesh draw_multimesh
 draw_colored_polygon draw_string draw_multiline_string draw_string_outline draw_multiline_string_outline draw_char draw_char_outline
 `)); // 描画命令率の分子。
 
@@ -102,6 +103,8 @@ function reason(node, category) {
 	if (category === 'unavailable') {
 		if (node.name === 'StatusIndicator') return 'OSの状態表示で、Webページ内へ描画しない';
 		if (node.name === 'ShaderGlobalsOverride') return '描画driverを持たないDOM onlyでは利用しない';
+		if (node.name === 'ImporterMeshInstance3D') return 'import工程で通常Meshへ変換され、実行画面へ直接描画しない';
+		if (node.name === 'RootMotionView') return 'editor内の移動確認表示で、書き出した実行画面では描画しない';
 		return 'DOM onlyの共通設定でXRまたはOS固有表示を積んでいない';
 	}
 	return '自身は画素を出さず、入力・音・物理・通信などを担う';
@@ -167,6 +170,7 @@ function inspect(data) {
 		return { ...node, category, reason: reason(node, category), supported: supported.has(node.name), fixture: tested.has(node.name) };
 	});
 	const targets = nodes.filter((node) => node.category === 'render');
+	const targets3d = targets.filter((node) => node.group === 'node3d');
 	const fixtureTargets = nodes.filter((node) => node.category === 'render' || node.category === 'affects_render');
 	const classified = nodes.filter((node) => node.category !== 'unknown').length;
 	const available = nodes.filter((node) => node.category !== 'unavailable');
@@ -181,6 +185,7 @@ function inspect(data) {
 			inventory: metric(classified, nodes.length),
 			instantiation: metric(available.filter((node) => constructed.has(node.name)).length, available.length),
 			drawing: metric(targets.filter((node) => node.supported).length, targets.length),
+			drawing3d: metric(targets3d.filter((node) => node.supported).length, targets3d.length),
 			drawCommands: metric(draw.filter((name) => drawSupported.has(name)).length, draw.length),
 			fixture: metric(fixtureTargets.filter((node) => node.fixture).length, fixtureTargets.length),
 		},
@@ -200,6 +205,7 @@ function markdown(report) {
 		`| 棚卸し | ${m.inventory.done} | ${m.inventory.total} | ${m.inventory.display} |`,
 		`| 利用対象Nodeの生成 | ${m.instantiation.done} | ${m.instantiation.total} | ${m.instantiation.display} |`,
 		`| 描画Node対応 | ${m.drawing.done} | ${m.drawing.total} | ${m.drawing.display} |`,
+		`| 描画3D Node対応 | ${m.drawing3d.done} | ${m.drawing3d.total} | ${m.drawing3d.display} |`,
 		`| \`_draw()\`命令対応 | ${m.drawCommands.done} | ${m.drawCommands.total} | ${m.drawCommands.display} |`,
 		`| 描画関係Nodeのfixture配置 | ${m.fixture.done} | ${m.fixture.total} | ${m.fixture.display} |`, '',
 		`内訳はControl ${report.counts.groups.control}、Node2D ${report.counts.groups.node2d}、Node3D ${report.counts.groups.node3d}、その他 ${report.counts.groups.other}。分類は描画 ${report.counts.categories.render}、描画へ影響 ${report.counts.categories.affects_render}、非描画 ${report.counts.categories.non_visual}、現levelで利用不可 ${report.counts.categories.unavailable}だよ。`, '',

@@ -27,6 +27,37 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +	yweb_text_sync_process();
 +#endif
+--- a/scene/gui/scroll_bar.h
++++ b/scene/gui/scroll_bar.h
+@@ -130,0 +131,7 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	// DOM描画が現在のhover・pressed状態と同じTheme項目を選ぶための名前を返す。
++	StringName yweb_grabber_style() const;
++	StringName yweb_decrement_icon() const;
++	StringName yweb_increment_icon() const;
++#endif
++
+--- a/scene/gui/scroll_bar.cpp
++++ b/scene/gui/scroll_bar.cpp
+@@ -474,0 +475,6 @@
++}
++
++#ifdef YWEB_TEXT_DOM_ENABLED
++// つまみの操作状態に対応するStyleBox名を返す。
++StringName ScrollBar::yweb_grabber_style() const {
++	return drag.active ? SNAME("grabber_pressed") : highlight == HIGHLIGHT_RANGE ? SNAME("grabber_highlight") : SNAME("grabber");
+@@ -476,0 +483,11 @@
++// 減少buttonの操作状態に対応するicon名を返す。
++StringName ScrollBar::yweb_decrement_icon() const {
++	return decr_active ? SNAME("decrement_pressed") : highlight == HIGHLIGHT_DECR ? SNAME("decrement_highlight") : SNAME("decrement");
++}
++
++// 増加buttonの操作状態に対応するicon名を返す。
++StringName ScrollBar::yweb_increment_icon() const {
++	return incr_active ? SNAME("increment_pressed") : highlight == HIGHLIGHT_INCR ? SNAME("increment_highlight") : SNAME("increment");
++}
++#endif
++
 --- a/scene/gui/control.cpp
 +++ b/scene/gui/control.cpp
 @@ -53,0 +54,4 @@
@@ -68,7 +99,7 @@
 +
 @@ -794,0 +799,7 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
-+			// DOM所有Labelは背景をCanvasへ残し、glyphだけを重複描画しない。
++			// DOM所有Labelは背景をCanvasへ残し、glyphの重複描画を避ける。
 +			if (yweb_text_dom_owns(this)) {
 +				break;
 +			}
@@ -102,7 +133,7 @@
 +#endif
 @@ -467,0 +472,8 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
-+				// DOM所有Buttonは背景とiconをCanvasへ残し、確定した文字矩形だけを同期する。
++				// DOM所有Buttonは背景とiconをCanvasへ残し、確定した文字矩形を同期する。
 +				if (yweb_text_dom_owns(this)) {
 +					const int flags = (is_clipped ? 4 : 0) | (has_focus() ? 64 : 0) | (is_disabled() ? 256 : 0) | (get_focus_mode_with_override() == FOCUS_ALL ? 1024 : 0);
 +					yweb_text_sync_control(this, xl_text, Rect2(text_ofs, Size2(text_buf_width, text_buf->get_size().height)), 1, flags, align_rtl_checked, VERTICAL_ALIGNMENT_TOP, font_color, theme_cache.font_size, theme_cache.line_spacing, font_outline_color, outline_size);
@@ -118,7 +149,7 @@
 +
 @@ -303,0 +308,11 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
-+			// DOM所有LinkButtonはfocus枠をCanvasへ残し、文字とunderlineだけを同期する。
++			// DOM所有LinkButtonはfocus枠をCanvasへ残し、文字とunderlineを同期する。
 +			if (yweb_text_dom_owns(this)) {
 +				const Vector2 text_offset = is_layout_rtl() ? Vector2(size.width - width, 0) : Vector2();
 +				const int flags = (do_underline ? 16 : 0) | (has_focus() ? 64 : 0) | (is_disabled() ? 256 : 0) | (get_focus_mode_with_override() == FOCUS_ALL ? 1024 : 0);
@@ -156,14 +187,12 @@
 -	String previous_text = get_text();
 --- a/scene/gui/text_edit.cpp
 +++ b/scene/gui/text_edit.cpp
-@@ -33,0 +34,4 @@
+@@ -32,0 +33,4 @@
++
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +#include "platform/web/yweb_text_sync.h"
 +#endif
-+
-@@ -965,0 +970,9 @@
-+			}
-+
+@@ -967,0 +972,10 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +			// DOM所有TextEditは背景とfocus枠だけをCanvasへ残す。
 +			if (yweb_text_dom_owns(this)) {
@@ -171,8 +200,9 @@
 +				v_scroll->hide();
 +				RS::get_singleton()->canvas_item_clear(text_ci);
 +				break;
-@@ -966,0 +980 @@
++			}
 +#endif
++
 @@ -3452,0 +3467,6 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +	// DOM textareaがIME候補とfocusを所有する場合はWeb標準の隠しIMEを起動しない。
@@ -180,12 +210,28 @@
 +		return;
 +	}
 +#endif
+@@ -4040,0 +4061,13 @@
++}
++
++#ifdef YWEB_TEXT_DOM_ENABLED
++// Browser入力を通常編集として置換し、text_setを発生させない。
++void TextEdit::yweb_set_text(const String &p_text) {
++	remove_secondary_carets();
++	set_caret_line(0);
++	set_caret_column(0);
++	begin_complex_operation();
++	deselect();
++	_remove_text(0, 0, MAX(0, get_line_count() - 1), MAX(get_line(MAX(get_line_count() - 1, 0)).size() - 1, 0));
++	insert_text_at_caret(p_text);
++	end_complex_operation();
+@@ -4041,0 +4075 @@
++#endif
 --- a/scene/gui/text_edit.h
 +++ b/scene/gui/text_edit.h
 @@ -860,0 +861,10 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
-+	// DOM確定入力を標準のtext_changed通知付きで反映する。
-+	void yweb_set_text(const String &p_text) { _set_text(p_text, true); }
++	// Browserで確定した本文を設定し、通常編集と同じ変更通知へ流す。
++	void yweb_set_text(const String &p_text);
 +	// 非表示Canvas scrollbarへDOMの縦横scroll位置を保持する。
 +	void yweb_set_scroll(double p_vertical, int p_horizontal) {
 +		first_visible_col = p_horizontal;
@@ -260,6 +306,188 @@
 +	yweb_font = p_font;
 +	yweb_font_size = p_font_size;
 +#endif
+--- a/scene/resources/multimesh.h
++++ b/scene/resources/multimesh.h
+@@ -58,0 +59,6 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	Vector<Transform3D> yweb_transforms; // 描画driverが保持しないDOM版の3D instance位置。
++	Vector<Transform2D> yweb_transforms_2d; // 描画driverが保持しないDOM版の2D instance位置。
++	void _yweb_store_buffer(const Vector<float> &p_buffer);
++#endif
++
+--- a/scene/resources/multimesh.cpp
++++ b/scene/resources/multimesh.cpp
+@@ -196,0 +197,22 @@
++
++#ifdef YWEB_TEXT_DOM_ENABLED
++// 保存済みMultiMesh bufferから2Dまたは3D Transformを復元する。
++void MultiMesh::_yweb_store_buffer(const Vector<float> &p_buffer) {
++	if (instance_count == 0) return;
++	uint32_t stride = (transform_format == TRANSFORM_2D ? 8 : 12) + (use_colors ? 4 : 0) + (use_custom_data ? 4 : 0);
++	if (p_buffer.size() != stride * instance_count) return;
++	for (int index = 0; index < instance_count; index++) {
++		const float *data = p_buffer.ptr() + index * stride;
++		if (transform_format == TRANSFORM_2D) {
++			yweb_transforms_2d.write[index] = Transform2D(data[0], data[4], data[1], data[5], data[3], data[7]);
++			continue;
++		}
++		Transform3D transform;
++		transform.basis.rows[0] = Vector3(data[0], data[1], data[2]);
++		transform.basis.rows[1] = Vector3(data[4], data[5], data[6]);
++		transform.basis.rows[2] = Vector3(data[8], data[9], data[10]);
++		transform.origin = Vector3(data[3], data[7], data[11]);
++		yweb_transforms.write[index] = transform;
++	}
++}
++#endif
+@@ -207,0 +230,3 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	_yweb_store_buffer(p_buffer);
++#endif
+@@ -215,0 +241,3 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	_yweb_store_buffer(p_buffer_curr);
++#endif
+@@ -235,0 +264,4 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	yweb_transforms.resize(p_count);
++	yweb_transforms_2d.resize(p_count);
++#endif
+@@ -261,0 +294,3 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	yweb_transforms.write[p_instance] = p_transform;
++#endif
+@@ -267,0 +303,3 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	yweb_transforms_2d.write[p_instance] = p_transform;
++#endif
+@@ -273,0 +312,3 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	return yweb_transforms[p_instance];
++#endif
+@@ -279,0 +321,3 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	return yweb_transforms_2d[p_instance];
++#endif
+--- a/scene/2d/cpu_particles_2d.h
++++ b/scene/2d/cpu_particles_2d.h
+@@ -332,0 +333,6 @@
++
++#ifdef YWEB_TEXT_DOM_ENABLED
++	// DOM画像同期へ生存粒子の確定TransformとColorを一括して渡す。
++	void yweb_particles(Vector<Transform2D> &r_transforms, Vector<Color> &r_colors, int p_limit);
++	void yweb_advance(double p_delta);
++#endif
+--- a/scene/2d/cpu_particles_2d.cpp
++++ b/scene/2d/cpu_particles_2d.cpp
+@@ -1264,0 +1265,43 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++// GPU代替のCPU simulationをtree外でもGodot本体と同じ刻みで進める。
++void CPUParticles2D::yweb_advance(double p_delta) {
++	MutexLock lock(update_mutex);
++	if (particles.is_empty()) return;
++	const double step = fixed_fps > 0 ? 1.0 / fixed_fps : 1.0 / 30.0;
++	if (time == 0 && pre_process_time > 0) {
++		double todo = pre_process_time;
++		const float old_scale = speed_scale;
++		speed_scale = 1.0;
++		while (todo > 0) {
++			_particles_process(MIN(todo, step));
++			todo -= step;
++		}
++		speed_scale = old_scale;
++	}
++	if (fixed_fps > 0) {
++		frame_remainder += CLAMP(p_delta, 0.0, 0.1);
++		while (frame_remainder >= step) {
++			_particles_process(step);
++			frame_remainder -= step;
++		}
++	} else {
++		_particles_process(CLAMP(p_delta, 0.0, 0.1));
++	}
++}
++
++// CPU simulationが確定した生存粒子を、一度のlockでRenderingServerと同じlocal Transformへ写す。
++void CPUParticles2D::yweb_particles(Vector<Transform2D> &r_transforms, Vector<Color> &r_colors, int p_limit) {
++	MutexLock lock(update_mutex);
++	r_transforms.clear();
++	r_colors.clear();
++	const int count = MIN(particles.size(), p_limit);
++	for (int index = 0; index < count; index++) {
++		if (!particles[index].active) continue;
++		Transform2D transform = particles[index].transform;
++		if (!local_coords) transform = inv_emission_transform * transform;
++		r_transforms.push_back(transform);
++		r_colors.push_back(particles[index].color);
++	}
++}
++#endif
++
+--- a/scene/3d/cpu_particles_3d.h
++++ b/scene/3d/cpu_particles_3d.h
+@@ -339,0 +340,6 @@
++
++#ifdef YWEB_TEXT_DOM_ENABLED
++	// DOM Mesh同期へ生存粒子の確定TransformとColorを一括して渡す。
++	void yweb_particles(Vector<Transform3D> &r_transforms, Vector<Color> &r_colors, int p_limit);
++	void yweb_advance(double p_delta);
++#endif
+--- a/scene/3d/cpu_particles_3d.cpp
++++ b/scene/3d/cpu_particles_3d.cpp
+@@ -1390,0 +1391,43 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++// GPU代替のCPU simulationをtree外でもGodot本体と同じ刻みで進める。
++void CPUParticles3D::yweb_advance(double p_delta) {
++	MutexLock lock(update_mutex);
++	if (particles.is_empty()) return;
++	const double step = fixed_fps > 0 ? 1.0 / fixed_fps : 1.0 / 30.0;
++	if (time == 0 && pre_process_time > 0) {
++		double todo = pre_process_time;
++		const float old_scale = speed_scale;
++		speed_scale = 1.0;
++		while (todo > 0) {
++			_particles_process(MIN(todo, step));
++			todo -= step;
++		}
++		speed_scale = old_scale;
++	}
++	if (fixed_fps > 0) {
++		frame_remainder += CLAMP(p_delta, 0.0, 0.1);
++		while (frame_remainder >= step) {
++			_particles_process(step);
++			frame_remainder -= step;
++		}
++	} else {
++		_particles_process(CLAMP(p_delta, 0.0, 0.1));
++	}
++}
++
++// CPU simulationが確定した生存粒子を、一度のlockでRenderingServerと同じlocal Transformへ写す。
++void CPUParticles3D::yweb_particles(Vector<Transform3D> &r_transforms, Vector<Color> &r_colors, int p_limit) {
++	MutexLock lock(update_mutex);
++	r_transforms.clear();
++	r_colors.clear();
++	const int count = MIN(particles.size(), p_limit);
++	for (int index = 0; index < count; index++) {
++		if (!particles[index].active) continue;
++		Transform3D transform = particles[index].transform;
++		if (!local_coords) transform = inv_emission_transform * transform;
++		r_transforms.push_back(transform);
++		r_colors.push_back(particles[index].color);
++	}
++}
++#endif
++
+--- a/scene/gui/virtual_joystick.h
++++ b/scene/gui/virtual_joystick.h
+@@ -90,0 +91,6 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	// DOM同期へGodotが確定したtip位置と入力状態を渡す。
++	Vector2 yweb_tip_position() const { return tip_pos; }
++	bool yweb_is_pressed() const { return is_pressed; }
++#endif
++
 --- a/scene/resources/text_paragraph.h
 +++ b/scene/resources/text_paragraph.h
 @@ -66,0 +67,6 @@

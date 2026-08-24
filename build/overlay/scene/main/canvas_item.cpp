@@ -67,6 +67,9 @@ void yweb_draw_texture(CanvasItem *p_item, const Ref<Texture2D> &p_texture, cons
 void yweb_draw_texture_region(CanvasItem *p_item, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, const Rect2 &p_src_rect, const Color &p_modulate);
 void yweb_draw_style_box(CanvasItem *p_item, const Ref<StyleBox> &p_style, const Rect2 &p_rect);
 void yweb_draw_transform(CanvasItem *p_item, const Transform2D &p_transform);
+void yweb_draw_mesh(CanvasItem *p_item, const Ref<Mesh> &p_mesh, const Transform2D &p_transform, const Color &p_modulate);
+void yweb_draw_multimesh(CanvasItem *p_item, const Ref<MultiMesh> &p_multimesh);
+void yweb_draw_animation(CanvasItem *p_item, double p_length, double p_begin, double p_end, double p_offset, bool p_enabled);
 void yweb_draw_string(const CanvasItem *p_item, const Point2 &p_pos, const String &p_text, int p_alignment, float p_width, int p_font_size, int p_lines, const Color &p_color, const Color &p_outline = Color(), int p_outline_size = 0);
 #define YWEB_DRAW(m_call) m_call
 #else
@@ -208,11 +211,28 @@ void CanvasItem::_redraw_callback() {
 #ifdef YWEB_TEXT_DOM_ENABLED
 // 描画処理を外したDOM版でも、変更時に標準通知と_drawを同じ順番で実行する。
 void CanvasItem::yweb_dom_redraw() {
-	if (!yweb_dom_dirty) {
+	if (!yweb_dom_dirty && yweb_dom_synced) {
 		return;
 	}
 	yweb_dom_dirty = false;
+	yweb_dom_synced = true;
 	_redraw_callback();
+}
+
+// 標準Controlの重複描画を避けながら、利用者の_drawとdraw signalは残す。
+void CanvasItem::yweb_dom_custom_redraw() {
+	if ((!yweb_dom_dirty && yweb_dom_synced) || !is_inside_tree() || !is_visible_in_tree()) {
+		return;
+	}
+	yweb_dom_dirty = false;
+	yweb_dom_synced = true;
+	drawing = true;
+	current_item_drawn = this;
+	YWEB_DRAW(yweb_draw_begin(this));
+	emit_signal(SceneStringName(draw));
+	GDVIRTUAL_CALL(_draw);
+	current_item_drawn = nullptr;
+	drawing = false;
 }
 #endif
 
@@ -1116,6 +1136,7 @@ void CanvasItem::draw_animation_slice(double p_animation_length, double p_slice_
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 
+	YWEB_DRAW(yweb_draw_animation(this, p_animation_length, p_slice_begin, p_slice_end, p_offset, true));
 	RenderingServer::get_singleton()->canvas_item_add_animation_slice(canvas_item, p_animation_length, p_slice_begin, p_slice_end, p_offset);
 }
 
@@ -1123,6 +1144,7 @@ void CanvasItem::draw_end_animation() {
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 
+	YWEB_DRAW(yweb_draw_animation(this, 1, 0, 1, 0, false));
 	RenderingServer::get_singleton()->canvas_item_add_animation_slice(canvas_item, 1, 0, 2, 0);
 }
 
@@ -1160,6 +1182,7 @@ void CanvasItem::draw_mesh(RequiredParam<Mesh> rp_mesh, const Ref<Texture2D> &p_
 	EXTRACT_PARAM_OR_FAIL(p_mesh, rp_mesh);
 	RID texture_rid = p_texture.is_valid() ? p_texture->get_rid() : RID();
 
+	YWEB_DRAW(yweb_draw_mesh(this, p_mesh, p_transform, p_modulate));
 	RenderingServer::get_singleton()->canvas_item_add_mesh(canvas_item, p_mesh->get_rid(), p_transform, p_modulate, texture_rid);
 }
 
@@ -1167,6 +1190,7 @@ void CanvasItem::draw_multimesh(RequiredParam<MultiMesh> rp_multimesh, const Ref
 	ERR_THREAD_GUARD;
 	EXTRACT_PARAM_OR_FAIL(p_multimesh, rp_multimesh);
 	RID texture_rid = p_texture.is_valid() ? p_texture->get_rid() : RID();
+	YWEB_DRAW(yweb_draw_multimesh(this, p_multimesh));
 	RenderingServer::get_singleton()->canvas_item_add_multimesh(canvas_item, p_multimesh->get_rid(), texture_rid);
 }
 

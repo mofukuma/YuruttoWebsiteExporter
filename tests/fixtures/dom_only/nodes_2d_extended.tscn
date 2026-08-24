@@ -1,0 +1,8 @@
+; resource展開型の2D Nodeを検査するscene。
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://nodes_2d_extended.gd" type="Script" id="1"]
+
+[node name="Nodes2DExtended" type="Node2D"]
+script = ExtResource("1")

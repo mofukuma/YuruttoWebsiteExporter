@@ -10,8 +10,6 @@ const TINTS := [Color("f87171"), Color("fbbf24"), Color("34d399"), Color("60a5fa
 func _ready() -> void:
 	var font := load("res://fonts/Match.ttf") as FontFile
 	if font != null:
-		font.hinting = TextServer.HINTING_NONE
-		font.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 		var text_theme := Theme.new()
 		text_theme.default_font = font
 		theme = text_theme

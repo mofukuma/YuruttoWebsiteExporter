@@ -15,6 +15,8 @@ trap 'rm -rf "$work"' EXIT
 files='platform/web/detect.py
 platform/web/SCsub
 platform/web/display_server_web.cpp
+scene/gui/scroll_bar.h
+scene/gui/scroll_bar.cpp
 scene/gui/control.cpp
 scene/gui/label.cpp
 scene/gui/base_button.cpp
@@ -24,7 +26,19 @@ scene/gui/link_button.cpp
 scene/gui/line_edit.cpp
 scene/gui/line_edit.h
 scene/gui/text_edit.cpp
-scene/gui/text_edit.h'
+scene/gui/text_edit.h
+scene/gui/tree.cpp
+scene/resources/text_line.h
+scene/resources/text_line.cpp
+scene/resources/multimesh.h
+scene/resources/multimesh.cpp
+scene/2d/cpu_particles_2d.h
+scene/2d/cpu_particles_2d.cpp
+scene/3d/cpu_particles_3d.h
+scene/3d/cpu_particles_3d.cpp
+scene/gui/virtual_joystick.h
+scene/resources/text_paragraph.h
+scene/resources/text_paragraph.cpp'
 
 # 本家fileだけを一回のarchive走査で展開する。
 set --

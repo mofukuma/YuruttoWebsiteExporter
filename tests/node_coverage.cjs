@@ -10,6 +10,7 @@ const { collect, inspect, markdown } = require('./node_inventory.cjs');
 
 const repo = path.resolve(__dirname, '..'); // 棚卸し対象のproject root。
 const list = path.join(repo, 'ログ/全ノード棚卸し一覧.md'); // 人が確認する棚卸し表。
+const containerTypes = JSON.parse(fs.readFileSync(path.join(repo, 'tests/fixtures/dom_only/container_types.json'), 'utf8')); // はみ出し試験へ置くContainer派生型。
 const data = collect(); // 実行中GodotのClassDB一覧。
 const report = inspect(data); // 分類と独立指標の検査結果。
 
@@ -19,7 +20,20 @@ assert.equal(report.metrics.inventory.done, report.metrics.inventory.total, `未
 assert.equal(report.metrics.inventory.rate, 100, '棚卸し率が100%でない');
 assert.equal(report.metrics.instantiation.rate, 100, '利用対象Nodeの生成率が100%でない');
 assert.deepEqual(report.duplicates, [], `分類が重複している: ${report.duplicates.join(', ')}`);
-assert.deepEqual(data.constructed, report.nodes.filter((node) => node.category !== 'unavailable').map((node) => node.name), '利用対象で生成できないNodeがある');
+const available = new Set(report.nodes.filter((node) => node.category !== 'unavailable').map((node) => node.name)); // 対象外Nodeを生成結果から除く照合用一覧。
+assert.deepEqual(data.constructed.filter((name) => available.has(name)), [...available], '利用対象で生成できないNodeがある');
+assert.ok(report.metrics.drawing3d.rate >= 90, `描画3D Nodeが90%未満: ${report.metrics.drawing3d.done}/${report.metrics.drawing3d.total} (${report.metrics.drawing3d.display})`);
+
+// ClassDBの全Container派生を、はみ出し試験の共通一覧へ漏れなく含める。
+const parents = new Map(report.nodes.map((node) => [node.name, node.parent]));
+const isContainer = (name) => {
+	for (let current = name; current; current = parents.get(current)) {
+		if (current === 'Container') return true;
+	}
+	return false;
+};
+const actualContainers = report.nodes.filter((node) => isContainer(node.name)).map((node) => node.name).sort();
+assert.deepEqual([...containerTypes].sort(), actualContainers, 'Container派生のはみ出し試験に漏れがある');
 
 // 描画達成率は丸め前で98%以上を求め、生成成功や非描画Nodeで水増しさせない。
 for (const name of ['drawing', 'drawCommands', 'fixture']) {

@@ -10,9 +10,6 @@ const PANEL := Color("e2e8f0") # 板の面色。
 func _ready() -> void:
 	var font := load("res://fonts/Match.ttf") as FontFile
 	if font != null:
-		# 輪郭のまま描かせ、Browserの字形計算へ寄せる。
-		font.hinting = TextServer.HINTING_NONE
-		font.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 		var text_theme := Theme.new()
 		text_theme.default_font = font
 		theme = text_theme

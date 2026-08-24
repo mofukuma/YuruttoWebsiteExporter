@@ -14,9 +14,6 @@ func _ready() -> void:
 	# Browserと同じ字形で比べるため、Web fontを持つThemeを画面全体へ適用する。
 	var font := load("res://fonts/Match.ttf") as FontFile
 	if font != null:
-		# 輪郭のまま描かせ、Browserの字形計算へ寄せる。
-		font.hinting = TextServer.HINTING_NONE
-		font.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 		var text_theme := Theme.new()
 		text_theme.default_font = font
 		theme = text_theme

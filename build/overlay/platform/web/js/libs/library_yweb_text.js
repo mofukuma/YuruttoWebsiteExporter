@@ -12,13 +12,25 @@ const YWebText = {
 		images: new Map(), // 識別値ごとの画像data URI。
 		drawn: new Set(), // 描画命令から作った要素。次の描画まで残す。
 		drawOwners: new Map(), // CanvasItemごとの描画DOM ID。
+		nodeOwners: new Map(), // Nodeごとの全DOM ID。3D射影を所有要素数で処理する。
+		clips: new Map(), // ObjectIDごとのGodot確定切り抜き矩形。
+		scrolls: new Map(), // ScrollContainerごとのBrowserスクロール状態。
+		scrollMembers: new Map(), // Nodeごとの祖先ScrollContainer ID。
+		scrollOwners: new Map(), // ScrollContainerごとの子Node ID。操作中の更新範囲を絞る。
+		scrollSeen: new Set(), // 現frameにも存在するScrollContainer ID。
+		activeAnimations: new Map(), // _draw中に後続命令へ付ける時間範囲。
+		elementAnimations: new Map(), // DOM IDごとの時間範囲。
+		meshes: new Map(), // 今frameの3D三角形をNodeと色ごとにまとめる領域。
+		projected: new Set(), // SubViewportから3D平面へ射影したDOM ID。
 		seen: new Set(), // 現frameで同期されたDOM ID。
 		event: null,
 		siteEvent: null,
 		siteCallback: null,
 		root: null,
 		rootSize: '',
+		tintIndex: 0, // 画像ごとの色filter IDを重複させない連番。
 		mouseDown: false,
+		metricsContext: null, // Browser字形を同じfontと寸法で測るCanvas文脈。
 		lineCache: {}, // 書体と寸法ごとの、本来の行送り。測り直しを避ける。
 		ruler: null, // 行送りを測るための、見えない物差し。
 		kinds: ['Label', 'Button', 'LinkButton', 'LineEdit', 'TextEdit', 'ControlText'],
@@ -33,11 +45,18 @@ const YWebText = {
 			// Godotも同じ描きかたをするので、これを揃えるとCanvasとDOMの文字の見た目が近づく。
 			root.style.cssText = 'position:absolute;transform-origin:0 0;pointer-events:none;overflow:hidden;z-index:1;font-family:sans-serif;text-rendering:geometricPrecision;-webkit-font-smoothing:antialiased';
 			const style = document.createElement('style');
-			style.textContent = '#yweb-text-root input::placeholder,#yweb-text-root textarea::placeholder{color:var(--yweb-placeholder,currentColor);opacity:1}';
+			style.textContent = [
+				'#yweb-text-root input::placeholder,#yweb-text-root textarea::placeholder{color:var(--yweb-placeholder,currentColor);opacity:1}',
+				'#yweb-text-root [data-yweb-scroll]{scrollbar-color:#cbd5e1 #1e293b;scrollbar-width:auto}',
+				'#yweb-text-root [data-yweb-scroll]::-webkit-scrollbar{width:14px;height:14px}',
+				'#yweb-text-root [data-yweb-scroll]::-webkit-scrollbar-track{background:#1e293b}',
+				'#yweb-text-root [data-yweb-scroll]::-webkit-scrollbar-thumb{background:#cbd5e1;border:3px solid #1e293b;border-radius:7px}',
+			].join('');
 			document.head.appendChild(style);
 			canvas.parentElement.appendChild(root);
 			canvas.addEventListener('mousedown', () => { YWebText.mouseDown = true; });
 			window.addEventListener('mouseup', () => { YWebText.mouseDown = false; });
+			window.addEventListener('wheel', (event) => YWebText.wheel(event), { passive: false });
 			YWebText.root = root;
 			return root;
 		},
@@ -84,9 +103,69 @@ const YWebText = {
 		},
 		// Godot位置行列とBrowser fontの横幅補正を一つのtransformへ反映する。
 		place: function (element) {
-			const matrix = element.dataset.ywebMatrix;
+			const matrix = YWebText.scrollMatrix(element.dataset.ywebUid, element.dataset.ywebMatrix);
 			const scale = element.dataset.ywebTextScale || '1';
 			element.style.transform = `matrix(${matrix}) scaleX(${scale})`;
+		},
+		// GodotとBrowserの実字形範囲を対応させ、外側の配置と操作領域は動かさない。
+		glyph: function (element) {
+			const glyph = element.ywebGlyph;
+			if (!glyph) return;
+			const top = Number(element.dataset.ywebGlyphTop);
+			const bottom = Number(element.dataset.ywebGlyphBottom);
+			const ascent = Number(element.dataset.ywebFontAscent);
+			const text = glyph.textContent;
+			if (!text || text.includes('\n') || element.dataset.ywebWrap === '1' || element.dataset.ywebDecorated === '1' || !(bottom > top)) {
+				glyph.style.transform = 'none';
+				return;
+			}
+			const style = getComputedStyle(element);
+			const context = YWebText.metricsContext || (YWebText.metricsContext = document.createElement('canvas').getContext('2d'));
+			context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+			const metrics = context.measureText(text);
+			const browserAscent = metrics.actualBoundingBoxAscent;
+			const browserDescent = metrics.actualBoundingBoxDescent;
+			const fontAscent = metrics.fontBoundingBoxAscent || browserAscent;
+			const fontDescent = metrics.fontBoundingBoxDescent || browserDescent;
+			const lineHeight = Number.parseFloat(style.lineHeight);
+			const lead = Math.max(0, lineHeight - fontAscent - fontDescent) / 2;
+			const browserTop = lead + fontAscent - browserAscent;
+			const browserBottom = lead + fontAscent + browserDescent;
+			const height = browserBottom - browserTop;
+			if (!(height > 0)) {
+				glyph.style.transform = 'none';
+				return;
+			}
+			const scale = Math.max(0.5, Math.min(2, (bottom - top) / height));
+			const shift = ascent + top - browserTop * scale;
+			glyph.style.transform = `matrix(1,0,0,${scale},0,${shift})`;
+		},
+		// 四隅へ一致する射影変換をCSSの列優先matrix3dへ組み立てる。
+		perspective: function (width, height, x0, y0, x1, y1, x2, y2, x3, y3) {
+			const dx1 = x1 - x3;
+			const dx2 = x2 - x3;
+			const dx3 = x0 - x1 - x2 + x3;
+			const dy1 = y1 - y3;
+			const dy2 = y2 - y3;
+			const dy3 = y0 - y1 - y2 + y3;
+			const divisor = dx1 * dy2 - dx2 * dy1;
+			const gx = divisor ? (dx3 * dy2 - dx2 * dy3) / divisor : 0;
+			const gy = divisor ? (dx1 * dy3 - dx3 * dy1) / divisor : 0;
+			return [
+				(x1 - x0 + gx * x1) / width, (y1 - y0 + gx * y1) / width, 0, gx / width,
+				(x2 - x0 + gy * x2) / height, (y2 - y0 + gy * y2) / height, 0, gy / height,
+				0, 0, 1, 0, x0, y0, 0, 1,
+			];
+		},
+		// 二つの列優先4x4行列を合成する。
+		multiply: function (left, right) {
+			const result = new Array(16).fill(0);
+			for (let column = 0; column < 4; column++) {
+				for (let row = 0; row < 4; row++) {
+					for (let index = 0; index < 4; index++) result[column * 4 + row] += left[index * 4 + row] * right[column * 4 + index];
+				}
+			}
+			return result;
 		},
 		// Browser fontの実幅をGodotが確定した項目幅へ折返さず収める。
 		fit: function (element) {
@@ -102,7 +181,9 @@ const YWebText = {
 			const key = `${font}\n${element.textContent}`;
 			element.dataset.ywebFontRequest = key;
 			const done = () => {
-				if (element.isConnected && element.dataset.ywebFontRequest === key) YWebText.fit(element);
+				if (!element.isConnected || element.dataset.ywebFontRequest !== key) return;
+				YWebText.glyph(element);
+				YWebText.fit(element);
 			};
 			document.fonts.load(font, element.textContent).then(done, done);
 		},
@@ -110,8 +191,159 @@ const YWebText = {
 		color: function (red, green, blue, alpha) {
 			return `rgba(${Math.round(red * 255)},${Math.round(green * 255)},${Math.round(blue * 255)},${alpha})`;
 		},
-		// 描画DOM IDをCanvasItemの接頭辞へ結び、生存確認を要素数に比例させる。
+		// Godot ObjectID由来の識別値を、全描画DOMの安定したHTML idへ反映する。
+		identify: function (element, uid) {
+			element.id = `yweb-${uid.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+			element.dataset.ywebUid = uid;
+		},
+		// Nodeの祖先にある全ScrollContainerのBrowser移動量を画面座標へ変換する。
+		scrollOffset: function (uid) {
+			let x = 0;
+			let y = 0;
+			const node = uid?.split('-', 1)[0];
+			for (const owner of YWebText.scrollMembers.get(node) || []) {
+				const scroll = YWebText.scrolls.get(owner);
+				if (!scroll) continue;
+				x += scroll.matrix[0] * scroll.element.scrollLeft + scroll.matrix[2] * scroll.element.scrollTop;
+				y += scroll.matrix[1] * scroll.element.scrollLeft + scroll.matrix[3] * scroll.element.scrollTop;
+			}
+			return [x, y];
+		},
+		// Godotの確定行列へBrowserスクロール量を合成し、Godot状態を書き換えず表示を動かす。
+		scrollMatrix: function (uid, raw) {
+			const matrix = String(raw || '').split(',').map(Number);
+			if (matrix.length !== 6 || matrix.some((value) => !Number.isFinite(value))) return raw;
+			const [x, y] = YWebText.scrollOffset(uid);
+			matrix[4] -= x;
+			matrix[5] -= y;
+			return matrix.join(',');
+		},
+		// Browserが保持するスクロール量を、該当Nodeの既存DOMへまとめて反映する。
+		applyScroll: function (owner) {
+			const nodes = [...(owner ? YWebText.scrollOwners.get(owner) || [] : YWebText.scrollMembers.keys())];
+			for (const uid of nodes) {
+				const scroll = YWebText.scrolls.get(uid);
+				if (!scroll) continue;
+				scroll.matrix = YWebText.scrollMatrix(uid, scroll.base).split(',').map(Number);
+				scroll.element.style.transform = `matrix(${scroll.matrix})`;
+				YWebText.clip(scroll.element, uid, ...scroll.matrix);
+			}
+			for (const node of nodes) {
+				for (const uid of YWebText.nodeOwners.get(node) || []) {
+					const element = YWebText.elements.get(uid);
+					const raw = element?.dataset.ywebTransform;
+					if (!element || !raw || element.dataset.ywebProjected) continue;
+					const matrix = YWebText.scrollMatrix(uid, raw);
+					const scale = element.dataset.ywebTextScale;
+					element.style.transform = `matrix(${matrix})${scale ? ` scaleX(${scale})` : ''}`;
+					const values = matrix.split(',').map(Number);
+					YWebText.clip(element, uid, ...values);
+				}
+			}
+		},
+		// Wheel位置にある最も内側のScrollContainerをBrowser側でスクロールする。
+		wheel: function (event) {
+			const root = YWebText.root;
+			if (!root?.isConnected) return;
+			const box = root.getBoundingClientRect();
+			const x = (event.clientX - box.left) * root.offsetWidth / box.width;
+			const y = (event.clientY - box.top) * root.offsetHeight / box.height;
+			const scaleX = root.offsetWidth / box.width;
+			const scaleY = root.offsetHeight / box.height;
+			const deltaX = event.deltaX * scaleX;
+			const deltaY = event.deltaY * scaleY;
+			const front = document.elementsFromPoint(event.clientX, event.clientY).find((element) => element !== root && root.contains(element) && getComputedStyle(element).pointerEvents !== 'none');
+			const scrolls = [...YWebText.scrolls.values()].reverse();
+			const scroll = scrolls.find((item) => {
+				const [xx, xy, yx, yy, atX, atY] = item.matrix;
+				const determinant = xx * yy - xy * yx;
+				if (Math.abs(determinant) < 0.000001) return false;
+				const localX = ((x - atX) * yy - (y - atY) * yx) / determinant;
+				const localY = ((y - atY) * xx - (x - atX) * xy) / determinant;
+				const area = YWebText.clipArea(item.uid);
+				const visible = !area || x >= area[0] && y >= area[1] && x < area[2] && y < area[3];
+				const frontUid = front?.closest('[data-yweb-uid]')?.dataset.ywebUid?.split('-', 1)[0];
+				const reachable = !front || item.element.contains(front) || YWebText.scrollOwners.get(item.uid)?.has(frontUid);
+				const hit = visible && reachable && localX >= 0 && localY >= 0 && localX < item.width && localY < item.height;
+				const canX = deltaX < 0 ? item.element.scrollLeft > 0 : deltaX > 0 && item.element.scrollLeft < item.element.scrollWidth - item.element.clientWidth;
+				const canY = deltaY < 0 ? item.element.scrollTop > 0 : deltaY > 0 && item.element.scrollTop < item.element.scrollHeight - item.element.clientHeight;
+				return hit && (canX || canY);
+			});
+			if (!scroll) return;
+			if (event.target === scroll.element || scroll.element.contains(event.target)) return;
+			const before = `${scroll.element.scrollLeft},${scroll.element.scrollTop}`;
+			scroll.element.scrollBy(deltaX, deltaY);
+			if (`${scroll.element.scrollLeft},${scroll.element.scrollTop}` !== before) event.preventDefault();
+		},
+		// 画像の各色をGodotのmodulateと同じ比率で掛け、動的変更は同じfilterへ上書きする。
+		tint: function (element, red, green, blue) {
+			if (Math.abs(red - 1) < 0.0001 && Math.abs(green - 1) < 0.0001 && Math.abs(blue - 1) < 0.0001) return 'none';
+			const values = [red, green, blue].map((value) => Math.round(value * 10000) / 10000);
+			const key = values.join(',');
+			if (!element.ywebTint) {
+				const ns = 'http://www.w3.org/2000/svg';
+				const svg = document.createElementNS(ns, 'svg');
+				const filter = document.createElementNS(ns, 'filter');
+				const matrix = document.createElementNS(ns, 'feColorMatrix');
+				const id = `yweb-tint-${++YWebText.tintIndex}`;
+				svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+				filter.id = id;
+				filter.setAttribute('color-interpolation-filters', 'sRGB');
+				matrix.setAttribute('type', 'matrix');
+				filter.appendChild(matrix);
+				svg.appendChild(filter);
+				document.body.appendChild(svg);
+				element.ywebTint = { svg, matrix, id, key: '' };
+			}
+			if (element.ywebTint.key !== key) {
+				element.ywebTint.key = key;
+				element.ywebTint.matrix.setAttribute('values', `${values[0]} 0 0 0 0 0 ${values[1]} 0 0 0 0 0 ${values[2]} 0 0 0 0 0 1 0`);
+			}
+			return `url("#${element.ywebTint.id}")`;
+		},
+		// 画像要素と一対の色filterを同じ時機に回収する。
+		drop: function (element) {
+			for (const image of [element, ...element.querySelectorAll('img')]) image.ywebTint?.svg.remove();
+			element.remove();
+		},
+		// 親clipをBrowserスクロール後の画面矩形へまとめ、表示とhit判定で共有する。
+		clipArea: function (uid) {
+			const owner = uid.split('-', 1)[0];
+			const areas = YWebText.clips.get(owner);
+			if (!areas?.length) return null;
+			let area;
+			for (const entry of areas) {
+				const [moveX, moveY] = YWebText.scrollOffset(entry.owner);
+				const moved = [entry.area[0] - moveX, entry.area[1] - moveY, entry.area[2] - moveX, entry.area[3] - moveY];
+				area = area ? [Math.max(area[0], moved[0]), Math.max(area[1], moved[1]), Math.min(area[2], moved[2]), Math.min(area[3], moved[3])] : moved;
+			}
+			return area;
+		},
+		// 画面座標のclip矩形を要素local座標へ戻し、階層なしの平坦DOMへ適用する。
+		clip: function (element, uid, xx, xy, yx, yy, x, y) {
+			const area = YWebText.clipArea(uid);
+			if (!area) {
+				element.style.clipPath = 'none';
+				return;
+			}
+			const determinant = xx * yy - xy * yx;
+			if (Math.abs(determinant) < 0.000001 || area[2] <= area[0] || area[3] <= area[1]) {
+				element.style.clipPath = 'inset(100%)';
+				return;
+			}
+			const local = (px, py) => [((px - x) * yy - (py - y) * yx) / determinant, ((py - y) * xx - (px - x) * xy) / determinant];
+			const points = [local(area[0], area[1]), local(area[2], area[1]), local(area[2], area[3]), local(area[0], area[3])];
+			element.style.clipPath = `polygon(${points.map(([px, py]) => `${px}px ${py}px`).join(',')})`;
+		},
+		// DOM IDをNodeへ結び、描画要素は再描画用の接頭辞にも結ぶ。
 		trackDraw: function (uid) {
+			const node = uid.split('-', 1)[0];
+			let owned = YWebText.nodeOwners.get(node);
+			if (!owned) {
+				owned = new Set();
+				YWebText.nodeOwners.set(node, owned);
+			}
+			owned.add(uid);
 			const at = uid.indexOf('-d');
 			if (at < 0) return;
 			const owner = uid.slice(0, at + 2);
@@ -122,9 +354,17 @@ const YWebText = {
 			}
 			ids.add(uid);
 			YWebText.drawn.add(uid);
+			const animation = YWebText.activeAnimations.get(owner.slice(0, -2));
+			if (animation) YWebText.elementAnimations.set(uid, animation);
+			else YWebText.elementAnimations.delete(uid);
 		},
 		// 回収した描画DOM IDを所有者の集合から外す。
 		forgetDraw: function (uid) {
+			const node = uid.split('-', 1)[0];
+			const owned = YWebText.nodeOwners.get(node);
+			owned?.delete(uid);
+			if (owned?.size === 0) YWebText.nodeOwners.delete(node);
+			YWebText.elementAnimations.delete(uid);
 			if (!YWebText.drawn.delete(uid)) return;
 			const at = uid.indexOf('-d');
 			const owner = uid.slice(0, at + 2);
@@ -174,6 +414,31 @@ const YWebText = {
 			GodotRuntime.free(text);
 			GodotRuntime.free(uid);
 		},
+		// Godotの表示順で意味DOMへfocusを送り、Canvasへの途中離脱を防ぐ。
+		tab: function (element, event) {
+			if (event.key !== 'Tab') return false;
+			const items = [...YWebText.getRoot().querySelectorAll('[data-yweb-text]')]
+				.filter((item) => item.tabIndex >= 0 && !item.disabled && item.getAttribute('aria-disabled') !== 'true' && getComputedStyle(item).display !== 'none')
+				.sort((left, right) => {
+					const a = left.getBoundingClientRect();
+					const b = right.getBoundingClientRect();
+					return Math.abs(a.top - b.top) > 1 ? a.top - b.top : a.left - b.left;
+				});
+			const index = items.indexOf(element);
+			const next = items[index + (event.shiftKey ? -1 : 1)];
+			if (!next) return false;
+			event.preventDefault();
+			event.stopPropagation();
+			// Godotの同じkey処理が終わった後、旧Controlのreleaseを挟まず次へ直接切り替える。
+			element.dataset.ywebTabbing = 'true';
+			requestAnimationFrame(() => {
+				next.focus({ preventScroll: true });
+				requestAnimationFrame(() => {
+					if (document.activeElement !== next) next.focus({ preventScroll: true });
+				});
+			});
+			return true;
+		},
 		// inputとtextareaへIME、選択、focusの双方向境界を一度結ぶ。
 		bindInput: function (element) {
 			for (const name of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend']) {
@@ -185,6 +450,10 @@ const YWebText = {
 				YWebText.send(element, 3);
 			});
 			element.addEventListener('blur', () => {
+				if (element.dataset.ywebTabbing) {
+					delete element.dataset.ywebTabbing;
+					return;
+				}
 				delete element.dataset.ywebFocusPending;
 				element.dataset.ywebBlurPending = 'true';
 				YWebText.send(element, 4);
@@ -205,6 +474,7 @@ const YWebText = {
 			element.addEventListener('select', () => YWebText.send(element, 2));
 			element.addEventListener('keyup', () => YWebText.send(element, 2));
 			element.addEventListener('keydown', (event) => {
+				if (YWebText.tab(element, event)) return;
 				event.stopPropagation();
 				if (element.tagName === 'INPUT' && event.key === 'Enter' && !event.isComposing) {
 					event.preventDefault();
@@ -220,6 +490,10 @@ const YWebText = {
 				YWebText.send(element, 3);
 			});
 			element.addEventListener('blur', () => {
+				if (element.dataset.ywebTabbing) {
+					delete element.dataset.ywebTabbing;
+					return;
+				}
 				delete element.dataset.ywebFocusPending;
 				element.dataset.ywebBlurPending = 'true';
 				YWebText.send(element, 4);
@@ -227,14 +501,15 @@ const YWebText = {
 			element.addEventListener('click', (event) => {
 				event.preventDefault();
 				event.stopPropagation();
-				if (!event.detail) YWebText.activate(element);
+				YWebText.activate(element);
 			});
+			element.addEventListener('keydown', (event) => { YWebText.tab(element, event); });
 		},
 		// Control種別に合う意味要素を既定装飾なしで作る。
 		create: function (uid, kind) {
 			const tag = YWebText.tags[kind] || 'span';
 			const element = document.createElement(tag);
-			element.id = `yweb-text-${uid}`;
+			YWebText.identify(element, uid);
 			element.dataset.ywebText = uid;
 			element.style.cssText = 'position:absolute;box-sizing:border-box;transform-origin:0 0;margin:0;padding:0;border:0;outline:0;background:transparent;color:inherit;font:inherit;border-radius:0';
 			if (tag === 'button') element.type = 'button';
@@ -245,9 +520,14 @@ const YWebText = {
 				element.style.resize = 'none';
 				YWebText.bindInput(element);
 			} else {
-				element.style.pointerEvents = 'none';
+				element.style.pointerEvents = tag === 'button' || tag === 'a' ? 'auto' : 'none';
 				element.style.userSelect = 'text';
 				element.style.display = 'flex';
+				const glyph = document.createElement('span');
+				glyph.dataset.ywebGlyph = uid;
+				glyph.style.cssText = 'display:block;width:100%;min-width:0;transform-origin:0 0;pointer-events:none';
+				element.appendChild(glyph);
+				element.ywebGlyph = glyph;
 				if (tag === 'button' || tag === 'a') YWebText.bindAction(element);
 			}
 			YWebText.getRoot().appendChild(element);
@@ -266,8 +546,9 @@ const YWebText = {
 		let element = YWebText.elements.get(uid);
 		if (!element) {
 			element = document.createElement('div');
+			YWebText.identify(element, uid);
 			element.dataset.ywebBox = uid;
-			element.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0;box-sizing:border-box';
+			element.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0;box-sizing:border-box;pointer-events:none';
 			YWebText.getRoot().appendChild(element);
 			YWebText.elements.set(uid, element);
 		}
@@ -281,18 +562,93 @@ const YWebText = {
 		].join(';');
 		if (element.dataset.ywebStyle !== style) {
 			element.dataset.ywebStyle = style;
-			element.style.cssText = `position:absolute;left:0;top:0;transform-origin:0 0;box-sizing:border-box;${style}`;
+			element.style.cssText = `position:absolute;left:0;top:0;transform-origin:0 0;box-sizing:border-box;pointer-events:none;${style}`;
+			delete element.dataset.ywebTransform;
 		}
 		const transform = [xx, xy, yx, yy, x, y].join(',');
 		if (element.dataset.ywebTransform !== transform) {
 			element.dataset.ywebTransform = transform;
 			element.style.transform = `matrix(${transform})`;
 		}
+		YWebText.clip(element, uid, xx, xy, yx, yy, x, y);
 	},
 	yweb_image_data__sig: 'vpp',
 	// 画像の中身を識別値へ一度覚える。以後は同じ識別値で参照する。
 	yweb_image_data: function (pKey, pData) {
 		YWebText.images.set(GodotRuntime.parseString(pKey), GodotRuntime.parseString(pData));
+	},
+	yweb_clip_sync__sig: 'vppffffi',
+	// CanvasItemとclip親を結び、Browserスクロール後に全範囲を交差できる形で保存する。
+	yweb_clip_sync: function (pUid, pOwner, left, top, right, bottom, enabled) {
+		const uid = GodotRuntime.parseString(pUid);
+		const owner = GodotRuntime.parseString(pOwner);
+		if (!enabled) {
+			YWebText.clips.delete(uid);
+			return;
+		}
+		let areas = YWebText.clips.get(uid);
+		if (!areas) {
+			areas = [];
+			YWebText.clips.set(uid, areas);
+		}
+		areas.push({ owner, area: [left, top, right, bottom] });
+	},
+	yweb_scroll_sync__sig: 'vp' + 'f'.repeat(10),
+	// ScrollContainerの範囲と内容量を受け、実際のスクロール量はBrowser要素へ保持する。
+	yweb_scroll_sync: function (pUid, xx, xy, yx, yy, x, y, width, height, maxX, maxY) {
+		const uid = GodotRuntime.parseString(pUid);
+		YWebText.scrollSeen.add(uid);
+		let scroll = YWebText.scrolls.get(uid);
+		if (!scroll) {
+			const element = document.createElement('div');
+			YWebText.identify(element, `${uid}-scroll`);
+			element.dataset.ywebScroll = uid;
+			element.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0;overflow:scroll;scrollbar-gutter:stable;pointer-events:auto;background:transparent';
+			const content = document.createElement('div');
+			content.setAttribute('aria-hidden', 'true');
+			element.appendChild(content);
+			YWebText.getRoot().appendChild(element);
+			element.addEventListener('scroll', () => YWebText.applyScroll(uid), { passive: true });
+			scroll = { uid, element, content, base: '', matrix: [], width: 0, height: 0 };
+			YWebText.scrolls.set(uid, scroll);
+		}
+		scroll.base = [xx, xy, yx, yy, x, y].join(',');
+		scroll.matrix = YWebText.scrollMatrix(uid, scroll.base).split(',').map(Number);
+		scroll.width = width;
+		scroll.height = height;
+		scroll.element.style.width = `${width}px`;
+		scroll.element.style.height = `${height}px`;
+		scroll.element.style.transform = `matrix(${scroll.matrix})`;
+		YWebText.clip(scroll.element, uid, ...scroll.matrix);
+		scroll.content.style.width = `${scroll.element.clientWidth + maxX}px`;
+		scroll.content.style.height = `${scroll.element.clientHeight + maxY}px`;
+		if (scroll.element.scrollLeft > maxX) scroll.element.scrollLeft = maxX;
+		if (scroll.element.scrollTop > maxY) scroll.element.scrollTop = maxY;
+	},
+	yweb_scroll_member__sig: 'vpp',
+	// Nodeを祖先ScrollContainerへ結び、平坦DOMでもBrowser移動量を共有する。
+	yweb_scroll_member: function (pUid, pOwner) {
+		const uid = GodotRuntime.parseString(pUid);
+		const owner = GodotRuntime.parseString(pOwner);
+		let owners = YWebText.scrollMembers.get(uid);
+		if (!owners) {
+			owners = new Set();
+			YWebText.scrollMembers.set(uid, owners);
+		}
+		owners.add(owner);
+		let members = YWebText.scrollOwners.get(owner);
+		if (!members) {
+			members = new Set();
+			YWebText.scrollOwners.set(owner, members);
+		}
+		members.add(uid);
+	},
+	yweb_animation_sync__sig: 'vpffffi',
+	// CanvasItemの後続描画命令へanimation sliceを付け、終了時に解除する。
+	yweb_animation_sync: function (pUid, length, begin, end, offset, enabled) {
+		const uid = GodotRuntime.parseString(pUid);
+		if (enabled) YWebText.activeAnimations.set(uid, { length, begin, end, offset });
+		else YWebText.activeAnimations.delete(uid);
 	},
 	yweb_image_sync__sig: 'vpp' + 'f'.repeat(8) + 'i' + 'f'.repeat(4),
 	// 画像を、箱や文字と同じ座標系と重なり順でDOMへ置く。
@@ -305,8 +661,9 @@ const YWebText = {
 		let element = YWebText.elements.get(uid);
 		if (!element) {
 			element = document.createElement('img');
+			YWebText.identify(element, uid);
 			element.dataset.ywebImage = uid;
-			element.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0';
+			element.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none';
 			YWebText.getRoot().appendChild(element);
 			YWebText.elements.set(uid, element);
 		}
@@ -315,19 +672,21 @@ const YWebText = {
 			element.dataset.ywebImageKey = key;
 			element.src = source;
 		}
-		const style = `width:${width}px;height:${height}px;z-index:${z};opacity:${alpha}`;
+		const style = `width:${width}px;height:${height}px;z-index:${z};opacity:${alpha};filter:${YWebText.tint(element, red, green, blue)}`;
 		if (element.dataset.ywebStyle !== style) {
 			element.dataset.ywebStyle = style;
-			element.style.cssText = `position:absolute;left:0;top:0;transform-origin:0 0;${style}`;
+			element.style.cssText = `position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;${style}`;
+			delete element.dataset.ywebTransform;
 		}
 		const transform = [xx, xy, yx, yy, x, y].join(',');
 		if (element.dataset.ywebTransform !== transform) {
 			element.dataset.ywebTransform = transform;
 			element.style.transform = `matrix(${transform})`;
 		}
+		YWebText.clip(element, uid, xx, xy, yx, yy, x, y);
 	},
 	yweb_image_region_sync__sig: 'vpp' + 'f'.repeat(14) + 'i' + 'f'.repeat(4),
-	// 画像領域を一要素のCSS backgroundとして切り出す。
+	// 親の切り抜き枠と子画像の移動で、atlas内の指定領域を表示する。
 	yweb_image_region_sync: function (pUid, pKey, xx, xy, yx, yy, x, y, width, height, imageWidth, imageHeight, srcX, srcY, srcWidth, srcHeight, z, red, green, blue, alpha) {
 		const uid = GodotRuntime.parseString(pUid);
 		const key = GodotRuntime.parseString(pKey);
@@ -337,32 +696,96 @@ const YWebText = {
 		let element = YWebText.elements.get(uid);
 		if (!element) {
 			element = document.createElement('div');
+			YWebText.identify(element, uid);
 			element.dataset.ywebImageRegion = uid;
+			const image = document.createElement('img');
+			YWebText.identify(image, `${uid}-source`);
+			image.dataset.ywebRegionImage = uid;
+			image.draggable = false;
+			element.appendChild(image);
 			YWebText.getRoot().appendChild(element);
 			YWebText.elements.set(uid, element);
 		}
+		const image = element.firstElementChild;
 		const source = YWebText.images.get(key);
-		const scaleX = width / srcWidth;
-		const scaleY = height / srcHeight;
+		if (source && image.dataset.ywebImageKey !== key) {
+			image.dataset.ywebImageKey = key;
+			image.src = source;
+		}
+		const regionWidth = Math.abs(srcWidth);
+		const regionHeight = Math.abs(srcHeight);
+		const scaleX = width / regionWidth;
+		const scaleY = height / regionHeight;
+		const flipX = srcWidth < 0;
+		const flipY = srcHeight < 0;
+		element.dataset.ywebSource = [srcX, srcY, srcWidth, srcHeight].join(',');
 		const style = [
-			'position:absolute', 'left:0', 'top:0', 'transform-origin:0 0', 'background-repeat:no-repeat',
+			'position:absolute', 'left:0', 'top:0', 'transform-origin:0 0', 'overflow:hidden',
 			`width:${width}px`, `height:${height}px`, `z-index:${z}`, `opacity:${alpha}`,
-			`background-image:url(${JSON.stringify(source || '')})`,
-			`background-size:${imageWidth * scaleX}px ${imageHeight * scaleY}px`,
-			`background-position:${-srcX * scaleX}px ${-srcY * scaleY}px`,
 		].join(';');
 		if (element.dataset.ywebStyle !== style) {
 			element.dataset.ywebStyle = style;
 			element.style.cssText = style;
+			delete element.dataset.ywebTransform;
+		}
+		const imageStyle = [
+			'position:absolute', 'transform-origin:0 0', 'display:block', 'max-width:none', 'pointer-events:none',
+			`left:${(flipX ? srcX + regionWidth : -srcX) * scaleX}px`,
+			`top:${(flipY ? srcY + regionHeight : -srcY) * scaleY}px`,
+			`width:${imageWidth * scaleX}px`, `height:${imageHeight * scaleY}px`,
+			`transform:scale(${flipX ? -1 : 1},${flipY ? -1 : 1})`, `filter:${YWebText.tint(image, red, green, blue)}`,
+		].join(';');
+		if (image.dataset.ywebStyle !== imageStyle) {
+			image.dataset.ywebStyle = imageStyle;
+			image.style.cssText = imageStyle;
 		}
 		const transform = [xx, xy, yx, yy, x, y].join(',');
 		if (element.dataset.ywebTransform !== transform) {
 			element.dataset.ywebTransform = transform;
 			element.style.transform = `matrix(${transform})`;
 		}
+		YWebText.clip(element, uid, xx, xy, yx, yy, x, y);
+	},
+	yweb_nine_patch_sync__sig: 'vpp' + 'f'.repeat(12) + 'i'.repeat(4) + 'f'.repeat(4),
+	// 四隅を原寸で保ち、辺と中央をGodotの軸規則で伸ばす九分割画像を作る。
+	yweb_nine_patch_sync: function (pUid, pKey, xx, xy, yx, yy, x, y, width, height, left, top, right, bottom, z, horizontal, vertical, center, red, green, blue, alpha) {
+		const uid = GodotRuntime.parseString(pUid);
+		const key = GodotRuntime.parseString(pKey);
+		YWebText.seen.add(uid);
+		YWebText.trackDraw(uid);
+		YWebText.hideCanvas();
+		let element = YWebText.elements.get(uid);
+		if (!element) {
+			element = document.createElement('div');
+			YWebText.identify(element, uid);
+			element.dataset.ywebNinePatch = uid;
+			YWebText.getRoot().appendChild(element);
+			YWebText.elements.set(uid, element);
+		}
+		const source = YWebText.images.get(key);
+		const repeat = ['stretch', 'repeat', 'round'];
+		const slices = `${top} ${right} ${bottom} ${left}`;
+		const style = [width, height, left, top, right, bottom, z, horizontal, vertical, center, key, red, green, blue, alpha].join(',');
+		if (source && element.dataset.ywebStyle !== style) {
+			element.dataset.ywebStyle = style;
+			element.dataset.ywebImageKey = key;
+			element.style.cssText = `position:absolute;left:0;top:0;box-sizing:border-box;transform-origin:0 0;pointer-events:none;width:${width}px;height:${height}px;z-index:${z};opacity:${alpha};border-style:solid;border-width:${top}px ${right}px ${bottom}px ${left}px`;
+			element.style.borderImageSource = `url("${source}")`;
+			element.style.borderImageSlice = `${slices}${center ? ' fill' : ''}`;
+			element.style.borderImageWidth = `${top}px ${right}px ${bottom}px ${left}px`;
+			element.style.borderImageRepeat = `${repeat[horizontal] || 'stretch'} ${repeat[vertical] || 'stretch'}`;
+			element.style.filter = YWebText.tint(element, red, green, blue);
+			delete element.dataset.ywebTransform;
+		}
+		const transform = [xx, xy, yx, yy, x, y].join(',');
+		if (element.dataset.ywebTransform !== transform) {
+			element.dataset.ywebTransform = transform;
+			element.style.transform = `matrix(${transform})`;
+		}
+		YWebText.clip(element, uid, xx, xy, yx, yy, x, y);
 	},
 	yweb_polygon_sync__sig: 'vpp' + 'f'.repeat(8) + 'i' + 'f'.repeat(4),
-	// Godotの点列を一枚のCSS clip-pathとして置く。
+	// 外側で親clip、内側で点列を切り抜き、二つの範囲を同時に守る。
 	yweb_polygon_sync: function (pUid, pPoints, xx, xy, yx, yy, x, y, width, height, z, red, green, blue, alpha) {
 		const uid = GodotRuntime.parseString(pUid);
 		const points = GodotRuntime.parseString(pPoints);
@@ -372,25 +795,88 @@ const YWebText = {
 		let element = YWebText.elements.get(uid);
 		if (!element) {
 			element = document.createElement('div');
+			YWebText.identify(element, uid);
 			element.dataset.ywebPolygon = uid;
+			const shape = document.createElement('div');
+			shape.style.cssText = 'position:absolute;inset:0';
+			element.appendChild(shape);
 			YWebText.getRoot().appendChild(element);
 			YWebText.elements.set(uid, element);
 		}
-		const style = `position:absolute;left:0;top:0;transform-origin:0 0;width:${width}px;height:${height}px;z-index:${z};background:${YWebText.color(red, green, blue, alpha)};clip-path:polygon(${points})`;
+		const style = `position:absolute;left:0;top:0;transform-origin:0 0;width:${width}px;height:${height}px;z-index:${z};pointer-events:none`;
 		if (element.dataset.ywebStyle !== style) {
 			element.dataset.ywebStyle = style;
 			element.style.cssText = style;
+			delete element.dataset.ywebTransform;
+		}
+		const shape = element.firstElementChild;
+		shape.style.background = YWebText.color(red, green, blue, alpha);
+		shape.style.clipPath = `polygon(${points})`;
+		const transform = [xx, xy, yx, yy, x, y].join(',');
+		if (element.dataset.ywebTransform !== transform) {
+			element.dataset.ywebTransform = transform;
+			element.style.transform = `matrix(${transform})`;
+		}
+		YWebText.clip(element, uid, xx, xy, yx, yy, x, y);
+	},
+	yweb_gradient_sync__sig: 'vp' + 'i' + 'f'.repeat(8) + 'i' + 'f'.repeat(4),
+	// ColorPickerの色面を、Godot内部Controlの確定矩形へCSS gradientで置く。
+	yweb_gradient_sync: function (pUid, kind, xx, xy, yx, yy, x, y, width, height, z, red, green, blue, alpha) {
+		const uid = GodotRuntime.parseString(pUid);
+		YWebText.seen.add(uid);
+		YWebText.trackDraw(uid);
+		YWebText.hideCanvas();
+		let element = YWebText.elements.get(uid);
+		if (!element) {
+			element = document.createElement('div');
+			YWebText.identify(element, uid);
+			element.dataset.ywebGradient = uid;
+			YWebText.getRoot().appendChild(element);
+			YWebText.elements.set(uid, element);
+		}
+		const hue = YWebText.color(red, green, blue, alpha);
+		const background = kind === 0
+			? `linear-gradient(to bottom,transparent,#000),linear-gradient(to right,#fff,${hue})`
+			: 'linear-gradient(to bottom,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)';
+		const style = `position:absolute;left:0;top:0;transform-origin:0 0;width:${width}px;height:${height}px;z-index:${z};background:${background};pointer-events:none`;
+		if (element.dataset.ywebStyle !== style) {
+			element.dataset.ywebStyle = style;
+			element.style.cssText = style;
+			delete element.dataset.ywebTransform;
 		}
 		const transform = [xx, xy, yx, yy, x, y].join(',');
 		if (element.dataset.ywebTransform !== transform) {
 			element.dataset.ywebTransform = transform;
 			element.style.transform = `matrix(${transform})`;
 		}
+		YWebText.clip(element, uid, xx, xy, yx, yy, x, y);
 	},
-	yweb_plane_sync__sig: 'vppp' + 'f'.repeat(10) + 'ii' + 'f'.repeat(5),
-	// Godotが投影した3D平面を、画像または文字のmatrix3dとして置く。
-	yweb_plane_sync: function (pUid, pKey, pText, x0, y0, x1, y1, x2, y2, x3, y3, width, height, z, kind, red, green, blue, alpha, fontSize) {
+	yweb_triangle_sync__sig: 'vppp' + 'f'.repeat(6) + 'i' + 'f'.repeat(4),
+	// Godotが投影したMeshを粒子単位でまとめ、半透明instanceの重なりを保つ。
+	yweb_triangle_sync: function (pUid, pType, pGroup, x0, y0, x1, y1, x2, y2, z, red, green, blue, alpha) {
 		const uid = GodotRuntime.parseString(pUid);
+		const type = GodotRuntime.parseString(pType);
+		const group = GodotRuntime.parseString(pGroup);
+		YWebText.hideCanvas();
+		const owner = uid.slice(0, uid.lastIndexOf('-mesh'));
+		const color = YWebText.color(red, green, blue, alpha);
+		const key = `${owner}-mesh3d-${alpha < 0.999 ? group : ''}-${color}`;
+		const mesh = YWebText.meshes.get(key) || { type, color, z, count: 0, path: '' };
+		// 同じ向きのsubpathへ揃え、一枚のSVG塗りで内部の継ぎ目を作らない。
+		if ((x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0) < 0) {
+			[x1, x2] = [x2, x1];
+			[y1, y2] = [y2, y1];
+		}
+		mesh.path += `M${x0} ${y0}L${x1} ${y1}L${x2} ${y2}Z`;
+		mesh.z = Math.max(mesh.z, z);
+		mesh.count++;
+		YWebText.meshes.set(key, mesh);
+	},
+	yweb_plane_sync__sig: 'vpppp' + 'f'.repeat(10) + 'ii' + 'f'.repeat(5),
+	// Godotが投影した3D平面を、画像または文字のmatrix3dとして置く。
+	yweb_plane_sync: function (pUid, pType, pKey, pText, x0, y0, x1, y1, x2, y2, x3, y3, width, height, z, kind, red, green, blue, alpha, fontSize) {
+		const uid = GodotRuntime.parseString(pUid);
+		const type = GodotRuntime.parseString(pType);
 		const key = GodotRuntime.parseString(pKey);
 		const value = GodotRuntime.parseString(pText);
 		YWebText.seen.add(uid);
@@ -398,12 +884,14 @@ const YWebText = {
 		let element = YWebText.elements.get(uid);
 		const tag = kind ? 'div' : 'img';
 		if (!element || element.tagName.toLowerCase() !== tag) {
-			element?.remove();
+			if (element) YWebText.drop(element);
 			element = document.createElement(tag);
+			YWebText.identify(element, uid);
 			element.dataset.ywebPlane3d = uid;
 			YWebText.getRoot().appendChild(element);
 			YWebText.elements.set(uid, element);
 		}
+		if (element.dataset.ywebNode3d !== type) element.dataset.ywebNode3d = type;
 		if (kind) element.textContent = value;
 		else {
 			const source = YWebText.images.get(key);
@@ -420,25 +908,33 @@ const YWebText = {
 		if (element.dataset.ywebStyle !== style) {
 			element.dataset.ywebStyle = style;
 			element.style.cssText = style;
+			delete element.dataset.ywebTransform;
 		}
-		// 四隅を一致させる射影変換を、CSSの列優先matrix3dへ組み立てる。
-		const dx1 = x1 - x3;
-		const dx2 = x2 - x3;
-		const dx3 = x0 - x1 - x2 + x3;
-		const dy1 = y1 - y3;
-		const dy2 = y2 - y3;
-		const dy3 = y0 - y1 - y2 + y3;
-		const divisor = dx1 * dy2 - dx2 * dy1;
-		const gx = divisor ? (dx3 * dy2 - dx2 * dy3) / divisor : 0;
-		const gy = divisor ? (dx1 * dy3 - dx3 * dy1) / divisor : 0;
-		const transform = [
-			(x1 - x0 + gx * x1) / width, (y1 - y0 + gx * y1) / width, 0, gx / width,
-			(x2 - x0 + gy * x2) / height, (y2 - y0 + gy * y2) / height, 0, gy / height,
-			0, 0, 1, 0, x0, y0, 0, 1,
-		].join(',');
+		const transform = YWebText.perspective(width, height, x0, y0, x1, y1, x2, y2, x3, y3).join(',');
 		if (element.dataset.ywebTransform !== transform) {
 			element.dataset.ywebTransform = transform;
 			element.style.transform = `matrix3d(${transform})`;
+		}
+	},
+	yweb_project_sync__sig: 'vp' + 'f'.repeat(10) + 'i',
+	// SubViewport内の平坦DOMをSprite3Dと同じ四隅へ射影し、入力判定もBrowserへ任せる。
+	yweb_project_sync: function (pOwner, width, height, x0, y0, x1, y1, x2, y2, x3, y3, z) {
+		const owner = GodotRuntime.parseString(pOwner);
+		const plane = YWebText.perspective(width, height, x0, y0, x1, y1, x2, y2, x3, y3);
+		for (const uid of YWebText.nodeOwners.get(owner) || []) {
+			const element = YWebText.elements.get(uid);
+			if (!element) continue;
+			const raw = element.dataset.ywebMatrix || element.dataset.ywebTransform;
+			const values = raw?.split(',').map(Number);
+			if (values?.length !== 6 || values.some((value) => !Number.isFinite(value))) continue;
+			const scale = Number(element.dataset.ywebTextScale || 1);
+			const [a, b, c, d, e, f] = values;
+			const local = [a * scale, b * scale, 0, 0, c, d, 0, 0, 0, 0, 1, 0, e, f, 0, 1];
+			element.style.transform = `matrix3d(${YWebText.multiply(plane, local).join(',')})`;
+			if (!element.dataset.ywebProjected) element.dataset.ywebProjectZ = element.style.zIndex;
+			element.style.zIndex = String(z + Math.abs(Number(element.style.zIndex) || 0) % 100);
+			element.dataset.ywebProjected = '1';
+			YWebText.projected.add(uid);
 		}
 	},
 	yweb_text_set_event_cb__sig: 'vp',
@@ -471,11 +967,27 @@ const YWebText = {
 	// 一frameの文字同期前にroot寸法を更新する。
 	yweb_text_begin: function () {
 		YWebText.resizeRoot();
+		// 前frameの射影を2D確定行列へ戻し、今frameに存在する3D面を改めて適用する。
+		for (const uid of YWebText.projected) {
+			const element = YWebText.elements.get(uid);
+			if (!element) continue;
+			if (element.dataset.ywebMatrix) YWebText.place(element);
+			else if (element.dataset.ywebTransform) element.style.transform = `matrix(${element.dataset.ywebTransform})`;
+			element.style.zIndex = element.dataset.ywebProjectZ || '';
+			delete element.dataset.ywebProjectZ;
+			delete element.dataset.ywebProjected;
+		}
+		YWebText.projected.clear();
 		YWebText.seen.clear();
+		YWebText.meshes.clear();
+		YWebText.clips.clear();
+		YWebText.scrollMembers.clear();
+		YWebText.scrollOwners.clear();
+		YWebText.scrollSeen.clear();
 	},
-	yweb_text_sync__sig: 'viiii' + 'f'.repeat(8) + 'i'.repeat(8) + 'f'.repeat(25),
+	yweb_text_sync__sig: 'viiii' + 'f'.repeat(8) + 'i'.repeat(8) + 'f'.repeat(28),
 	// 一つのControl状態をObjectID対応の意味要素へ反映する。
-	yweb_text_sync: function (pUid, pText, pAux, pFont, xx, xy, yx, yy, x, y, width, height, flags, z, horizontal, vertical, kind, maxLength, selectionStart, selectionEnd, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha, scrollX, scrollY) {
+	yweb_text_sync: function (pUid, pText, pAux, pFont, xx, xy, yx, yy, x, y, width, height, flags, z, horizontal, vertical, kind, maxLength, selectionStart, selectionEnd, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha, fontAscent, glyphTop, glyphBottom, scrollX, scrollY) {
 		const uid = GodotRuntime.parseString(pUid);
 		YWebText.seen.add(uid);
 		YWebText.trackDraw(uid);
@@ -485,7 +997,7 @@ const YWebText = {
 		const tag = YWebText.tags[kind] || 'span';
 		let element = YWebText.elements.get(uid);
 		if (!element || element.tagName.toLowerCase() !== tag) {
-			element?.remove();
+			if (element) YWebText.drop(element);
 			element = YWebText.create(uid, kind);
 		}
 		const type = YWebText.kinds[kind] || 'Control';
@@ -496,8 +1008,10 @@ const YWebText = {
 			element.dataset.ywebMatrix = transform;
 			YWebText.place(element);
 		}
+		YWebText.clip(element, uid, ...YWebText.scrollMatrix(uid, transform).split(',').map(Number));
 		let textChanged = false;
 		if (tag === 'input' || tag === 'textarea') {
+			element.tabIndex = flags & 1024 ? 0 : -1;
 			if (!element.dataset.ywebComposing && element.value !== text) {
 				element.value = text;
 				delete element.dataset.ywebSent;
@@ -521,16 +1035,17 @@ const YWebText = {
 				if (document.activeElement === element && !element.dataset.ywebFocusPending) element.blur();
 			}
 		} else {
-			if (element.textContent !== text) {
-				element.textContent = text;
+			const content = element.ywebGlyph || element;
+			if (content.textContent !== text) {
+				content.textContent = text;
 				textChanged = true;
 			}
 			if (tag === 'button') element.disabled = !!(flags & 256);
 			if (tag === 'a') {
-				if (aux && !(flags & 256)) element.href = aux; else element.removeAttribute('href');
+				if (aux) element.href = aux; else element.removeAttribute('href');
 			}
 			if (flags & 256) element.setAttribute('aria-disabled', 'true'); else element.removeAttribute('aria-disabled');
-			element.tabIndex = flags & 1024 ? 0 : -1;
+			element.tabIndex = flags & 1024 && !(flags & 256) ? 0 : -1;
 			if (flags & 64 && !YWebText.mouseDown && !element.dataset.ywebBlurPending) {
 				delete element.dataset.ywebFocusPending;
 				if (document.activeElement !== element) element.focus({ preventScroll: true });
@@ -543,9 +1058,14 @@ const YWebText = {
 			if (Math.abs(element.scrollLeft - scrollX) > 0.5) element.scrollLeft = scrollX;
 			if (Math.abs(element.scrollTop - scrollY) > 0.5) element.scrollTop = scrollY;
 		}
-		const appearance = [width, height, flags, z, horizontal, vertical, font, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha].join(',');
-		if (element.dataset.ywebAppearance === appearance && !(kind === 5 && textChanged)) return;
+		const appearance = [width, height, flags, z, horizontal, vertical, font, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha, fontAscent, glyphTop, glyphBottom].join(',');
+		if (element.dataset.ywebAppearance === appearance && !textChanged) return;
 		element.dataset.ywebAppearance = appearance;
+		element.dataset.ywebFontAscent = String(fontAscent);
+		element.dataset.ywebGlyphTop = String(glyphTop);
+		element.dataset.ywebGlyphBottom = String(glyphBottom);
+		element.dataset.ywebWrap = flags & 8 ? '1' : '0';
+		element.dataset.ywebDecorated = outlineSize > 0 || shadowAlpha > 0 || flags & 16 ? '1' : '0';
 		element.style.display = flags & 1 ? (tag === 'input' || tag === 'textarea' || kind === 5 ? 'block' : 'flex') : 'none';
 		element.style.width = `${width}px`;
 		element.style.height = `${height}px`;
@@ -572,26 +1092,65 @@ const YWebText = {
 		element.style.textDecorationLine = flags & 16 ? 'underline' : 'none';
 		element.style.textUnderlineOffset = flags & 16 ? `${underlineOffset}px` : 'auto';
 		element.style.textDecorationThickness = flags & 16 ? `${underlineThickness}px` : 'auto';
-		if (kind === 5) {
-			YWebText.fit(element);
-			YWebText.loadFont(element);
-		}
+		YWebText.glyph(element);
+		if (kind === 5) YWebText.fit(element);
+		if (element.ywebGlyph) YWebText.loadFont(element);
 	},
 	yweb_text_remove__sig: 'vi',
 	// 解放済みControlの意味要素とObjectID対応を回収する。
 	yweb_text_remove: function (pUid) {
 		const uid = GodotRuntime.parseString(pUid);
-		YWebText.elements.get(uid)?.remove();
+		const element = YWebText.elements.get(uid);
+		if (element) YWebText.drop(element);
 		YWebText.elements.delete(uid);
+		YWebText.forgetDraw(uid);
 	},
 	yweb_text_end__sig: 'v',
 	// 今frameで使われなかった複数項目と解放済み要素を回収する。
 	yweb_text_end: function () {
+		// 同色の三角形群を一枚のSVG pathへ確定し、内部edgeの隙間を避ける。
+		for (const [uid, mesh] of YWebText.meshes) {
+			YWebText.seen.add(uid);
+			let element = YWebText.elements.get(uid);
+			if (!element) {
+				element = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+				YWebText.identify(element, uid);
+				element.dataset.ywebTriangle3d = uid;
+				const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+				YWebText.identify(path, `${uid}-path`);
+				element.appendChild(path);
+				YWebText.getRoot().appendChild(element);
+				YWebText.elements.set(uid, element);
+			}
+			element.dataset.ywebNode3d = mesh.type;
+			element.dataset.ywebTriangleCount = String(mesh.count);
+			const style = `position:absolute;left:0;top:0;width:100%;height:100%;z-index:${mesh.z};overflow:visible;pointer-events:none`;
+			if (element.dataset.ywebStyle !== style) {
+				element.dataset.ywebStyle = style;
+				element.style.cssText = style;
+			}
+			const path = element.firstElementChild;
+			if (path.getAttribute('d') !== mesh.path) path.setAttribute('d', mesh.path);
+			if (path.getAttribute('fill') !== mesh.color) path.setAttribute('fill', mesh.color);
+			path.setAttribute('fill-rule', 'nonzero');
+		}
 		for (const [uid, element] of YWebText.elements) {
+			const animation = YWebText.elementAnimations.get(uid);
+			if (animation && animation.length > 0) {
+				const time = (performance.now() / 1000 + animation.offset) % animation.length;
+				const visible = animation.begin <= animation.end ? time >= animation.begin && time < animation.end : time >= animation.begin || time < animation.end;
+				element.style.visibility = visible ? 'visible' : 'hidden';
+			} else element.style.visibility = 'visible';
 			if (YWebText.seen.has(uid)) continue;
-			element.remove();
+			YWebText.drop(element);
 			YWebText.elements.delete(uid);
 			YWebText.forgetDraw(uid);
+		}
+		YWebText.applyScroll();
+		for (const [uid, scroll] of YWebText.scrolls) {
+			if (YWebText.scrollSeen.has(uid)) continue;
+			scroll.element.remove();
+			YWebText.scrolls.delete(uid);
 		}
 	},
 	yweb_draw_reset__sig: 'vp',
@@ -601,15 +1160,21 @@ const YWebText = {
 		const prefix = GodotRuntime.parseString(pPrefix);
 		if (prefix === '') {
 			YWebText.images.clear();
-			for (const uid of YWebText.drawn) YWebText.elements.get(uid)?.remove();
+			for (const uid of YWebText.drawn) {
+				const element = YWebText.elements.get(uid);
+				if (element) YWebText.drop(element);
+			}
 			YWebText.drawn.clear();
 			YWebText.drawOwners.clear();
+			YWebText.activeAnimations.clear();
+			YWebText.elementAnimations.clear();
 			return;
 		}
-		for (const uid of YWebText.drawOwners.get(prefix) || []) {
-			YWebText.elements.get(uid)?.remove();
+		for (const uid of [...(YWebText.drawOwners.get(prefix) || [])]) {
+			const element = YWebText.elements.get(uid);
+			if (element) YWebText.drop(element);
 			YWebText.elements.delete(uid);
-			YWebText.drawn.delete(uid);
+			YWebText.forgetDraw(uid);
 		}
 		YWebText.drawOwners.delete(prefix);
 	},
