@@ -22,7 +22,7 @@ const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const size = { width: 800, height: 600 }; // 両者で揃える画面寸法。
 const limit = 10; // 各画面へ許す8bit RGBのRMSE上限。10は不合格にする。
 const containerTypes = JSON.parse(fs.readFileSync(path.join(repo, 'tests/fixtures/dom_only/container_types.json'), 'utf8')); // ClassDBとfixtureで共有するContainer派生型。
-const allScreens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d', 'animated_sprite', 'mesh_3d', 'themes', 'particles_2d', 'controls_extended', 'nodes_2d_extended', 'windows_media', 'affects_extended', 'scroll_layout', 'container_overflow', 'input_3d', 'canvas_inputs']; // 比べられる全画面。
+const allScreens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d', 'animated_sprite', 'mesh_3d', 'themes', 'particles_2d', 'controls_extended', 'nodes_2d_extended', 'windows_media', 'affects_extended', 'scroll_layout', 'container_overflow', 'input_3d', 'code_edit', 'canvas_inputs']; // 比べられる全画面。
 const selected = (process.env.YWEB_SCREEN || '').split(',').filter(Boolean); // 変更箇所へ絞る画面名。
 const screens = selected.length ? selected : allScreens; // 未指定時は全画面を一括検査する。
 const comparedScreens = screens.filter((name) => name !== 'canvas_inputs'); // 画素比較する画面。操作fixtureはBrowser往復へ専念する。
@@ -112,7 +112,7 @@ for (const name of comparedScreens) {
 			await page.evaluate(() => document.fonts.ready);
 			await page.waitForTimeout(settle[name] ? 2500 : 400);
 			const shot = path.join(work, `browser-${name}.png`);
-			const shotBeforeInteraction = name === 'themes' || name === 'scroll_layout' || name === 'container_overflow' || name === 'input_3d'; // 操作前の初期画面をGodot基準と比べる。
+			const shotBeforeInteraction = name === 'themes' || name === 'scroll_layout' || name === 'container_overflow' || name === 'input_3d' || name === 'code_edit'; // 操作前の初期画面をGodot基準と比べる。
 			if (shotBeforeInteraction) await page.screenshot({ path: shot });
 			if (name === 'draw_all') {
 				const dom = await page.evaluate(() => ({
@@ -513,6 +513,88 @@ for (const name of comparedScreens) {
 				await page.getByText('2D VALUE:beta|left/right|1|set0', { exact: true }).waitFor();
 				assert.deepEqual(await Promise.all([line3d.inputValue(), area3d.inputValue(), line2d.inputValue(), area2d.inputValue()]), ['alpha', 'one\ntwo', 'beta', 'left\nright'], 'Godotへ渡した入力値をDOM表示へ戻せていない');
 				await page.screenshot({ path: path.join(work, 'browser-input_3d-filled.png') });
+			}
+			if (name === 'code_edit') {
+				const editor = page.locator('textarea[data-yweb-code-input]');
+				const wrapper = page.locator('div[data-yweb-kind="CodeEdit"][data-yweb-text]');
+				await editor.waitFor();
+				const initial = await wrapper.evaluate((element) => {
+					const input = element.querySelector('textarea');
+					const rows = [...element.querySelectorAll('[data-yweb-code-line]')];
+					globalThis.__ywebCodeRefs = { wrapper: element, input, rows: new Map(rows.map((row) => [row.dataset.ywebCodeLine, row])) };
+					return {
+						tag: element.tagName, input: input?.tagName, layer: element.querySelector('[data-yweb-code-layer]')?.tagName,
+						kind: input?.dataset.ywebKind, rows: rows.length, numbers: rows.map((row) => row.querySelector('[data-yweb-code-number]')?.textContent),
+						text: rows.map((row) => row.querySelector('code')?.textContent), colors: [...new Set([...element.querySelectorAll('code span')].map((span) => getComputedStyle(span).color))],
+						guides: element.querySelectorAll('[data-yweb-column]').length, fill: getComputedStyle(input).webkitTextFillColor,
+						scrollable: input.scrollHeight > input.clientHeight, value: input.value,
+					};
+				});
+				assert.deepEqual([initial.tag, initial.input, initial.layer, initial.kind], ['DIV', 'TEXTAREA', 'PRE', 'CodeEdit'], 'CodeEditの表示層と入力層を二層DOMにできていない');
+				assert.ok(initial.rows >= 6 && initial.rows < 36, `CodeEditを可視行へ絞れていない: ${initial.rows}`);
+				assert.ok(initial.text.includes('extends Node') && initial.text.includes('# 日本語のコメントも構文色で表示する'), 'CodeEditの可視本文を構文DOMへ置けていない');
+				assert.ok(initial.colors.length >= 4, `SyntaxHighlighterの色区分が不足: ${initial.colors}`);
+				assert.ok(initial.numbers.some((value) => value.endsWith('001')) && initial.guides === 2, '行番号または行長guideを表示していない');
+				assert.equal(initial.fill, 'rgba(0, 0, 0, 0)', '確定時のtextarea文字が構文DOMへ重なっている');
+				assert.ok(initial.scrollable && initial.value.includes('var value_29 := 29'), 'CodeEdit全文をnative textareaへ保持していない');
+
+				// Browser scrollだけで表示行を入れ替え、編集本文とNode DOMを作り直さない。
+				await editor.evaluate((input) => {
+					input.scrollTop = 220;
+					input.dispatchEvent(new Event('scroll', { bubbles: true }));
+				});
+				await page.waitForFunction(() => {
+					const lines = [...document.querySelectorAll('[data-yweb-code-line]')].map((row) => Number(row.dataset.ywebCodeLine));
+					return lines.length > 0 && Math.min(...lines) > 0;
+				});
+				await page.getByText(/^CHANGES 0 /).waitFor();
+				await editor.evaluate((input) => {
+					input.scrollTop = 0;
+					input.dispatchEvent(new Event('scroll', { bubbles: true }));
+				});
+
+				const japanese = 'func greet():\n    # 日本語のコメントを確定\n    print("こんにちは😀")';
+				await editor.focus();
+				await editor.evaluate((input, value) => {
+					input.setSelectionRange(0, input.value.length);
+					input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+					input.value = value;
+					input.setSelectionRange(value.length, value.length);
+					input.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: '日本語のコメントを確定' }));
+					input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertCompositionText', data: '日本語のコメントを確定', isComposing: true }));
+				}, japanese);
+				await page.waitForTimeout(40);
+				await page.getByText(/^CHANGES 0 /).waitFor();
+				assert.deepEqual(await editor.evaluate((input) => [getComputedStyle(input).webkitTextFillColor, input.ywebOwner.ywebLayer.style.visibility]), ['rgb(229, 231, 235)', 'hidden'], 'IME変換中の平文表示へ切り替えていない');
+
+				// compositionend後にinputが来る順でも、確定文章を一回にまとめる。
+				await editor.evaluate((input) => {
+					input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '日本語のコメントを確定' }));
+					input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromComposition', data: '日本語のコメントを確定' }));
+				});
+				await page.getByText('CHANGES 1 LINES 3 COMMENT     # 日本語のコメントを確定', { exact: true }).waitFor();
+				await page.waitForFunction(() => [...document.querySelectorAll('[data-yweb-code-text]')].some((row) => row.textContent.includes('日本語のコメントを確定')));
+				assert.equal(await editor.evaluate((input) => getComputedStyle(input).webkitTextFillColor), 'rgba(0, 0, 0, 0)', 'IME確定後に平文層が残っている');
+				assert.equal(await wrapper.locator('[data-yweb-code-layer]').evaluate((layer) => layer.style.visibility), 'visible', 'IME確定後に構文層が戻っていない');
+
+				// 貼り付け相当の文章入力とCodeEditの空白indentを全文同期へ流す。
+				await editor.evaluate((input) => {
+					input.value += '\n# 貼り付け文章';
+					input.setSelectionRange(input.value.length, input.value.length);
+					input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste', data: '# 貼り付け文章' }));
+				});
+				await page.getByText('CHANGES 2 LINES 4 COMMENT     # 日本語のコメントを確定', { exact: true }).waitFor();
+				await editor.press('Tab');
+				await page.getByText('CHANGES 3 LINES 4 COMMENT     # 日本語のコメントを確定', { exact: true }).waitFor();
+				assert.ok((await editor.inputValue()).endsWith('    '), 'CodeEditのspaces indentをBrowser Tabへ反映していない');
+
+				const stable = await wrapper.evaluate((element) => ({
+					wrapper: globalThis.__ywebCodeRefs.wrapper === element,
+					input: globalThis.__ywebCodeRefs.input === element.querySelector('textarea'),
+					connected: globalThis.__ywebCodeRefs.wrapper.isConnected && globalThis.__ywebCodeRefs.input.isConnected,
+				}));
+				assert.deepEqual(stable, { wrapper: true, input: true, connected: true }, 'CodeEditのNode UID DOMを入力やscrollで再生成している');
+				await page.screenshot({ path: path.join(work, 'browser-code_edit-ime.png') });
 			}
 			if (name === 'canvas_inputs') {
 				await exerciseUi(page, 'dom-canvas_inputs');

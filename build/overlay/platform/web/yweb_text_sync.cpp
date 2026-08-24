@@ -9,12 +9,14 @@
 
 #include "core/object/object.h"
 #include "core/io/resource_loader.h"
+#include "core/io/json.h"
 #include "core/templates/hash_map.h"
 #include "core/templates/hash_set.h"
 #include "scene/gui/base_button.h"
 #include "scene/gui/button.h"
 #include "scene/gui/check_box.h"
 #include "scene/gui/check_button.h"
+#include "scene/gui/code_edit.h"
 #include "scene/gui/color_picker.h"
 #include "scene/gui/label.h"
 #include "scene/gui/line_edit.h"
@@ -89,6 +91,7 @@ int yweb_text_prefer_dom();
 void yweb_site_scene(const char *p_path);
 void yweb_text_begin();
 void yweb_text_sync(const char *p_uid, const char *p_text, const char *p_aux, const char *p_font, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_flags, int p_z, int p_horizontal, int p_vertical, int p_kind, int p_max_length, int p_selection_start, int p_selection_end, float p_red, float p_green, float p_blue, float p_alpha, float p_font_size, float p_line_spacing, float p_outline_red, float p_outline_green, float p_outline_blue, float p_outline_alpha, float p_outline_size, float p_shadow_red, float p_shadow_green, float p_shadow_blue, float p_shadow_alpha, float p_shadow_x, float p_shadow_y, float p_underline_offset, float p_underline_thickness, float p_placeholder_red, float p_placeholder_green, float p_placeholder_blue, float p_placeholder_alpha, float p_font_ascent, float p_glyph_top, float p_glyph_bottom, float p_scroll_x, float p_scroll_y);
+void yweb_code_sync(const char *p_uid, const char *p_state);
 void yweb_text_remove(const char *p_uid);
 void yweb_clip_sync(const char *p_uid, const char *p_owner, float p_left, float p_top, float p_right, float p_bottom, int p_enabled);
 void yweb_scroll_sync(const char *p_uid, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, float p_max_x, float p_max_y);
@@ -116,6 +119,7 @@ enum TextKind {
 	TEXT_LINE_INPUT,
 	TEXT_AREA,
 	TEXT_CONTROL,
+	TEXT_CODE,
 };
 
 enum TextFlag {
@@ -385,6 +389,7 @@ bool yweb_text_dom_owns(const Control *p_control) {
 	}
 	if (Object::cast_to<LineEdit>(p_control)) return true;
 	if (const TextEdit *edit = Object::cast_to<TextEdit>(p_control)) {
+		if (Object::cast_to<CodeEdit>(p_control)) return true;
 		if (p_control->get_class() != SNAME("TextEdit")) return false;
 		if (edit->get_caret_count() != 1 || edit->get_gutter_count() != 0 || edit->is_drawing_minimap() || edit->get_syntax_highlighter().is_valid()) {
 			WARN_PRINT_ONCE("TextEditの補助表示をtextarea標準表示へ置き換えます。primary caretを同期します。");
@@ -517,12 +522,98 @@ static int text_index(TextEdit *p_edit, int p_line, int p_column) {
 	return index + p_column;
 }
 
+// 一行をSyntaxHighlighterの色境界で分け、Browserへ安全な文字列として渡す。
+static Array code_segments(CodeEdit *p_edit, int p_line, const Color &p_default) {
+	const String text = p_edit->get_line(p_line);
+	const Ref<SyntaxHighlighter> highlighter = p_edit->get_syntax_highlighter();
+	Dictionary colors = highlighter.is_valid() ? highlighter->get_line_syntax_highlighting(p_line) : Dictionary();
+	Vector<int> starts;
+	const Array keys = colors.keys();
+	for (int index = 0; index < keys.size(); index++) starts.push_back((int)keys[index]);
+	starts.sort();
+	if (starts.is_empty() || starts[0] != 0) starts.insert(0, 0);
+
+	Array segments;
+	Color color = p_default;
+	for (int index = 0; index < starts.size(); index++) {
+		const int from = CLAMP(starts[index], 0, text.length());
+		if (colors.has(from)) {
+			const Dictionary info = colors[from];
+			if (info.has("color")) color = info["color"];
+		}
+		const int to = index + 1 < starts.size() ? CLAMP(starts[index + 1], from, text.length()) : text.length();
+		Dictionary segment;
+		segment["text"] = text.substr(from, to - from);
+		segment["color"] = String("#") + color.to_html();
+		segments.push_back(segment);
+	}
+	if (segments.is_empty()) {
+		Dictionary segment;
+		segment["text"] = "";
+		segment["color"] = String("#") + p_default.to_html();
+		segments.push_back(segment);
+	}
+	return segments;
+}
+
+// CodeEditの見えている行と補助表示を、再利用可能なDOM行へまとめて渡す。
+static void sync_code(CodeEdit *p_edit, float p_line_height) {
+	Dictionary state;
+	state["gutter"] = p_edit->get_total_gutter_width();
+	// 行番号と記号をGodotが確定した各gutterの位置へ置く。
+	int gutter_x = 0;
+	for (int index = 0; index < p_edit->get_gutter_count(); index++) {
+		if (!p_edit->is_gutter_drawn(index)) continue;
+		const String name = p_edit->get_gutter_name(index);
+		if (name == "main_gutter" || name == "line_numbers" || name == "fold_gutter") {
+			state[name + "_x"] = gutter_x;
+			state[name + "_width"] = p_edit->get_gutter_width(index);
+		}
+		gutter_x += p_edit->get_gutter_width(index);
+	}
+	state["tab"] = p_edit->get_tab_size();
+	state["indent"] = p_edit->is_indent_using_spaces() ? String(" ").repeat(p_edit->get_indent_size()) : String("\t");
+	state["line_height"] = p_line_height;
+	state["line_numbers"] = p_edit->is_draw_line_numbers_enabled();
+	state["line_color"] = String("#") + p_edit->get_theme_color(SNAME("line_number_color")).to_html();
+	state["current_color"] = p_edit->is_highlight_current_line_enabled() ? String("#") + p_edit->get_theme_color(SNAME("current_line_color")).to_html() : "transparent";
+	state["selection_color"] = String("#") + p_edit->get_theme_color(SNAME("selection_color")).to_html();
+	state["caret_color"] = String("#") + p_edit->get_theme_color(SNAME("caret_color")).to_html();
+	state["text_color"] = String("#") + p_edit->get_font_color().to_html();
+	state["current"] = p_edit->get_caret_line();
+
+	Array lines;
+	const int first = MAX(0, p_edit->get_first_visible_line());
+	const int last = MIN(p_edit->get_line_count() - 1, p_edit->get_last_full_visible_line() + 1);
+	const int digits = MAX(p_edit->get_line_numbers_min_digits(), String::num_int64(p_edit->get_line_count()).length());
+	for (int line = first; line <= last; line++) {
+		if (line >= p_edit->get_first_visible_line() && line <= p_edit->get_last_full_visible_line() && !p_edit->is_line_in_viewport(line)) continue;
+		Dictionary row;
+		const String number = String::num_int64(line + 1).lpad(digits, p_edit->is_line_numbers_zero_padded() ? "0" : " ");
+		row["line"] = line;
+		row["number"] = number;
+		row["y"] = p_edit->get_scroll_pos_for_line(line) * p_line_height;
+		row["fold"] = p_edit->is_line_folded(line) ? "closed" : p_edit->can_fold_line(line) ? "open" : "";
+		row["breakpoint"] = p_edit->is_line_breakpointed(line);
+		row["bookmark"] = p_edit->is_line_bookmarked(line);
+		row["executing"] = p_edit->is_line_executing(line);
+		row["segments"] = code_segments(p_edit, line, p_edit->get_font_color());
+		lines.push_back(row);
+	}
+	state["lines"] = lines;
+	state["guides"] = p_edit->get_line_length_guidelines();
+	const CharString uid = text_uid(p_edit->get_instance_id());
+	const CharString json = JSON::stringify(state).utf8();
+	yweb_code_sync(uid.get_data(), json.get_data());
+}
+
 // TextEditの値、Theme、caret、selectionをtextarea状態へまとめる。
 static void sync_text_area(TextEdit *p_edit) {
 	TextState state;
 	state.text = p_edit->get_text();
 	state.aux = p_edit->get_placeholder();
-	state.kind = TEXT_AREA;
+	CodeEdit *code = Object::cast_to<CodeEdit>(p_edit);
+	state.kind = code ? TEXT_CODE : TEXT_AREA;
 	state.flags = TEXT_CLIP;
 	if (p_edit->get_line_wrapping_mode() != TextEdit::LINE_WRAPPING_NONE) state.flags |= TEXT_WRAP;
 	if (p_edit->is_editable()) state.flags |= TEXT_EDITABLE;
@@ -545,6 +636,7 @@ static void sync_text_area(TextEdit *p_edit) {
 	state.outline_size = p_edit->get_theme_constant(SNAME("outline_size"));
 	state.rect = input_rect(p_edit, p_edit->get_theme_stylebox(p_edit->is_editable() ? SNAME("normal") : SNAME("read_only")));
 	sync_text(p_edit, state);
+	if (code) sync_code(code, MAX(1.0f, state.font_size + state.line_spacing));
 }
 
 // Canvas RIDを所有Controlへ一意に登録し、解放用の逆索引も保つ。

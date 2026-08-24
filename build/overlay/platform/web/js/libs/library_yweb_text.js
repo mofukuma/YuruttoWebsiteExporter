@@ -33,8 +33,8 @@ const YWebText = {
 		metricsContext: null, // Browser字形を同じfontと寸法で測るCanvas文脈。
 		lineCache: {}, // 書体と寸法ごとの、本来の行送り。測り直しを避ける。
 		ruler: null, // 行送りを測るための、見えない物差し。
-		kinds: ['Label', 'Button', 'LinkButton', 'LineEdit', 'TextEdit', 'ControlText'],
-		tags: ['span', 'button', 'a', 'input', 'textarea', 'span'],
+		kinds: ['Label', 'Button', 'LinkButton', 'LineEdit', 'TextEdit', 'ControlText', 'CodeEdit'],
+		tags: ['span', 'button', 'a', 'input', 'textarea', 'span', 'div'],
 		// Canvasと同じ親へ文字と入力専用rootを一度作る。
 		getRoot: function () {
 			if (YWebText.root?.isConnected) return YWebText.root;
@@ -47,6 +47,11 @@ const YWebText = {
 			const style = document.createElement('style');
 			style.textContent = [
 				'#yweb-text-root input::placeholder,#yweb-text-root textarea::placeholder{color:var(--yweb-placeholder,currentColor);opacity:1}',
+				'#yweb-text-root textarea[data-yweb-code-input]{color:transparent;-webkit-text-fill-color:transparent;caret-color:var(--yweb-caret,currentColor)}',
+				'#yweb-text-root textarea[data-yweb-code-input]::selection{background:var(--yweb-selection,Highlight);color:transparent;-webkit-text-fill-color:transparent}',
+				'#yweb-text-root textarea[data-yweb-code-input]::-webkit-scrollbar{width:8px;height:8px}',
+				'#yweb-text-root textarea[data-yweb-code-input]::-webkit-scrollbar-track{background:transparent}',
+				'#yweb-text-root textarea[data-yweb-code-input]::-webkit-scrollbar-thumb{background:#808080;border-radius:4px}',
 				'#yweb-text-root [data-yweb-scroll]{scrollbar-color:#cbd5e1 #1e293b;scrollbar-width:auto}',
 				'#yweb-text-root [data-yweb-scroll]::-webkit-scrollbar{width:14px;height:14px}',
 				'#yweb-text-root [data-yweb-scroll]::-webkit-scrollbar-track{background:#1e293b}',
@@ -59,6 +64,108 @@ const YWebText = {
 			window.addEventListener('wheel', (event) => YWebText.wheel(event), { passive: false });
 			YWebText.root = root;
 			return root;
+		},
+		// CodeEditの入力本体を他の意味要素と同じ操作経路へ渡す。
+		form: function (element) {
+			return element.ywebInput || element;
+		},
+		// Browser scrollを仮想化した構文行、行番号、ガイドへ即時反映する。
+		codeScroll: function (input) {
+			const owner = input?.ywebOwner;
+			if (!owner?.ywebRows) return;
+			const gutter = Number(owner.dataset.ywebCodeGutter || 0);
+			for (const row of owner.ywebRows.values()) {
+				row.style.top = `${Number(row.dataset.ywebCodeY) - input.scrollTop}px`;
+				row.ywebCode.style.left = `${gutter - input.scrollLeft}px`;
+			}
+			for (const guide of owner.ywebGuides || []) guide.style.left = `calc(${gutter - input.scrollLeft}px + ${guide.dataset.ywebColumn}ch)`;
+		},
+		// SyntaxHighlighterの可視行を、同じ行DOMを保ったまま色付きspanへ反映する。
+		code: function (owner, source) {
+			if (!owner?.ywebInput || owner.dataset.ywebCodeState === source) return;
+			owner.dataset.ywebCodeState = source;
+			const state = JSON.parse(source);
+			const input = owner.ywebInput;
+			owner.dataset.ywebCodeGutter = String(state.gutter);
+			owner.style.setProperty('--yweb-caret', state.caret_color);
+			owner.style.setProperty('--yweb-selection', state.selection_color);
+			owner.style.setProperty('--yweb-code-color', state.text_color);
+			input.style.paddingLeft = `${state.gutter}px`;
+			input.style.tabSize = String(state.tab);
+			input.dataset.ywebIndent = state.indent || '\t';
+			const seen = new Set();
+			for (const line of state.lines) {
+				const key = String(line.line);
+				seen.add(key);
+				let row = owner.ywebRows.get(key);
+				if (!row) {
+					row = document.createElement('div');
+					row.dataset.ywebCodeLine = key;
+					row.style.cssText = 'position:absolute;left:0;right:0;pointer-events:none;white-space:pre';
+					const number = document.createElement('span');
+					number.dataset.ywebCodeNumber = key;
+					number.style.cssText = 'position:absolute;text-align:left;white-space:pre';
+					const main = document.createElement('span');
+					main.dataset.ywebCodeMain = key;
+					main.style.cssText = 'position:absolute;text-align:center;white-space:pre';
+					const fold = document.createElement('span');
+					fold.dataset.ywebCodeFold = key;
+					fold.style.cssText = 'position:absolute;text-align:center;white-space:pre';
+					const code = document.createElement('code');
+					code.dataset.ywebCodeText = key;
+					code.style.cssText = 'position:absolute;top:0;white-space:pre;font:inherit;line-height:inherit';
+					row.append(number, main, fold, code);
+					row.ywebNumber = number;
+					row.ywebMain = main;
+					row.ywebFold = fold;
+					row.ywebCode = code;
+					owner.ywebLayer.appendChild(row);
+					owner.ywebRows.set(key, row);
+				}
+				row.dataset.ywebCodeY = String(line.y);
+				row.style.height = `${state.line_height}px`;
+				row.style.lineHeight = `${state.line_height}px`;
+				row.style.background = line.line === state.current ? state.current_color : 'transparent';
+				const marks = `${line.executing ? '▶' : ''}${line.breakpoint ? '●' : ''}${line.bookmark ? '◆' : ''}`;
+				const number = state.line_numbers ? line.number : '';
+				if (row.ywebNumber.textContent !== number) row.ywebNumber.textContent = number;
+				if (row.ywebMain.textContent !== marks) row.ywebMain.textContent = marks;
+				const fold = line.fold === 'closed' ? '▸' : line.fold === 'open' ? '▾' : '';
+				if (row.ywebFold.textContent !== fold) row.ywebFold.textContent = fold;
+				row.ywebNumber.style.left = `${state.line_numbers_x || 0}px`;
+				row.ywebNumber.style.width = `${state.line_numbers_width || 0}px`;
+				row.ywebMain.style.left = `${state.main_gutter_x || 0}px`;
+				row.ywebMain.style.width = `${state.main_gutter_width || 0}px`;
+				row.ywebFold.style.left = `${state.fold_gutter_x || 0}px`;
+				row.ywebFold.style.width = `${state.fold_gutter_width || 0}px`;
+				row.ywebNumber.style.color = state.line_color;
+				row.ywebMain.style.color = state.line_color;
+				row.ywebFold.style.color = state.line_color;
+				const signature = JSON.stringify(line.segments);
+				if (row.ywebCode.dataset.ywebSegments !== signature) {
+					row.ywebCode.dataset.ywebSegments = signature;
+					row.ywebCode.replaceChildren(...line.segments.map((part) => {
+						const span = document.createElement('span');
+						span.textContent = part.text;
+						span.style.color = part.color;
+						return span;
+					}));
+				}
+			}
+			for (const [key, row] of owner.ywebRows) {
+				if (seen.has(key)) continue;
+				row.remove();
+				owner.ywebRows.delete(key);
+			}
+			for (const guide of owner.ywebGuides || []) guide.remove();
+			owner.ywebGuides = (state.guides || []).map((column) => {
+				const guide = document.createElement('i');
+				guide.dataset.ywebColumn = String(column);
+				guide.style.cssText = 'position:absolute;top:0;bottom:0;border-left:1px solid currentColor;opacity:.3;pointer-events:none';
+				owner.ywebLayer.appendChild(guide);
+				return guide;
+			});
+			YWebText.codeScroll(input);
 		},
 		// DOM onlyでは描画しないCanvasを画面から外す。寸法はrootの基準として残す。
 		hideCanvas: function () {
@@ -458,22 +565,55 @@ const YWebText = {
 				element.dataset.ywebBlurPending = 'true';
 				YWebText.send(element, 4);
 			});
-			element.addEventListener('compositionstart', () => { element.dataset.ywebComposing = 'true'; });
+			element.addEventListener('compositionstart', () => {
+				element.dataset.ywebComposing = 'true';
+				delete element.dataset.ywebCompositionPending;
+				if (element.dataset.ywebCodeInput) {
+					element.style.webkitTextFillColor = 'var(--yweb-code-color)';
+					element.ywebOwner.ywebLayer.style.visibility = 'hidden';
+				}
+			});
 			element.addEventListener('compositionend', () => {
 				delete element.dataset.ywebComposing;
-				YWebText.limit(element);
-				YWebText.send(element, 1);
+				element.dataset.ywebCompositionPending = 'true';
+				// Chrome系のinput-before-endとFirefox系のinput-after-endを同じ確定一回へ畳む。
+				requestAnimationFrame(() => {
+					if (!element.dataset.ywebCompositionPending) return;
+					delete element.dataset.ywebCompositionPending;
+					YWebText.limit(element);
+					YWebText.send(element, 1);
+					if (element.dataset.ywebCodeInput) {
+						element.style.webkitTextFillColor = 'transparent';
+						element.ywebOwner.ywebLayer.style.visibility = 'visible';
+					}
+				});
 			});
 			element.addEventListener('input', () => {
 				if (!element.dataset.ywebComposing) {
+					delete element.dataset.ywebCompositionPending;
 					YWebText.limit(element);
 					YWebText.send(element, 1);
+					if (element.dataset.ywebCodeInput) {
+						element.style.webkitTextFillColor = 'transparent';
+						element.ywebOwner.ywebLayer.style.visibility = 'visible';
+					}
 				}
 			});
-			element.addEventListener('scroll', () => YWebText.send(element, 7));
+			element.addEventListener('scroll', () => {
+				YWebText.codeScroll(element);
+				YWebText.send(element, 7);
+			});
 			element.addEventListener('select', () => YWebText.send(element, 2));
 			element.addEventListener('keyup', () => YWebText.send(element, 2));
 			element.addEventListener('keydown', (event) => {
+				if (element.dataset.ywebCodeInput && event.key === 'Tab' && !event.isComposing) {
+					event.preventDefault();
+					event.stopPropagation();
+					const indent = element.dataset.ywebIndent || '\t';
+					element.setRangeText(indent, element.selectionStart, element.selectionEnd, 'end');
+					element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: indent }));
+					return;
+				}
 				if (YWebText.tab(element, event)) return;
 				event.stopPropagation();
 				if (element.tagName === 'INPUT' && event.key === 'Enter' && !event.isComposing) {
@@ -512,8 +652,34 @@ const YWebText = {
 			YWebText.identify(element, uid);
 			element.dataset.ywebText = uid;
 			element.style.cssText = 'position:absolute;box-sizing:border-box;transform-origin:0 0;margin:0;padding:0;border:0;outline:0;background:transparent;color:inherit;font:inherit;border-radius:0';
+			if (kind === 6) {
+				const layer = document.createElement('pre');
+				layer.dataset.ywebCodeLayer = uid;
+				layer.setAttribute('aria-hidden', 'true');
+				layer.style.cssText = 'position:absolute;inset:0;margin:0;padding:0;overflow:hidden;pointer-events:none;font:inherit;line-height:inherit';
+				const input = document.createElement('textarea');
+				YWebText.identify(input, `${uid}-input`);
+				input.dataset.ywebText = uid;
+				input.dataset.ywebCodeInput = uid;
+				input.autocomplete = 'off';
+				input.autocapitalize = 'off';
+				input.spellcheck = false;
+				input.wrap = 'off';
+				input.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;box-sizing:border-box;margin:0;padding:0;border:0;outline:0;background:transparent;font:inherit;line-height:inherit;white-space:pre;overflow:auto;resize:none;appearance:none;pointer-events:auto;user-select:text';
+				input.ywebOwner = element;
+				element.append(layer, input);
+				element.ywebLayer = layer;
+				element.ywebInput = input;
+				element.ywebRows = new Map();
+				element.ywebGuides = [];
+				YWebText.bindInput(input);
+			}
 			if (tag === 'button') element.type = 'button';
-			if (tag === 'input' || tag === 'textarea') {
+			if (kind === 6) {
+				element.style.pointerEvents = 'none';
+				element.style.userSelect = 'text';
+				element.style.display = 'block';
+			} else if (tag === 'input' || tag === 'textarea') {
 				element.style.pointerEvents = 'auto';
 				element.style.userSelect = 'text';
 				element.style.appearance = 'none';
@@ -1002,6 +1168,8 @@ const YWebText = {
 		}
 		const type = YWebText.kinds[kind] || 'Control';
 		if (element.dataset.ywebKind !== type) element.dataset.ywebKind = type;
+		const form = YWebText.form(element);
+		if (form !== element && form.dataset.ywebKind !== type) form.dataset.ywebKind = type;
 		const transform = [xx, xy, yx, yy, x, y].join(',');
 		if (element.dataset.ywebTransform !== transform) {
 			element.dataset.ywebTransform = transform;
@@ -1010,29 +1178,29 @@ const YWebText = {
 		}
 		YWebText.clip(element, uid, ...YWebText.scrollMatrix(uid, transform).split(',').map(Number));
 		let textChanged = false;
-		if (tag === 'input' || tag === 'textarea') {
-			element.tabIndex = flags & 1024 ? 0 : -1;
-			if (!element.dataset.ywebComposing && element.value !== text) {
-				element.value = text;
-				delete element.dataset.ywebSent;
+		if (form.tagName === 'INPUT' || form.tagName === 'TEXTAREA') {
+			form.tabIndex = flags & 1024 ? 0 : -1;
+			if (!form.dataset.ywebComposing && form.value !== text) {
+				form.value = text;
+				delete form.dataset.ywebSent;
 			}
-			element.placeholder = aux;
-			element.readOnly = !(flags & 32);
-			if (tag === 'input') element.type = flags & 128 ? 'password' : 'text';
-			element.dataset.ywebMaxLength = String(maxLength);
-			if (maxLength > 0) element.maxLength = maxLength * 2; else element.removeAttribute('maxlength');
-			element.wrap = flags & 8 ? 'soft' : 'off';
-			if (!element.dataset.ywebComposing) {
+			form.placeholder = aux;
+			form.readOnly = !(flags & 32);
+			if (form.tagName === 'INPUT') form.type = flags & 128 ? 'password' : 'text';
+			form.dataset.ywebMaxLength = String(maxLength);
+			if (maxLength > 0) form.maxLength = maxLength * 2; else form.removeAttribute('maxlength');
+			form.wrap = flags & 8 ? 'soft' : 'off';
+			if (!form.dataset.ywebComposing) {
 				const start = YWebText.offset(text, selectionStart);
 				const end = YWebText.offset(text, selectionEnd);
-				if (element.selectionStart !== start || element.selectionEnd !== end) element.setSelectionRange(start, end);
+				if (form.selectionStart !== start || form.selectionEnd !== end) form.setSelectionRange(start, end);
 			}
-			if (flags & 64 && !element.dataset.ywebBlurPending) {
-				delete element.dataset.ywebFocusPending;
-				if (document.activeElement !== element) element.focus({ preventScroll: true });
+			if (flags & 64 && !form.dataset.ywebBlurPending) {
+				delete form.dataset.ywebFocusPending;
+				if (document.activeElement !== form) form.focus({ preventScroll: true });
 			} else if (!(flags & 64)) {
-				delete element.dataset.ywebBlurPending;
-				if (document.activeElement === element && !element.dataset.ywebFocusPending) element.blur();
+				delete form.dataset.ywebBlurPending;
+				if (document.activeElement === form && !form.dataset.ywebFocusPending) form.blur();
 			}
 		} else {
 			const content = element.ywebGlyph || element;
@@ -1054,9 +1222,10 @@ const YWebText = {
 				if (document.activeElement === element && !element.dataset.ywebFocusPending) element.blur();
 			}
 		}
-		if (tag === 'textarea') {
-			if (Math.abs(element.scrollLeft - scrollX) > 0.5) element.scrollLeft = scrollX;
-			if (Math.abs(element.scrollTop - scrollY) > 0.5) element.scrollTop = scrollY;
+		if (form.tagName === 'TEXTAREA') {
+			if (Math.abs(form.scrollLeft - scrollX) > 0.5) form.scrollLeft = scrollX;
+			if (Math.abs(form.scrollTop - scrollY) > 0.5) form.scrollTop = scrollY;
+			YWebText.codeScroll(form);
 		}
 		const appearance = [width, height, flags, z, horizontal, vertical, font, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha, fontAscent, glyphTop, glyphBottom].join(',');
 		if (element.dataset.ywebAppearance === appearance && !textChanged) return;
@@ -1066,13 +1235,13 @@ const YWebText = {
 		element.dataset.ywebGlyphBottom = String(glyphBottom);
 		element.dataset.ywebWrap = flags & 8 ? '1' : '0';
 		element.dataset.ywebDecorated = outlineSize > 0 || shadowAlpha > 0 || flags & 16 ? '1' : '0';
-		element.style.display = flags & 1 ? (tag === 'input' || tag === 'textarea' || kind === 5 ? 'block' : 'flex') : 'none';
+		element.style.display = flags & 1 ? (form !== element || tag === 'input' || tag === 'textarea' || kind === 5 ? 'block' : 'flex') : 'none';
 		element.style.width = `${width}px`;
 		element.style.height = `${height}px`;
 		element.style.zIndex = String(z);
 		element.style.direction = flags & 2 ? 'rtl' : 'ltr';
-		element.style.overflow = tag === 'textarea' ? 'auto' : flags & 4 ? 'hidden' : 'visible';
-		element.style.whiteSpace = flags & 8 ? 'pre-wrap' : 'pre';
+		element.style.overflow = form !== element ? 'hidden' : tag === 'textarea' ? 'auto' : flags & 4 ? 'hidden' : 'visible';
+		element.style.whiteSpace = form !== element ? 'normal' : flags & 8 ? 'pre-wrap' : 'pre';
 		element.style.overflowWrap = flags & 8 ? 'anywhere' : 'normal';
 		element.style.justifyContent = ['flex-start', 'center', 'flex-end', 'space-between'][horizontal] || 'flex-start';
 		element.style.alignItems = ['flex-start', 'center', 'flex-end', 'stretch'][vertical] || 'flex-start';
@@ -1095,6 +1264,13 @@ const YWebText = {
 		YWebText.glyph(element);
 		if (kind === 5) YWebText.fit(element);
 		if (element.ywebGlyph) YWebText.loadFont(element);
+	},
+	yweb_code_sync__sig: 'vpp',
+	// CodeEditの構文色と行補助を、本文入力とは独立した背面DOMへ同期する。
+	yweb_code_sync: function (pUid, pState) {
+		const uid = GodotRuntime.parseString(pUid);
+		const element = YWebText.elements.get(uid);
+		if (element) YWebText.code(element, GodotRuntime.parseString(pState));
 	},
 	yweb_text_remove__sig: 'vi',
 	// 解放済みControlの意味要素とObjectID対応を回収する。

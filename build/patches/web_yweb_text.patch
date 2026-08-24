@@ -187,12 +187,14 @@
 -	String previous_text = get_text();
 --- a/scene/gui/text_edit.cpp
 +++ b/scene/gui/text_edit.cpp
-@@ -32,0 +33,4 @@
-+
+@@ -33,0 +34,4 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +#include "platform/web/yweb_text_sync.h"
 +#endif
-@@ -967,0 +972,10 @@
++
+@@ -965,0 +970,9 @@
++			}
++
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +			// DOM所有TextEditは背景とfocus枠だけをCanvasへ残す。
 +			if (yweb_text_dom_owns(this)) {
@@ -200,9 +202,8 @@
 +				v_scroll->hide();
 +				RS::get_singleton()->canvas_item_clear(text_ci);
 +				break;
-+			}
+@@ -966,0 +980 @@
 +#endif
-+
 @@ -3452,0 +3467,6 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +	// DOM textareaがIME候補とfocusを所有する場合はWeb標準の隠しIMEを起動しない。
@@ -226,6 +227,18 @@
 +	end_complex_operation();
 @@ -4041,0 +4075 @@
 +#endif
+@@ -8757 +8791,7 @@
+-	if (h_scroll->is_visible_in_tree()) {
++	// DOM入力が所有する非表示barも、本文の見える列と行を同じ値へ進める。
++#ifdef YWEB_TEXT_DOM_ENABLED
++	const bool yweb_dom = yweb_text_dom_owns(this);
++#else
++	const bool yweb_dom = false;
++#endif
++	if (h_scroll->is_visible_in_tree() || yweb_dom) {
+@@ -8760 +8800 @@
+-	if (v_scroll->is_visible_in_tree()) {
++	if (v_scroll->is_visible_in_tree() || yweb_dom) {
 --- a/scene/gui/text_edit.h
 +++ b/scene/gui/text_edit.h
 @@ -860,0 +861,10 @@
