@@ -172,6 +172,17 @@ struct GlyphState {
 	float ascent = 0.0f; // 行上端から基線までのGodot寸法。
 	float top = 0.0f; // 基線から字形上端までのGodot寸法。
 	float bottom = 0.0f; // 基線から字形下端までのGodot寸法。
+	bool edge = false; // Chromium向け字形edge補正を使える実描画輪郭の有無。
+};
+
+struct EditState {
+	uint32_t version = 0; // 本文が変わったかを判定するGodot編集番号。
+	String text; // 変更時に取得した全文。毎frameの連結を避ける。
+	CharString utf8; // WASMへ渡すUTF-8。変更時に一度作る。
+	Vector<int> lines; // caret位置を全文先頭から数える各行の開始位置。
+	bool sent = false; // 現本文をBrowserへ渡し終えた状態。
+	bool present = false; // 前frameにDOMを所有していた状態。
+	bool seen = false; // 現frameにDOMを所有した状態。
 };
 
 #ifndef GLES3_ENABLED
@@ -187,6 +198,8 @@ static HashMap<ObjectID, Vector<RID>> owner_canvases; // Control解放時に回�
 static HashMap<ObjectID, OutlineState> outlines; // outline直後の通常文字へ渡す状態。
 static HashMap<String, GlyphState> glyph_states; // DOM UIDごとの字形範囲。文字が変わった時に測り直す。
 static HashMap<String, Ref<Font>> font_resources; // 描画捕捉pathごとのfont。毎frameの再読込を避ける。
+static HashMap<ObjectID, EditState> edit_states; // TextEdit本文と行位置を編集時に更新するcache。
+static HashMap<ObjectID, String> code_states; // CodeEdit表示JSONを変更時とscroll時に更新する判定値。
 static int paint_order = -1; // 木を辿る間に使う重なり順。-1は走査の外。
 static HashMap<ObjectID, int> node_orders; // nodeごとの重なり順。描画命令は別timingで走るためここから引く。
 static HashSet<String> sent_images; // Browserへ渡し終えた画像の識別値。
@@ -319,7 +332,20 @@ static GlyphState glyph_state(const String &p_uid, const String &p_text, const R
 	state.text = p_text;
 	state.size = p_size;
 	if (p_font.is_valid() && !p_text.is_empty()) {
-		TextLine line(p_text, p_font, p_size);
+		// 複数行へ同じ補正を掛けるため、先頭の実文字行をBrowserと共通の計測基準にする。
+		String sample;
+		int start = 0;
+		while (start < p_text.length()) {
+			const int found = p_text.find("\n", start);
+			const int end = found < 0 ? p_text.length() : found;
+			if (end > start) {
+				sample = p_text.substr(start, end - start);
+				break;
+			}
+			if (found < 0) break;
+			start = found + 1;
+		}
+		TextLine line(sample, p_font, p_size);
 		const Size2 shaped_size = line.get_size();
 		(void)shaped_size;
 		state.ascent = line.get_line_ascent();
@@ -342,6 +368,7 @@ static GlyphState glyph_state(const String &p_uid, const String &p_text, const R
 				}
 			}
 		}
+		state.edge = found;
 	}
 	glyph_states.insert(p_uid, state);
 	return state;
@@ -400,7 +427,7 @@ bool yweb_text_dom_owns(const Control *p_control) {
 }
 
 // 一つの文字状態を現在の画面transformと合成してDOMへ送る。
-static void sync_text(Control *p_control, const TextState &p_state, const CharString &p_uid = CharString()) {
+static void sync_text(Control *p_control, const TextState &p_state, const CharString &p_uid = CharString(), const CharString *p_text = nullptr, bool p_omit_text = false) {
 	const ObjectID object = p_control->get_instance_id();
 	const CharString uid = p_uid.is_empty() ? text_uid(object) : p_uid;
 	const String uid_text = String::utf8(uid.get_data());
@@ -419,15 +446,16 @@ static void sync_text(Control *p_control, const TextState &p_state, const CharSt
 	int flags = p_state.flags;
 	flags = p_control->is_visible_in_tree() ? flags | TEXT_VISIBLE : flags & ~TEXT_VISIBLE;
 	flags = p_control->is_layout_rtl() ? flags | TEXT_RTL : flags & ~TEXT_RTL;
-	const CharString text = p_state.text.utf8();
+	const CharString text = p_text ? *p_text : p_state.text.utf8();
 	const CharString aux = p_state.aux.utf8();
 	Ref<Font> font_resource = control_font(p_control);
 	if (!p_state.font.is_empty()) font_resource = load_font(p_state.font);
 	const CharString font = font_resource_path(font_resource).utf8();
-	const GlyphState glyph = glyph_state(uid_text, p_state.text, font_resource, p_state.font_size);
+	GlyphState glyph;
+	if (p_state.kind != TEXT_AREA && p_state.kind != TEXT_CODE) glyph = glyph_state(uid_text, p_state.text, font_resource, p_state.font_size);
 	const int *order = node_orders.getptr(p_control->get_instance_id());
 	yweb_text_sync(
-			uid.get_data(), text.get_data(), aux.get_data(), font.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
+			uid.get_data(), p_omit_text ? nullptr : text.get_data(), aux.get_data(), font.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
 			p_state.rect.size.x, p_state.rect.size.y, flags, paint_order >= 0 ? paint_order : (order ? *order : p_control->get_z_index()), p_state.horizontal, p_state.vertical, p_state.kind, p_state.max_length, p_state.selection_start, p_state.selection_end,
 			color.r, color.g, color.b, color.a, p_state.font_size, p_state.line_spacing,
 			outline.r, outline.g, outline.b, outline.a, p_state.outline_size,
@@ -515,11 +543,28 @@ static void sync_line_input(LineEdit *p_line) {
 	sync_text(p_line, state);
 }
 
-// TextEditの行列位置をDOMが使う一続きのUnicode文字位置へ変換する。
-static int text_index(TextEdit *p_edit, int p_line, int p_column) {
-	int index = 0;
-	for (int line = 0; line < p_line; line++) index += p_edit->get_line(line).length() + 1;
-	return index + p_column;
+// TextEdit本文と各行位置を編集番号で覚え、巨大な本文を毎frame組み立てない。
+static EditState &edit_state(TextEdit *p_edit) {
+	const ObjectID object = p_edit->get_instance_id();
+	EditState *cached = edit_states.getptr(object);
+	const uint32_t version = p_edit->get_version();
+	if (cached && cached->version == version) return *cached;
+	EditState state;
+	state.version = version;
+	state.text = p_edit->get_text();
+	state.utf8 = state.text.utf8();
+	state.lines.push_back(0);
+	for (int index = 0; index < state.text.length(); index++) {
+		if (state.text[index] == '\n') state.lines.push_back(index + 1);
+	}
+	edit_states.insert(object, state);
+	return *edit_states.getptr(object);
+}
+
+// Godotの行列位置をcache済みの全文位置へ定数時間で直す。
+static int text_index(const EditState &p_state, int p_line, int p_column) {
+	const int line = CLAMP(p_line, 0, p_state.lines.size() - 1);
+	return p_state.lines[line] + p_column;
 }
 
 // 一行をSyntaxHighlighterの色境界で分け、Browserへ安全な文字列として渡す。
@@ -556,6 +601,39 @@ static Array code_segments(CodeEdit *p_edit, int p_line, const Color &p_default)
 	return segments;
 }
 
+// 小さな設定resourceの同一instance内変更を、公開保存propertyから識別する。
+static String storage_signature(const Object *p_object) {
+	if (!p_object) return "";
+	String signature;
+	List<PropertyInfo> properties;
+	p_object->get_property_list(&properties);
+	for (const PropertyInfo &property : properties) {
+		if (!(property.usage & PROPERTY_USAGE_STORAGE)) continue;
+		signature += "/" + String(property.name) + ":" + itos(p_object->get(property.name).hash());
+	}
+	return signature;
+}
+
+// SyntaxHighlighterの差替えと同一resource内の色変更を識別する。
+static String syntax_signature(const Ref<SyntaxHighlighter> &p_highlighter) {
+	if (p_highlighter.is_null()) return "0";
+	return String::num_uint64((uint64_t)p_highlighter->get_instance_id()) + storage_signature(p_highlighter.ptr());
+}
+
+// Font差替えとVariation変更を、実描画RIDを含む識別値へまとめる。
+static String code_font_signature(const Ref<Font> &p_font) {
+	if (p_font.is_null()) return "0";
+	String signature = String::num_uint64((uint64_t)p_font->get_instance_id());
+	const TypedArray<RID> rids = p_font->get_rids();
+	for (int index = 0; index < rids.size(); index++) {
+		const RID rid = rids[index];
+		signature += "/" + String::num_uint64(rid.get_id());
+	}
+	const Ref<FontVariation> variation = p_font;
+	if (variation.is_valid()) signature += storage_signature(variation.ptr());
+	return signature;
+}
+
 // CodeEditの見えている行と補助表示を、再利用可能なDOM行へまとめて渡す。
 static void sync_code(CodeEdit *p_edit, const Rect2 &p_text_rect, float p_line_height, const Ref<Font> &p_font, int p_font_size) {
 	Dictionary state;
@@ -590,8 +668,32 @@ static void sync_code(CodeEdit *p_edit, const Rect2 &p_text_rect, float p_line_h
 	state["caret_color"] = String("#") + p_edit->get_theme_color(SNAME("caret_color")).to_html();
 	state["text_color"] = String("#") + p_edit->get_font_color().to_html();
 	state["current"] = p_edit->get_caret_line();
-	// 内蔵VScrollBarの確定矩形とThemeを、OS依存の見た目を持たない表示層へ渡す。
 	ScrollBar *bar = p_edit->get_v_scroll_bar();
+	int mini_first = -1;
+	int mini_visible = 0;
+	// Minimapは文字でなく、Godotと同じ1x2pxの色付き区間として渡す。
+	if (p_edit->is_drawing_minimap()) {
+		const Ref<StyleBox> style = p_edit->get_theme_stylebox(p_edit->is_editable() ? SNAME("normal") : SNAME("read_only"));
+		const float width = p_edit->get_minimap_width();
+		Dictionary minimap;
+		minimap["x"] = p_edit->get_size().x - Math::floor(style->get_margin(SIDE_RIGHT)) - width + 2 - p_text_rect.position.x;
+		minimap["y"] = -p_text_rect.position.y;
+		minimap["width"] = width;
+		mini_visible = MAX(1, p_edit->get_minimap_visible_lines());
+		mini_first = Math::round(bar->get_as_ratio() * MAX(0, p_edit->get_line_count() - mini_visible));
+		minimap["total"] = p_edit->get_line_count();
+		minimap["height"] = mini_visible * 3;
+		minimap["viewport"] = (p_edit->get_visible_line_count() + 1) * 3;
+		Color viewport = p_edit->get_theme_color(SNAME("caret_color"));
+		viewport.a = 0.1;
+		minimap["viewport_color"] = String("#") + viewport.to_html();
+		viewport.a = 0.175;
+		minimap["viewport_hover_color"] = String("#") + viewport.to_html();
+		viewport.a = 0.25;
+		minimap["viewport_pressed_color"] = String("#") + viewport.to_html();
+		state["minimap"] = minimap;
+	}
+	// 内蔵VScrollBarの確定矩形とThemeを、OS依存の見た目を持たない表示層へ渡す。
 	const Ref<StyleBoxFlat> track = bar->get_theme_stylebox(SNAME("scroll"));
 	const Ref<StyleBoxFlat> grabber = bar->get_theme_stylebox(SNAME("grabber"));
 	if (track.is_valid() && grabber.is_valid() && bar->get_size().x > 0 && bar->get_size().y > 0) {
@@ -613,11 +715,34 @@ static void sync_code(CodeEdit *p_edit, const Rect2 &p_text_rect, float p_line_h
 		state["scroll"] = scroll;
 	}
 
-	Array lines;
 	const String uid_text = String::num_uint64((uint64_t)p_edit->get_instance_id());
 	const int first = MAX(0, p_edit->get_first_visible_line());
 	const int last = MIN(p_edit->get_line_count() - 1, p_edit->get_last_full_visible_line() + 1);
 	const int digits = MAX(p_edit->get_line_numbers_min_digits(), String::num_int64(p_edit->get_line_count()).length());
+	Array guides;
+	for (const Variant &value : p_edit->get_line_length_guidelines()) {
+		const int column = value;
+		Dictionary guide;
+		guide["column"] = column;
+		guide["x"] = p_edit->get_total_gutter_width() + (p_font.is_valid() ? p_font->get_string_size(String("0").repeat(column), HORIZONTAL_ALIGNMENT_LEFT, -1, p_font_size).x : 0.0f);
+		guides.push_back(guide);
+	}
+	state["guides"] = guides;
+	// 本文、見える行、Themeが同じframeは構文解析とWASM転送を省く。
+	String row_state;
+	for (int line = first; line <= last; line++) {
+		if (line >= p_edit->get_first_visible_line() && line <= p_edit->get_last_full_visible_line() && !p_edit->is_line_in_viewport(line)) continue;
+		row_state += itos(line) + ":" + itos(p_edit->is_line_folded(line)) + itos(p_edit->can_fold_line(line));
+		row_state += itos(p_edit->is_line_breakpointed(line)) + itos(p_edit->is_line_bookmarked(line)) + itos(p_edit->is_line_executing(line));
+		if (number_gutter >= 0) row_state += p_edit->get_line_gutter_item_color(line, number_gutter).to_html();
+	}
+	const Ref<SyntaxHighlighter> highlighter = p_edit->get_syntax_highlighter();
+	const String signature = itos(p_edit->get_version()) + "/" + itos(mini_first) + "/" + syntax_signature(highlighter) + "/" + code_font_signature(p_font) + "/" + row_state + "/" + JSON::stringify(state);
+	const ObjectID object = p_edit->get_instance_id();
+	const String *cached = code_states.getptr(object);
+	if (cached && *cached == signature) return;
+
+	Array lines;
 	for (int line = first; line <= last; line++) {
 		if (line >= p_edit->get_first_visible_line() && line <= p_edit->get_last_full_visible_line() && !p_edit->is_line_in_viewport(line)) continue;
 		Dictionary row;
@@ -631,10 +756,12 @@ static void sync_code(CodeEdit *p_edit, const Rect2 &p_text_rect, float p_line_h
 		row["glyph_ascent"] = glyph.ascent;
 		row["glyph_top"] = glyph.top;
 		row["glyph_bottom"] = glyph.bottom;
+		row["glyph_edge"] = glyph.edge;
 		const GlyphState number_glyph = glyph_state(uid_text + "-code-number-" + itos(line), number, p_font, p_font_size);
 		row["number_ascent"] = number_glyph.ascent;
 		row["number_top"] = number_glyph.top;
 		row["number_bottom"] = number_glyph.bottom;
+		row["number_edge"] = number_glyph.edge;
 		row["y"] = p_edit->get_scroll_pos_for_line(line) * p_line_height;
 		row["fold"] = p_edit->is_line_folded(line) ? "closed" : p_edit->can_fold_line(line) ? "open" : "";
 		row["breakpoint"] = p_edit->is_drawing_breakpoints_gutter() && p_edit->is_line_breakpointed(line);
@@ -644,16 +771,34 @@ static void sync_code(CodeEdit *p_edit, const Rect2 &p_text_rect, float p_line_h
 		lines.push_back(row);
 	}
 	state["lines"] = lines;
-	state["guides"] = p_edit->get_line_length_guidelines();
+	if (mini_first >= 0) {
+		Dictionary minimap = state["minimap"];
+		Array mini_lines;
+		for (int line = mini_first; line < MIN(p_edit->get_line_count(), mini_first + mini_visible); line++) {
+			Dictionary row;
+			row["line"] = line;
+			row["at"] = line - mini_first;
+			row["current"] = p_edit->is_highlight_current_line_enabled() && line == p_edit->get_caret_line();
+			row["segments"] = code_segments(p_edit, line, p_edit->get_font_color());
+			mini_lines.push_back(row);
+		}
+		minimap["lines"] = mini_lines;
+		state["minimap"] = minimap;
+	}
 	const CharString uid = uid_text.utf8();
 	const CharString json = JSON::stringify(state).utf8();
 	yweb_code_sync(uid.get_data(), json.get_data());
+	code_states.insert(object, signature);
 }
 
 // TextEditの値、Theme、caret、selectionをtextarea状態へまとめる。
 static void sync_text_area(TextEdit *p_edit) {
+	EditState &content = edit_state(p_edit);
+	const bool sends = p_edit->is_inside_tree() && yweb_text_dom_owns(p_edit);
+	if (!content.present || !sends) content.sent = false;
+	content.seen = sends;
 	TextState state;
-	state.text = p_edit->get_text();
+	state.text = content.text;
 	state.aux = p_edit->get_placeholder();
 	CodeEdit *code = Object::cast_to<CodeEdit>(p_edit);
 	state.kind = code ? TEXT_CODE : TEXT_AREA;
@@ -664,10 +809,10 @@ static void sync_text_area(TextEdit *p_edit) {
 	if (p_edit->get_focus_mode_with_override() == Control::FOCUS_ALL) state.flags |= TEXT_KEYBOARD_FOCUS;
 	state.vertical = VERTICAL_ALIGNMENT_TOP;
 	if (p_edit->has_selection()) {
-		state.selection_start = text_index(p_edit, p_edit->get_selection_from_line(), p_edit->get_selection_from_column());
-		state.selection_end = text_index(p_edit, p_edit->get_selection_to_line(), p_edit->get_selection_to_column());
+		state.selection_start = text_index(content, p_edit->get_selection_from_line(), p_edit->get_selection_from_column());
+		state.selection_end = text_index(content, p_edit->get_selection_to_line(), p_edit->get_selection_to_column());
 	} else {
-		state.selection_start = text_index(p_edit, p_edit->get_caret_line(), p_edit->get_caret_column());
+		state.selection_start = text_index(content, p_edit->get_caret_line(), p_edit->get_caret_column());
 		state.selection_end = state.selection_start;
 	}
 	state.color = p_edit->get_theme_color(p_edit->is_editable() ? SNAME("font_color") : SNAME("font_readonly_color"));
@@ -678,7 +823,8 @@ static void sync_text_area(TextEdit *p_edit) {
 	state.outline = p_edit->get_theme_color(SNAME("font_outline_color"));
 	state.outline_size = p_edit->get_theme_constant(SNAME("outline_size"));
 	state.rect = input_rect(p_edit, p_edit->get_theme_stylebox(p_edit->is_editable() ? SNAME("normal") : SNAME("read_only")));
-	sync_text(p_edit, state);
+	sync_text(p_edit, state, CharString(), &content.utf8, content.sent);
+	content.sent = sends;
 	if (code) sync_code(code, state.rect, MAX(1.0f, state.font_size + state.line_spacing), control_font(code), state.font_size);
 }
 
@@ -2298,6 +2444,8 @@ void yweb_text_sync_process() {
 		site_scene = scene->get_instance_id();
 		glyph_states.clear();
 		font_resources.clear();
+		edit_states.clear();
+		code_states.clear();
 #ifndef GLES3_ENABLED
 		// 前の画面の描画由来要素は、そのnodeが消えると描き直されないため、ここで捨てる。
 		const CharString all = String().utf8();
@@ -2320,6 +2468,7 @@ void yweb_text_sync_process() {
 	}
 	dirty.clear();
 
+	for (KeyValue<ObjectID, EditState> &entry : edit_states) entry.value.seen = false;
 	yweb_text_begin();
 #ifndef GLES3_ENABLED
 	if (scene) {
@@ -2354,10 +2503,13 @@ void yweb_text_sync_process() {
 		tracked.erase(object);
 		states.erase(object);
 		parts.erase(object);
+		edit_states.erase(object);
+		code_states.erase(object);
 		remove_canvases(object);
 	}
 	outlines.clear();
 	yweb_text_end();
+	for (KeyValue<ObjectID, EditState> &entry : edit_states) entry.value.present = entry.value.seen;
 #ifndef GLES3_ENABLED
 	prune_gpu_particles();
 #endif

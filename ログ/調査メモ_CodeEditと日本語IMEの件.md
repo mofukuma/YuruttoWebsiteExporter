@@ -14,6 +14,9 @@ CodeEditの編集機能をBrowser標準入力へ接続し、Canvasを使わな�
 - [HTML StandardのTextMetrics](https://html.spec.whatwg.org/multipage/canvas.html#textmetrics) はBrowser字形の実上端と実下端を返す。Godotの字形輪郭と比べれば、書体名や固定倍率へ依存せず縦寸法を補正できる。
 - [CSS Transforms](https://drafts.csswg.org/css-transforms-1/#transform-origin-property) の原点を左上へ固定すると、行位置を動かさず構文span全体へ縦倍率と基線移動を適用できる。
 - 白Themeの同じWeb fontでは横幅が一致し、Godot 13 pxの字形がBrowserで15〜16 pxになっていた。CodeEditも通常文字と同じ輪郭補正の対象にする。
+- [Godot TextEdit](https://docs.godotengine.org/en/4.7/classes/class_textedit.html) のminimapは有効化と幅を公開値で持つ。Godot本体の描画は文字縮小ではなく、構文色ごとの1×2 px矩形を3 px間隔で並べるため、DOMでも同じ色矩形を再利用する。
+- [Godot TextServer](https://docs.godotengine.org/en/4.7/classes/class_textserver.html) はglyphのatlas画像、UV矩形、描画offsetを取得できる。輪郭は形状、atlasはFreeTypeが作った画素被覆なので、濃度差を合わせる場合は固定倍率より実測値を基準にできる。
+- [SVG feComponentTransfer](https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Element/feComponentTransfer) は画素ごとのalphaを関数で変換できる。文字全体のopacityを下げず、半透明の縁へ限定してGodotとの濃度差を縮められる。
 
 ## 採用する境界
 

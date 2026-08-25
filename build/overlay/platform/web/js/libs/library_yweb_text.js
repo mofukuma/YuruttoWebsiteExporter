@@ -31,6 +31,13 @@ const YWebText = {
 		tintIndex: 0, // 画像ごとの色filter IDを重複させない連番。
 		mouseDown: false,
 		metricsContext: null, // Browser字形を同じfontと寸法で測るCanvas文脈。
+		glyphFilter: null, // ChromiumとGodotの縁alpha差を揃える共有filter。
+		fontLoads: new Map(), // 書体ごとの読込Promise。scroll時の再要求を避ける。
+		fontRetryMs: 250, // 一時的なWeb font失敗を一度再確認する間隔。
+		glyphRaster: 0.4, // 単一行で両rendererの画素中心を揃える字形高。
+		glyphMultiRaster: -0.4, // 複数行で変形後の端pixelを除く字形高。
+		glyphMultiShift: 1, // 複数行でBrowserの画素丸めを戻す位置。
+		glyphOpacity: 0.95, // FreeTypeとChromiumの縁合成量を揃える濃度。
 		lineCache: {}, // 書体と寸法ごとの、本来の行送り。測り直しを避ける。
 		ruler: null, // 行送りを測るための、見えない物差し。
 		kinds: ['Label', 'Button', 'LinkButton', 'LineEdit', 'TextEdit', 'ControlText', 'CodeEdit'],
@@ -78,22 +85,54 @@ const YWebText = {
 				row.style.top = `${Number(row.dataset.ywebCodeY) - input.scrollTop}px`;
 				row.ywebCode.style.left = `${gutter - input.scrollLeft}px`;
 			}
-			for (const guide of owner.ywebGuides || []) guide.style.left = `calc(${gutter - input.scrollLeft}px + ${guide.dataset.ywebColumn}ch)`;
+			// Godotの1px線は座標を中心に描くため、CSS borderの左端へ1px戻す。
+			for (const guide of owner.ywebGuides || []) guide.style.left = `${Number(guide.dataset.ywebX) - input.scrollLeft - 1}px`;
 			if (owner.ywebBar) {
 				const range = Math.max(0, input.scrollHeight - input.clientHeight);
 				owner.ywebBar.ywebKnob.style.top = `${range ? input.scrollTop / range * owner.ywebBar.ywebTravel : 0}px`;
 			}
+			if (owner.ywebMinimap) {
+				const range = Math.max(0, input.scrollHeight - input.clientHeight);
+				const ratio = range ? input.scrollTop / range : 0;
+				owner.ywebMinimap.ywebViewport.style.top = `${ratio * owner.ywebMinimap.ywebTravel}px`;
+			}
 		},
-		// CodeEditの文字矩形外にある内蔵barを、同じGodot行列でrootへ置く。
-		placeCodeBar: function (owner) {
-			const bar = owner?.ywebBar;
-			const matrix = YWebText.scrollMatrix(owner?.dataset.ywebUid, owner?.dataset.ywebMatrix).split(',').map(Number);
-			if (!bar || matrix.length !== 6 || matrix.some((value) => !Number.isFinite(value))) return;
-			const [x, y] = bar.ywebLocal;
+		// CodeEditの文字矩形外にある補助表示を、同じGodot行列でrootへ置く。
+		placeCodePart: function (owner, part) {
+			if (!part || !owner?.dataset.ywebMatrix) return;
+			const matrix = YWebText.scrollMatrix(owner.dataset.ywebUid, owner.dataset.ywebMatrix).split(',').map(Number);
+			if (matrix.length !== 6 || matrix.some((value) => !Number.isFinite(value))) return;
+			const [x, y] = part.ywebLocal;
 			matrix[4] += matrix[0] * x + matrix[2] * y;
 			matrix[5] += matrix[1] * x + matrix[3] * y;
-			bar.style.transform = `matrix(${matrix})`;
-			bar.style.zIndex = owner.style.zIndex;
+			part.style.transform = `matrix(${matrix})`;
+			part.style.zIndex = owner.style.zIndex;
+			YWebText.clip(part, owner.dataset.ywebUid, ...matrix);
+		},
+		// Minimapの構文区間を1x2pxの矩形へまとめ、文字DOMを増やさない。
+		minimapBlocks: function (segments, tab, width) {
+			const blocks = [];
+			let column = 0;
+			for (const segment of segments) {
+				let run = 0;
+				const flush = () => {
+					if (run) blocks.push({ x: column - run, width: Math.min(run, width - column + run), color: segment.color });
+					run = 0;
+				};
+				for (const char of Array.from(segment.text)) {
+					if (/\s/u.test(char)) {
+						flush();
+						column += char === '\t' ? tab - column % tab : 1;
+					} else {
+						column++;
+						run++;
+					}
+					if (column >= width) break;
+				}
+				flush();
+				if (column >= width) break;
+			}
+			return blocks.filter((block) => block.width > 0);
 		},
 		// SyntaxHighlighterの可視行を、同じ行DOMを保ったまま色付きspanへ反映する。
 		code: function (owner, source) {
@@ -105,6 +144,91 @@ const YWebText = {
 			owner.style.setProperty('--yweb-caret', state.caret_color);
 			owner.style.setProperty('--yweb-selection', state.selection_color);
 			owner.style.setProperty('--yweb-code-color', state.text_color);
+			if (state.minimap) {
+				if (!owner.ywebMinimap) {
+					const minimap = document.createElement('div');
+					const content = document.createElement('div');
+					const viewport = document.createElement('i');
+					minimap.dataset.ywebCodeMinimap = owner.dataset.ywebUid;
+					content.style.cssText = 'position:absolute;inset:0;pointer-events:none';
+					viewport.style.cssText = 'position:absolute;left:0;right:0;pointer-events:none';
+					minimap.append(content, viewport);
+					YWebText.getRoot().appendChild(minimap);
+					owner.ywebMinimap = minimap;
+					minimap.ywebContent = content;
+					minimap.ywebViewport = viewport;
+					minimap.ywebRows = new Map();
+					minimap.ywebMove = (event) => {
+						event.preventDefault();
+						event.stopPropagation();
+						const root = YWebText.getRoot().getBoundingClientRect();
+						const point = new DOMPoint(event.clientX - root.left, event.clientY - root.top).matrixTransform(new DOMMatrix(minimap.style.transform).inverse());
+						const at = point.y;
+						const ratio = Math.max(0, Math.min(1, (at - minimap.ywebViewport.offsetHeight / 2) / Math.max(1, minimap.ywebTravel)));
+						const input = owner.ywebInput;
+						input.scrollTop = ratio * Math.max(0, input.scrollHeight - input.clientHeight);
+						input.dispatchEvent(new Event('scroll', { bubbles: true }));
+					};
+					minimap.addEventListener('pointerenter', () => { if (!minimap.ywebPointer) viewport.style.background = minimap.ywebColors[1]; });
+					minimap.addEventListener('pointerleave', () => { if (!minimap.ywebPointer) viewport.style.background = minimap.ywebColors[0]; });
+					minimap.addEventListener('pointerdown', (event) => {
+						minimap.ywebPointer = event.pointerId;
+						minimap.setPointerCapture(event.pointerId);
+						viewport.style.background = minimap.ywebColors[2];
+						minimap.ywebMove(event);
+					});
+					minimap.addEventListener('pointermove', (event) => { if (minimap.ywebPointer === event.pointerId) minimap.ywebMove(event); });
+					minimap.addEventListener('pointerup', (event) => {
+						if (minimap.ywebPointer !== event.pointerId) return;
+						minimap.releasePointerCapture(event.pointerId);
+						delete minimap.ywebPointer;
+						viewport.style.background = minimap.ywebColors[1];
+					});
+				}
+				const minimap = owner.ywebMinimap;
+				minimap.style.cssText = `position:absolute;left:0;top:0;transform-origin:0 0;width:${state.minimap.width}px;height:${state.minimap.height}px;overflow:hidden;pointer-events:auto;cursor:default`;
+				minimap.dataset.ywebMinimapTotal = String(state.minimap.total);
+				minimap.ywebLocal = [state.minimap.x, state.minimap.y];
+				minimap.ywebViewport.style.height = `${state.minimap.viewport}px`;
+				minimap.ywebColors = [state.minimap.viewport_color, state.minimap.viewport_hover_color, state.minimap.viewport_pressed_color];
+				if (!minimap.ywebPointer) minimap.ywebViewport.style.background = state.minimap.viewport_color;
+				minimap.ywebTravel = Math.max(0, state.minimap.height - state.minimap.viewport);
+				const seen = new Set();
+				for (const line of state.minimap.lines) {
+					const key = String(line.at);
+					seen.add(key);
+					let row = minimap.ywebRows.get(key);
+					if (!row) {
+						row = document.createElement('i');
+						row.style.cssText = 'position:absolute;left:0;right:0;height:2px;pointer-events:none';
+						minimap.ywebContent.appendChild(row);
+						minimap.ywebRows.set(key, row);
+					}
+					row.dataset.ywebMinimapLine = String(line.line);
+					row.style.top = `${line.at * 3}px`;
+					row.style.background = line.current ? state.current_color : 'transparent';
+					const blocks = YWebText.minimapBlocks(line.segments, state.tab, state.minimap.width);
+					const signature = JSON.stringify(blocks);
+					if (row.dataset.ywebBlocks !== signature) {
+						row.dataset.ywebBlocks = signature;
+						for (let index = 0; index < blocks.length; index++) {
+							const block = blocks[index];
+							const item = row.children[index] || row.appendChild(document.createElement('i'));
+							item.style.cssText = `display:block;position:absolute;left:${block.x}px;width:${block.width}px;height:2px;background:${block.color};opacity:.6`;
+						}
+						for (let index = blocks.length; index < row.children.length; index++) row.children[index].style.display = 'none';
+					}
+				}
+				for (const [key, row] of minimap.ywebRows) {
+					if (seen.has(key)) continue;
+					row.remove();
+					minimap.ywebRows.delete(key);
+				}
+				YWebText.placeCodePart(owner, minimap);
+			} else if (owner.ywebMinimap) {
+				owner.ywebMinimap.remove();
+				owner.ywebMinimap = null;
+			}
 			if (state.scroll) {
 				if (!owner.ywebBar) {
 					const bar = document.createElement('i');
@@ -124,7 +248,7 @@ const YWebText = {
 				bar.ywebKnob.style.background = state.scroll.grabber_color;
 				bar.ywebKnob.style.borderRadius = `${state.scroll.grabber_radius}px`;
 				bar.ywebTravel = state.scroll.height - state.scroll.knob;
-				YWebText.placeCodeBar(owner);
+				YWebText.placeCodePart(owner, bar);
 			} else if (owner.ywebBar) {
 				owner.ywebBar.remove();
 				owner.ywebBar = null;
@@ -206,8 +330,8 @@ const YWebText = {
 					}));
 				}
 				const baseline = Math.max(0, state.line_height - state.font_ascent - state.font_descent) / 2 + state.font_ascent;
-				YWebText.glyphNode(row.ywebCode, row.ywebCode.textContent, Number(line.glyph_top), Number(line.glyph_bottom), Number(line.glyph_ascent), false, baseline);
-				YWebText.glyphNode(row.ywebNumber, number, Number(line.number_top), Number(line.number_bottom), Number(line.number_ascent), false, baseline);
+				YWebText.glyphNode(row.ywebCode, row.ywebCode.textContent, Number(line.glyph_top), Number(line.glyph_bottom), Number(line.glyph_ascent), false, baseline, line.glyph_edge === true);
+				YWebText.glyphNode(row.ywebNumber, number, Number(line.number_top), Number(line.number_bottom), Number(line.number_ascent), false, baseline, line.number_edge === true);
 			}
 			for (const [key, row] of owner.ywebRows) {
 				if (seen.has(key)) continue;
@@ -215,9 +339,10 @@ const YWebText = {
 				owner.ywebRows.delete(key);
 			}
 			for (const guide of owner.ywebGuides || []) guide.remove();
-			owner.ywebGuides = (state.guides || []).map((column, index) => {
+			owner.ywebGuides = (state.guides || []).map((value, index) => {
 				const guide = document.createElement('i');
-				guide.dataset.ywebColumn = String(column);
+				guide.dataset.ywebColumn = String(value.column);
+				guide.dataset.ywebX = String(value.x);
 				guide.style.cssText = `position:absolute;top:0;bottom:0;border-left:1px solid ${state.guide_color};opacity:${index ? .6 : 1};pointer-events:none`;
 				owner.ywebLayer.appendChild(guide);
 				return guide;
@@ -225,13 +350,41 @@ const YWebText = {
 			YWebText.codeScroll(input);
 			// Web fontの読込後に同じGodot輪郭から補正を再計算する。
 			const font = getComputedStyle(owner).font;
-			const fontKey = `${font}\n${state.lines.map((line) => line.number + line.segments.map((part) => part.text).join('')).join('\n')}`;
+			const fontKey = font;
 			if (owner.dataset.ywebCodeFont !== fontKey) {
 				owner.dataset.ywebCodeFont = fontKey;
-				document.fonts.load(font, input.value).then(() => {
+				owner.dataset.ywebCodeFontReady = '0';
+				const sample = state.lines.map((line) => line.number + line.segments.map((part) => part.text).join('')).join('\n');
+				let loaded = YWebText.fontLoads.get(font);
+				if (!loaded) {
+					loaded = document.fonts.load(font, sample);
+					YWebText.fontLoads.set(font, loaded);
+				}
+				loaded.then(() => {
 					if (!owner.isConnected || owner.dataset.ywebCodeFont !== fontKey) return;
+					const current = owner.dataset.ywebCodeState;
+					if (!current) return;
+					delete owner.dataset.ywebCodeFontRetried;
 					delete owner.dataset.ywebCodeState;
-					YWebText.code(owner, source);
+					YWebText.code(owner, current);
+					owner.dataset.ywebCodeFontReady = '1';
+				}, () => {
+					if (YWebText.fontLoads.get(font) === loaded) YWebText.fontLoads.delete(font);
+					if (!owner.isConnected || owner.dataset.ywebCodeFont !== fontKey) return;
+					owner.dataset.ywebCodeFontReady = '1';
+					if (owner.dataset.ywebCodeFontRetried === fontKey) {
+						delete owner.dataset.ywebCodeFont;
+						return;
+					}
+					owner.dataset.ywebCodeFontRetried = fontKey;
+					setTimeout(() => {
+						if (!owner.isConnected || owner.dataset.ywebCodeFont !== fontKey) return;
+						const current = owner.dataset.ywebCodeState;
+						if (!current) return;
+						delete owner.dataset.ywebCodeFont;
+						delete owner.dataset.ywebCodeState;
+						YWebText.code(owner, current);
+					}, YWebText.fontRetryMs);
 				});
 			}
 		},
@@ -282,16 +435,46 @@ const YWebText = {
 			const scale = element.dataset.ywebTextScale || '1';
 			element.style.transform = `matrix(${matrix}) scaleX(${scale})`;
 		},
+		// Chromiumの字形edgeをGodotのFreeType描画へ近づけるfilterを一つ共有する。
+		glyphEdge: function () {
+			if (YWebText.glyphFilter) return YWebText.glyphFilter;
+			const ns = 'http://www.w3.org/2000/svg';
+			const svg = document.createElementNS(ns, 'svg');
+			svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+			svg.innerHTML = '<filter id="yweb-glyph-edge"><feComponentTransfer><feFuncA type="gamma" amplitude="1" exponent="2.75" offset="0"/></feComponentTransfer></filter>';
+			document.body.appendChild(svg);
+			YWebText.glyphFilter = 'url("#yweb-glyph-edge")';
+			return YWebText.glyphFilter;
+		},
+		// 配列を作らず、複数行Labelの先頭にある実文字行を得る。
+		firstLine: function (text) {
+			let start = 0;
+			while (start < text.length) {
+				const found = text.indexOf('\n', start);
+				const end = found < 0 ? text.length : found;
+				if (end > start) return text.slice(start, end);
+				if (found < 0) break;
+				start = found + 1;
+			}
+			return '';
+		},
 		// GodotとBrowserの実字形範囲を対応させ、外側の配置と操作領域は動かさない。
-		glyphNode: function (glyph, text, top, bottom, ascent, blocked = false, baseline = NaN) {
-			if (!text || text.includes('\n') || blocked || !(bottom > top)) {
+		glyphNode: function (glyph, text, top, bottom, ascent, blocked = false, baseline = NaN, edge = false) {
+			if (!text || blocked || !(bottom > top)) {
 				glyph.style.transform = 'none';
+				glyph.style.opacity = '';
+				glyph.style.filter = 'none';
+				glyph.style.lineHeight = '';
 				return;
 			}
+			// 複数行の補正値を再入力にせず、親から継承する基準行高へ毎回戻す。
+			glyph.style.lineHeight = '';
 			const style = getComputedStyle(glyph);
 			const context = YWebText.metricsContext || (YWebText.metricsContext = document.createElement('canvas').getContext('2d'));
 			context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-			const metrics = context.measureText(text);
+			const multiline = text.includes('\n');
+			const sample = multiline ? YWebText.firstLine(text) : text;
+			const metrics = context.measureText(sample);
 			const browserAscent = metrics.actualBoundingBoxAscent;
 			const browserDescent = metrics.actualBoundingBoxDescent;
 			const fontAscent = metrics.fontBoundingBoxAscent || browserAscent;
@@ -305,16 +488,21 @@ const YWebText = {
 				glyph.style.transform = 'none';
 				return;
 			}
-			const scale = Math.max(0.5, Math.min(2, (bottom - top) / height));
+			const raster = (multiline ? YWebText.glyphMultiRaster : YWebText.glyphRaster) / devicePixelRatio;
+			let scale = Math.max(0.5, Math.min(2, (bottom - top + raster) / height));
 			if (Number.isFinite(baseline)) {
 				glyph.style.transformOrigin = '0 0';
-				// 両rendererの輪郭座標を画素中心へ揃え、整数画素化で一段長くなるのを防ぐ。
-				const shift = baseline + top - browserTop * scale + 0.5 / devicePixelRatio;
+				const shift = baseline + top - browserTop * scale + YWebText.glyphRaster / devicePixelRatio;
+				glyph.style.opacity = '';
+				glyph.style.filter = edge ? YWebText.glyphEdge() : 'none';
 				glyph.style.transform = `matrix(1,0,0,${scale},0,${shift})`;
 				return;
 			}
+			glyph.style.opacity = String(YWebText.glyphOpacity);
+			glyph.style.filter = 'none';
 			glyph.style.transformOrigin = '0 0';
-			const shift = ascent + top - browserTop * scale;
+			glyph.style.lineHeight = multiline ? `${lineHeight / scale}px` : '';
+			const shift = ascent + top - browserTop * scale - (multiline ? YWebText.glyphMultiShift / devicePixelRatio : 0);
 			glyph.style.transform = `matrix(1,0,0,${scale},0,${shift})`;
 		},
 		// 通常文字の内側spanへ、共有した字形補正を適用する。
@@ -421,7 +609,8 @@ const YWebText = {
 					element.style.transform = `matrix(${matrix})${scale ? ` scaleX(${scale})` : ''}`;
 					const values = matrix.split(',').map(Number);
 					YWebText.clip(element, uid, ...values);
-					YWebText.placeCodeBar(element);
+					YWebText.placeCodePart(element, element.ywebBar);
+					YWebText.placeCodePart(element, element.ywebMinimap);
 				}
 			}
 		},
@@ -489,6 +678,7 @@ const YWebText = {
 		drop: function (element) {
 			for (const image of [element, ...element.querySelectorAll('img')]) image.ywebTint?.svg.remove();
 			element.ywebBar?.remove();
+			element.ywebMinimap?.remove();
 			element.remove();
 		},
 		// 親clipをBrowserスクロール後の画面矩形へまとめ、表示とhit判定で共有する。
@@ -1235,7 +1425,7 @@ const YWebText = {
 		const uid = GodotRuntime.parseString(pUid);
 		YWebText.seen.add(uid);
 		YWebText.trackDraw(uid);
-		const text = GodotRuntime.parseString(pText);
+		const text = pText ? GodotRuntime.parseString(pText) : null;
 		const aux = GodotRuntime.parseString(pAux);
 		const font = GodotRuntime.parseString(pFont);
 		const tag = YWebText.tags[kind] || 'span';
@@ -1255,12 +1445,14 @@ const YWebText = {
 			YWebText.place(element);
 		}
 		YWebText.clip(element, uid, ...YWebText.scrollMatrix(uid, transform).split(',').map(Number));
-		YWebText.placeCodeBar(element);
+		YWebText.placeCodePart(element, element.ywebBar);
+		YWebText.placeCodePart(element, element.ywebMinimap);
 		let textChanged = false;
 		if (form.tagName === 'INPUT' || form.tagName === 'TEXTAREA') {
+			const value = text === null ? form.value : text;
 			form.tabIndex = flags & 1024 ? 0 : -1;
-			if (!form.dataset.ywebComposing && form.value !== text) {
-				form.value = text;
+			if (text !== null && !form.dataset.ywebComposing && form.value !== text) {
+				form.value = value;
 				delete form.dataset.ywebSent;
 			}
 			form.placeholder = aux;
@@ -1270,8 +1462,8 @@ const YWebText = {
 			if (maxLength > 0) form.maxLength = maxLength * 2; else form.removeAttribute('maxlength');
 			form.wrap = flags & 8 ? 'soft' : 'off';
 			if (!form.dataset.ywebComposing) {
-				const start = YWebText.offset(text, selectionStart);
-				const end = YWebText.offset(text, selectionEnd);
+				const start = YWebText.offset(value, selectionStart);
+				const end = YWebText.offset(value, selectionEnd);
 				if (form.selectionStart !== start || form.selectionEnd !== end) form.setSelectionRange(start, end);
 			}
 			if (flags & 64 && !form.dataset.ywebBlurPending) {
@@ -1283,7 +1475,7 @@ const YWebText = {
 			}
 		} else {
 			const content = element.ywebGlyph || element;
-			if (content.textContent !== text) {
+			if (text !== null && content.textContent !== text) {
 				content.textContent = text;
 				textChanged = true;
 			}

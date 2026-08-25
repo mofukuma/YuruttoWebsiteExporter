@@ -24,7 +24,7 @@ const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const size = { width: 800, height: 600 }; // 両者で揃える画面寸法。
 const limit = 10; // 各画面へ許す8bit RGBのRMSE上限。10は不合格にする。
 const containerTypes = JSON.parse(fs.readFileSync(path.join(repo, 'tests/fixtures/dom_only/container_types.json'), 'utf8')); // ClassDBとfixtureで共有するContainer派生型。
-const allScreens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d', 'animated_sprite', 'mesh_3d', 'themes', 'particles_2d', 'controls_extended', 'nodes_2d_extended', 'windows_media', 'affects_extended', 'scroll_layout', 'container_overflow', 'input_3d', 'code_edit', 'code_edit_light', 'canvas_inputs']; // 比べられる全画面。
+const allScreens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d', 'animated_sprite', 'mesh_3d', 'themes', 'particles_2d', 'controls_extended', 'nodes_2d_extended', 'windows_media', 'affects_extended', 'scroll_layout', 'container_overflow', 'input_3d', 'code_edit', 'canvas_inputs']; // 比べられる全画面。
 const selected = (process.env.YWEB_SCREEN || '').split(',').filter(Boolean); // 変更箇所へ絞る画面名。
 const screens = selected.length ? selected : allScreens; // 未指定時は全画面を一括検査する。
 const comparedScreens = screens.filter((name) => name !== 'canvas_inputs'); // 画素比較する画面。操作fixtureはBrowser往復へ専念する。
@@ -98,6 +98,7 @@ for (const name of comparedScreens) {
 	try {
 		for (const [index, name] of screens.entries()) {
 			const page = await browser.newPage({ viewport: size, deviceScaleFactor: 1 });
+			page.setDefaultTimeout(5000);
 			const uri = index === 0 ? '/' : `/${name}/`;
 			// URL切替前の起点sceneを誤って測らず、Godotが確定したscene通知を待つ。
 			await page.addInitScript(() => {
@@ -118,6 +119,10 @@ for (const name of comparedScreens) {
 			await page.goto(`http://127.0.0.1:${server.address().port}/#${uri}`, { waitUntil: 'domcontentloaded' });
 			await page.waitForFunction((scene) => globalThis.__ywebScene === scene, `res://${name}.tscn`, { timeout: 20000 });
 			await page.evaluate(() => document.fonts.ready);
+			if (name === 'code_edit') await page.waitForFunction(() => {
+				const editors = [...document.querySelectorAll('div[data-yweb-kind="CodeEdit"]')];
+				return editors.length === 2 && editors.every((element) => element.dataset.ywebCodeFontReady === '1');
+			});
 			await page.waitForTimeout(settle[name] ? 2500 : 400);
 			const shot = path.join(work, `browser-${name}.png`);
 			const shotBeforeInteraction = name === 'themes' || name === 'scroll_layout' || name === 'container_overflow' || name === 'input_3d' || name.startsWith('code_edit'); // 操作前の初期画面をGodot基準と比べる。
@@ -523,9 +528,17 @@ for (const name of comparedScreens) {
 				await page.screenshot({ path: path.join(work, 'browser-input_3d-filled.png') });
 			}
 			if (name === 'code_edit') {
-				const editor = page.locator('textarea[data-yweb-code-input]');
-				const wrapper = page.locator('div[data-yweb-kind="CodeEdit"][data-yweb-text]');
-				await editor.waitFor();
+				const editors = page.locator('textarea[data-yweb-code-input]');
+				const wrappers = page.locator('div[data-yweb-kind="CodeEdit"][data-yweb-text]');
+				await editors.first().waitFor();
+				assert.equal(await editors.count(), 2, '上下二つのCodeEditを同じ白背景画面へ置いていない');
+				const editor = editors.nth(0);
+				const wrapper = wrappers.nth(0);
+				const miniWrapper = wrappers.nth(1);
+				const editorUid = await wrapper.getAttribute('data-yweb-uid');
+				const miniUid = await miniWrapper.getAttribute('data-yweb-uid');
+				const miniInput = page.locator(`textarea[data-yweb-uid="${miniUid}-input"]`);
+				const miniOwner = page.locator(`div[data-yweb-uid="${miniUid}"]`);
 				const initial = await wrapper.evaluate((element) => {
 					const input = element.querySelector('textarea');
 					const rows = [...element.querySelectorAll('[data-yweb-code-line]')];
@@ -540,21 +553,62 @@ for (const name of comparedScreens) {
 				});
 				assert.deepEqual([initial.tag, initial.input, initial.layer, initial.kind], ['DIV', 'TEXTAREA', 'PRE', 'CodeEdit'], 'CodeEditの表示層と入力層を二層DOMにできていない');
 				assert.ok(initial.rows >= 6 && initial.rows < 36, `CodeEditを可視行へ絞れていない: ${initial.rows}`);
-				assert.ok(initial.text.includes('extends Node') && initial.text.includes('# 日本語のコメントも構文色で表示する'), 'CodeEditの可視本文を構文DOMへ置けていない');
+				assert.ok(initial.text.includes('extends Node') && initial.text.includes('# 白背景の日本語コメント'), 'CodeEditの可視本文を構文DOMへ置けていない');
 				assert.ok(initial.colors.length >= 4, `SyntaxHighlighterの色区分が不足: ${initial.colors}`);
 				assert.ok(initial.numbers.some((value) => value.endsWith('001')) && initial.guides === 2, '行番号または行長guideを表示していない');
 				assert.equal(initial.fill, 'rgba(0, 0, 0, 0)', '確定時のtextarea文字が構文DOMへ重なっている');
 				assert.ok(initial.scrollable && initial.value.includes('var value_29 := 29'), 'CodeEdit全文をnative textareaへ保持していない');
 
-				// Browser scrollだけで表示行を入れ替え、編集本文とNode DOMを作り直さない。
+				const options = await miniWrapper.evaluate((element) => {
+					const input = element.ywebInput;
+					const rows = [...element.querySelectorAll('[data-yweb-code-line]')];
+					const current = rows.find((row) => row.dataset.ywebCodeLine === '0');
+					const box = document.querySelector(`[data-yweb-box="${element.dataset.ywebUid}-box"]`);
+					const minimap = element.ywebMinimap;
+					globalThis.__ywebMiniRefs = {
+						minimap,
+						rows: new Map([...minimap.ywebRows]),
+						blocks: new Map([...minimap.ywebRows].map(([key, row]) => [key, [...row.children]])),
+					};
+					return {
+						indent: input.dataset.ywebIndent, tab: input.style.tabSize,
+						numbers: rows.map((row) => row.querySelector('[data-yweb-code-number]').textContent),
+						numberColor: getComputedStyle(rows[0].querySelector('[data-yweb-code-number]')).color,
+						syntax: [...new Set([...element.querySelectorAll('code span')].map((span) => getComputedStyle(span).color))],
+						folds: [...element.querySelectorAll('[data-yweb-code-fold]')].filter((mark) => mark.textContent).length,
+						breakpoints: [...element.querySelectorAll('[data-yweb-code-breakpoint]')].filter((mark) => mark.textContent).map((mark) => getComputedStyle(mark).color),
+						guides: [...element.querySelectorAll('[data-yweb-column]')].map((guide) => ({ column: guide.dataset.ywebColumn, color: getComputedStyle(guide).borderLeftColor, opacity: getComputedStyle(guide).opacity })),
+						current: getComputedStyle(current).backgroundColor,
+						panel: box ? [getComputedStyle(box).backgroundColor, getComputedStyle(box).borderColor, box.getBoundingClientRect().width, box.getBoundingClientRect().height] : [],
+						scroll: element.ywebBar ? [element.ywebBar.getBoundingClientRect().width, element.ywebBar.getBoundingClientRect().height] : [],
+						caret: getComputedStyle(element).getPropertyValue('--yweb-caret').trim(), selection: getComputedStyle(element).getPropertyValue('--yweb-selection').trim(),
+						minimap: minimap ? { box: minimap.getBoundingClientRect().toJSON(), total: Number(minimap.dataset.ywebMinimapTotal), rows: minimap.ywebRows.size, blocks: minimap.querySelectorAll('[data-yweb-minimap-line] > i').length, text: minimap.textContent, viewport: minimap.ywebViewport.getBoundingClientRect().height } : null,
+					};
+				});
+				assert.equal(options.indent, '\t', '下段CodeEditのtab indentを反映していない');
+				assert.equal(options.tab, '8', '下段CodeEditのtab幅を反映していない');
+				assert.ok(options.numbers.includes('  1') && options.folds === 0, `空白埋め行番号またはfold gutter無効を反映していない: ${JSON.stringify(options)}`);
+				assert.equal(options.numberColor, 'rgb(71, 85, 105)', '下段CodeEditの行番号色を反映していない');
+				assert.ok(options.syntax.includes('rgb(4, 120, 87)') && options.syntax.includes('rgb(126, 34, 206)'), '下段CodeEditの構文色を反映していない');
+				assert.deepEqual(options.breakpoints, ['rgb(220, 38, 38)'], 'breakpointとTheme色を反映していない');
+				assert.deepEqual(options.guides, [{ column: '24', color: 'rgb(203, 213, 225)', opacity: '1' }], '下段CodeEditの行長guideを反映していない');
+				assert.equal(options.current, 'rgba(0, 0, 0, 0)', '現在行highlight無効を反映していない');
+				assert.deepEqual(options.panel, ['rgb(255, 255, 255)', 'rgb(203, 213, 225)', 736, 238], '下段CodeEditの白Themeまたは比較領域が違う');
+				assert.deepEqual(options.scroll, [8, 214], '下段CodeEdit内蔵scrollbarの確定範囲を表示していない');
+				assert.deepEqual([options.caret, options.selection], ['#0f172aff', '#bfdbfeff'], '下段CodeEditのcaretまたは選択色を反映していない');
+				assert.ok(options.minimap && options.minimap.total === 206 && options.minimap.rows === 74 && options.minimap.blocks >= 140 && options.minimap.text === '', `minimapを文字でなく表示範囲の色矩形へ展開していない: ${JSON.stringify(options.minimap)}`);
+				assert.ok(Math.abs(options.minimap.box.x - 650) <= 1 && Math.abs(options.minimap.box.y - 286) <= 1 && options.minimap.box.width === 110 && options.minimap.box.height >= 210, `minimapをGodot確定範囲へ置いていない: ${JSON.stringify(options.minimap)}`);
+
+				// Browser scrollで表示行を入れ替え、編集本文とNode DOMを作り直さない。
 				await editor.evaluate((input) => {
 					input.scrollTop = 220;
 					input.dispatchEvent(new Event('scroll', { bubbles: true }));
 				});
-				await page.waitForFunction(() => {
-					const lines = [...document.querySelectorAll('[data-yweb-code-line]')].map((row) => Number(row.dataset.ywebCodeLine));
+				await page.waitForFunction((uid) => {
+					const owner = document.querySelector(`[data-yweb-uid="${uid}"]`);
+					const lines = [...owner.querySelectorAll('[data-yweb-code-line]')].map((row) => Number(row.dataset.ywebCodeLine));
 					return lines.length > 0 && Math.min(...lines) > 0;
-				});
+				}, await wrapper.getAttribute('data-yweb-uid'));
 				await page.getByText(/^CHANGES 0 /).waitFor();
 				await editor.evaluate((input) => {
 					input.scrollTop = 0;
@@ -573,7 +627,7 @@ for (const name of comparedScreens) {
 				}, japanese);
 				await page.waitForTimeout(40);
 				await page.getByText(/^CHANGES 0 /).waitFor();
-				assert.deepEqual(await editor.evaluate((input) => [getComputedStyle(input).webkitTextFillColor, input.ywebOwner.ywebLayer.style.visibility]), ['rgb(229, 231, 235)', 'hidden'], 'IME変換中の平文表示へ切り替えていない');
+				assert.deepEqual(await editor.evaluate((input) => [getComputedStyle(input).webkitTextFillColor, input.ywebOwner.ywebLayer.style.visibility]), ['rgb(23, 32, 51)', 'hidden'], 'IME変換中の平文表示へ切り替えていない');
 
 				// compositionend後にinputが来る順でも、確定文章を一回にまとめる。
 				await editor.evaluate((input) => {
@@ -600,51 +654,47 @@ for (const name of comparedScreens) {
 					wrapper: globalThis.__ywebCodeRefs.wrapper === element,
 					input: globalThis.__ywebCodeRefs.input === element.querySelector('textarea'),
 					connected: globalThis.__ywebCodeRefs.wrapper.isConnected && globalThis.__ywebCodeRefs.input.isConnected,
+					value: element.querySelector('textarea').value,
 				}));
-				assert.deepEqual(stable, { wrapper: true, input: true, connected: true }, 'CodeEditのNode UID DOMを入力やscrollで再生成している');
-				await page.screenshot({ path: path.join(work, 'browser-code_edit-ime.png') });
-			}
-			if (name === 'code_edit_light') {
-				const editor = page.locator('textarea[data-yweb-code-input]');
-				const wrapper = page.locator('div[data-yweb-kind="CodeEdit"]');
-				await editor.waitFor();
-				const options = await wrapper.evaluate((element) => {
-					const input = element.ywebInput;
-					const rows = [...element.querySelectorAll('[data-yweb-code-line]')];
-					const current = rows.find((row) => row.dataset.ywebCodeLine === '0');
-					const box = document.querySelector(`[data-yweb-box="${element.dataset.ywebUid}-box"]`);
+				assert.deepEqual({ wrapper: stable.wrapper, input: stable.input, connected: stable.connected }, { wrapper: true, input: true, connected: true }, 'CodeEditのNode UID DOMを入力やscrollで再生成している');
+
+				// 下段のTab設定とminimap clickをBrowserからGodotへ往復させる。
+				await miniInput.focus();
+				await page.waitForFunction(({ uid, value }) => {
+					const owner = document.querySelector(`div[data-yweb-uid="${uid}"]`);
+					return owner && owner !== globalThis.__ywebCodeRefs.wrapper && owner.querySelector('textarea')?.value === value;
+				}, { uid: editorUid, value: stable.value });
+				await page.waitForFunction((uid) => [...document.querySelectorAll(`[data-yweb-uid="${uid}"] [data-yweb-code-text] span`)].some((span) => span.textContent === 'extends' && getComputedStyle(span).color === 'rgb(234, 88, 12)'), miniUid);
+				await miniInput.evaluate((input) => input.setSelectionRange(0, 0));
+				await miniInput.press('Tab');
+				await page.getByText('MINIMAP FIRST 0 TAB 1', { exact: true }).waitFor();
+				assert.ok((await miniInput.inputValue()).startsWith('\t'), '下段CodeEditのTab入力をGodotへ返していない');
+				const minimap = page.locator('[data-yweb-code-minimap]');
+				const miniBox = await minimap.boundingBox();
+				await page.mouse.move(miniBox.x + miniBox.width / 2, miniBox.y + miniBox.height * 0.2);
+				await page.mouse.down();
+				assert.equal(await minimap.evaluate((element) => getComputedStyle(element.ywebViewport).backgroundColor), 'rgba(15, 23, 42, 0.25)', 'minimap drag中のTheme表示へ切り替えていない');
+				await page.mouse.move(miniBox.x + miniBox.width / 2, miniBox.y + miniBox.height * 0.82);
+				await page.mouse.up();
+				await page.getByText(/^MINIMAP FIRST ([1-9]|[1-9][0-9]+) TAB 1$/).waitFor();
+				const miniMoved = await miniOwner.evaluate((element) => {
+					const previous = globalThis.__ywebMiniRefs;
+					const rows = element.ywebMinimap.ywebRows;
+					const lines = [...rows.values()].map((row) => Number(row.dataset.ywebMinimapLine));
 					return {
-						indent: input.dataset.ywebIndent, tab: input.style.tabSize,
-						numbers: rows.map((row) => row.querySelector('[data-yweb-code-number]').textContent),
-						numberColor: getComputedStyle(rows[0].querySelector('[data-yweb-code-number]')).color,
-						syntax: [...new Set([...element.querySelectorAll('code span')].map((span) => getComputedStyle(span).color))],
-						folds: [...element.querySelectorAll('[data-yweb-code-fold]')].filter((mark) => mark.textContent).length,
-						breakpoints: [...element.querySelectorAll('[data-yweb-code-breakpoint]')].filter((mark) => mark.textContent).map((mark) => getComputedStyle(mark).color),
-						guides: [...element.querySelectorAll('[data-yweb-column]')].map((guide) => ({ column: guide.dataset.ywebColumn, color: getComputedStyle(guide).borderLeftColor, opacity: getComputedStyle(guide).opacity })),
-						current: getComputedStyle(current).backgroundColor,
-						panel: box ? [getComputedStyle(box).backgroundColor, getComputedStyle(box).borderColor] : [],
-						size: box ? [box.getBoundingClientRect().width, box.getBoundingClientRect().height] : [],
-						scroll: element.ywebBar ? [element.ywebBar.getBoundingClientRect().width, element.ywebBar.getBoundingClientRect().height] : [],
-						caret: getComputedStyle(element).getPropertyValue('--yweb-caret').trim(), selection: getComputedStyle(element).getPropertyValue('--yweb-selection').trim(),
+						scroll: element.ywebInput.scrollTop,
+						viewport: element.ywebMinimap.ywebViewport.offsetTop,
+						stable: previous.minimap === element.ywebMinimap && [...previous.rows].every(([key, row]) => rows.get(key) === row && row.isConnected),
+						blocks: [...previous.blocks].every(([key, old]) => {
+							const current = [...rows.get(key).children];
+							return old.every((block, index) => current[index] === block && block.isConnected);
+						}),
+						rows: rows.size,
+						first: Math.min(...lines),
 					};
 				});
-				assert.equal(options.indent, '\t', '白Themeのtab indentを反映していない');
-				assert.equal(options.tab, '8', '白Themeのtab幅を反映していない');
-				assert.ok(options.numbers.includes(' 1') && options.folds === 0, '空白埋め行番号またはfold gutter無効を反映していない');
-				assert.equal(options.numberColor, 'rgb(71, 85, 105)', '白Themeの行番号色を反映していない');
-				assert.ok(options.syntax.includes('rgb(4, 120, 87)') && options.syntax.includes('rgb(126, 34, 206)'), '白Themeの構文色を反映していない');
-				assert.deepEqual(options.breakpoints, ['rgb(220, 38, 38)'], 'breakpointとTheme色を反映していない');
-				assert.deepEqual(options.guides, [{ column: '24', color: 'rgb(203, 213, 225)', opacity: '1' }], '白Themeの行長guideを反映していない');
-				assert.equal(options.current, 'rgba(0, 0, 0, 0)', '現在行highlight無効を反映していない');
-				assert.deepEqual(options.panel, ['rgb(255, 255, 255)', 'rgb(203, 213, 225)'], '白Themeの背景と枠を反映していない');
-				assert.deepEqual(options.size, [736, 170], 'CodeEditの比較領域を縮めている');
-				assert.deepEqual(options.scroll, [8, 146], 'CodeEdit内蔵scrollbarの確定範囲を表示していない');
-				assert.deepEqual([options.caret, options.selection], ['#0f172aff', '#bfdbfeff'], '白Themeのcaretまたは選択色を反映していない');
-				await editor.focus();
-				await editor.evaluate((input) => input.setSelectionRange(input.value.length, input.value.length));
-				await editor.press('Tab');
-				await page.getByText(/^CHANGES 1 /).waitFor();
-				assert.ok((await editor.inputValue()).endsWith('\t'), '白ThemeのTab入力をGodotへ返していない');
+				assert.ok(miniMoved.scroll > 0 && miniMoved.viewport > 0 && miniMoved.stable && miniMoved.blocks && miniMoved.rows === 74 && miniMoved.first >= 74, `minimap操作、表示行上限、全描画DOM再利用が成立していない: ${JSON.stringify(miniMoved)}`);
+				await page.screenshot({ path: path.join(work, 'browser-code_edit-ime.png') });
 			}
 			if (name === 'canvas_inputs') {
 				await exerciseUi(page, 'dom-canvas_inputs');
