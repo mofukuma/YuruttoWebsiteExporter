@@ -91,6 +91,8 @@ int yweb_text_prefer_dom();
 void yweb_site_scene(const char *p_path);
 void yweb_text_begin();
 void yweb_text_sync(const char *p_uid, const char *p_text, const char *p_aux, const char *p_font, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_flags, int p_z, int p_horizontal, int p_vertical, int p_kind, int p_max_length, int p_selection_start, int p_selection_end, float p_red, float p_green, float p_blue, float p_alpha, float p_font_size, float p_line_spacing, float p_outline_red, float p_outline_green, float p_outline_blue, float p_outline_alpha, float p_outline_size, float p_shadow_red, float p_shadow_green, float p_shadow_blue, float p_shadow_alpha, float p_shadow_x, float p_shadow_y, float p_underline_offset, float p_underline_thickness, float p_placeholder_red, float p_placeholder_green, float p_placeholder_blue, float p_placeholder_alpha, float p_font_ascent, float p_glyph_top, float p_glyph_bottom, float p_scroll_x, float p_scroll_y);
+// Button全体の操作範囲と内側文字の余白をBrowserへ渡す。
+void yweb_action_sync(const char *p_uid, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, float p_left, float p_top, float p_right, float p_bottom);
 void yweb_code_sync(const char *p_uid, const char *p_state);
 void yweb_text_remove(const char *p_uid);
 void yweb_clip_sync(const char *p_uid, const char *p_owner, float p_left, float p_top, float p_right, float p_bottom, int p_enabled);
@@ -133,6 +135,7 @@ enum TextFlag {
 	TEXT_SECRET = 128,
 	TEXT_DISABLED = 256,
 	TEXT_KEYBOARD_FOCUS = 1024,
+	TEXT_MOUSE = 2048, // BrowserがButton全体のpointer入力を所有する。
 };
 
 struct TextState {
@@ -426,6 +429,11 @@ bool yweb_text_dom_owns(const Control *p_control) {
 	return capture_control(p_control);
 }
 
+// 意味DOMがmouse入力を所有するButton系かを判定する。
+bool yweb_text_dom_action_owns(const Control *p_control) {
+	return Object::cast_to<BaseButton>(p_control) && yweb_text_dom_owns(p_control);
+}
+
 // 一つの文字状態を現在の画面transformと合成してDOMへ送る。
 static void sync_text(Control *p_control, const TextState &p_state, const CharString &p_uid = CharString(), const CharString *p_text = nullptr, bool p_omit_text = false) {
 	const ObjectID object = p_control->get_instance_id();
@@ -464,6 +472,15 @@ static void sync_text(Control *p_control, const TextState &p_state, const CharSt
 			p_state.placeholder.r, p_state.placeholder.g, p_state.placeholder.b, p_state.placeholder.a,
 			glyph.ascent, glyph.top, glyph.bottom,
 			p_state.scroll.x, p_state.scroll.y);
+	// Buttonの意味DOMはControl全体でhitし、文字はThemeの内側へ配置する。
+	if (Object::cast_to<BaseButton>(p_control)) {
+		const Transform2D action = canvas_transform(p_control);
+		const Size2 size = p_control->get_size();
+		const Rect2 content = p_state.rect;
+		yweb_action_sync(uid.get_data(), action[0].x, action[0].y, action[1].x, action[1].y, action[2].x, action[2].y,
+				size.x, size.y, content.position.x, content.position.y,
+				MAX(0.0f, size.x - content.position.x - content.size.x), MAX(0.0f, size.y - content.position.y - content.size.y));
+	}
 }
 
 // 文字Controlの内側を得る共通処理を後段で定義する。
@@ -922,6 +939,10 @@ static void text_event(const char *p_uid, int p_kind, const char *p_text, int p_
 		if (control->has_focus()) control->release_focus();
 	} else if (p_kind == 6) {
 		if (BaseButton *button = Object::cast_to<BaseButton>(control)) button->yweb_click();
+	} else if (p_kind == 8 || p_kind == 9) {
+		if (BaseButton *button = Object::cast_to<BaseButton>(control)) {
+			if (Viewport *viewport = button->get_viewport()) viewport->yweb_update_mouse_over(p_kind == 8 ? button : nullptr);
+		}
 	} else if (LineEdit *line = Object::cast_to<LineEdit>(control)) {
 		if ((p_kind == 1 || p_kind == 5) && line->get_text() != incoming) line->_set_text(incoming, true);
 		const int start = CLAMP(p_start, 0, line->get_text().length());
@@ -1120,6 +1141,7 @@ static void sync_button_text(Control *p_control, const String &p_text, int p_kin
 		if (button->has_focus()) state.flags |= TEXT_FOCUSED;
 		if (button->is_disabled()) state.flags |= TEXT_DISABLED;
 		if (button->get_focus_mode_with_override() == Control::FOCUS_ALL) state.flags |= TEXT_KEYBOARD_FOCUS;
+		if (button->get_mouse_filter_with_override() != Control::MOUSE_FILTER_IGNORE) state.flags |= TEXT_MOUSE;
 		if (mode == BaseButton::DRAW_NORMAL && button->has_focus(true)) color = SNAME("font_focus_color");
 		else if (mode == BaseButton::DRAW_HOVER_PRESSED) color = SNAME("font_hover_pressed_color");
 		else if (mode == BaseButton::DRAW_PRESSED) color = button->has_theme_color(SNAME("font_pressed_color")) ? SNAME("font_pressed_color") : SNAME("font_color");

@@ -25,7 +25,7 @@ function sha(value) {
 function lock(file) {
 	const values = {};
 	for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
-		const match = /^([A-Z][A-Z0-9_]*)=(.+)$/.exec(line.trim());
+		const match = /^([A-Z][A-Z0-9_]*)=(.+?)(?:\s+#.*)?$/.exec(line.trim());
 		if (match) values[match[1]] = match[2];
 	}
 	return values;

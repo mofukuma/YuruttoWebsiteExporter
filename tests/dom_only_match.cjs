@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 const { browserPath } = require('./browser.cjs');
-const { exerciseUi } = require('./browser_ui.cjs');
+const { exerciseHover, exerciseUi } = require('./browser_ui.cjs');
 const { createServer } = require('../build/serve_web.cjs');
 const { install } = require('../build/fetch_webfont.cjs');
 
@@ -24,10 +24,10 @@ const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const size = { width: 800, height: 600 }; // 両者で揃える画面寸法。
 const limit = 10; // 各画面へ許す8bit RGBのRMSE上限。10は不合格にする。
 const containerTypes = JSON.parse(fs.readFileSync(path.join(repo, 'tests/fixtures/dom_only/container_types.json'), 'utf8')); // ClassDBとfixtureで共有するContainer派生型。
-const allScreens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d', 'animated_sprite', 'mesh_3d', 'themes', 'particles_2d', 'controls_extended', 'nodes_2d_extended', 'windows_media', 'affects_extended', 'scroll_layout', 'container_overflow', 'input_3d', 'code_edit', 'canvas_inputs']; // 比べられる全画面。
+const allScreens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d', 'animated_sprite', 'mesh_3d', 'themes', 'particles_2d', 'controls_extended', 'nodes_2d_extended', 'windows_media', 'affects_extended', 'scroll_layout', 'container_overflow', 'input_3d', 'code_edit', 'canvas_inputs', 'hover_scroll']; // 比べられる全画面。
 const selected = (process.env.YWEB_SCREEN || '').split(',').filter(Boolean); // 変更箇所へ絞る画面名。
 const screens = selected.length ? selected : allScreens; // 未指定時は全画面を一括検査する。
-const comparedScreens = screens.filter((name) => name !== 'canvas_inputs'); // 画素比較する画面。操作fixtureはBrowser往復へ専念する。
+const comparedScreens = screens.filter((name) => !['canvas_inputs', 'hover_scroll'].includes(name)); // 画素比較する画面。操作fixtureはBrowser往復へ専念する。
 const structureOnly = process.env.YWEB_STRUCTURE_ONLY === '1'; // DOM構造の開発検査ではRMSE結果を記録して終了値から外す。
 const settle = { physics: 320, omochi: 950, particles_2d: 30 }; // 物理と粒子を速く回した画面で、形が決まるまで進めるframe数。
 
@@ -116,7 +116,7 @@ for (const name of comparedScreens) {
 					},
 				});
 			});
-			await page.goto(`http://127.0.0.1:${server.address().port}/#${uri}`, { waitUntil: 'domcontentloaded' });
+				await page.goto(`http://127.0.0.1:${server.address().port}${uri}`, { waitUntil: 'domcontentloaded' });
 			await page.waitForFunction((scene) => globalThis.__ywebScene === scene, `res://${name}.tscn`, { timeout: 20000 });
 			await page.evaluate(() => document.fonts.ready);
 			if (name === 'code_edit') await page.waitForFunction(() => {
@@ -702,6 +702,12 @@ for (const name of comparedScreens) {
 				await page.close();
 				continue; // 操作fixtureは画素比較画面へ混ぜず、signal往復を独立判定する。
 			}
+			if (name === 'hover_scroll') {
+				await exerciseHover(page, 'dom-hover_scroll');
+				ui.push('hover');
+				await page.close();
+				continue; // hover fixtureはBrowser scrollとsignal往復へ専念する。
+			}
 			if (!shotBeforeInteraction) await page.screenshot({ path: shot });
 			await page.close();
 
@@ -726,7 +732,8 @@ for (const name of comparedScreens) {
 
 	// 画面ごとに上限を当てる。平均では、良い画面が悪い画面を隠してしまう。
 	const over = Object.entries(measured).filter(([, value]) => value >= limit);
-	if (screens.includes('canvas_inputs')) assert.deepEqual(ui, ['dom'], 'DOM onlyのBrowser UI操作を完走していない');
+	if (screens.includes('canvas_inputs')) assert.ok(ui.includes('dom'), 'DOM onlyのBrowser UI操作を完走していない');
+	if (screens.includes('hover_scroll')) assert.ok(ui.includes('hover'), 'DOM onlyのhover操作を完走していない');
 	fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ unit: 'RGB 0..255', measured, limit, ui }, null, 2)}\n`);
 	console.log(JSON.stringify({ structural: true, ui, rmseOk: over.length === 0, unit: 'RGB 0..255', measured, limit }));
 	if (!structureOnly) assert.deepEqual(over, [], `Godot画面との差が大きい: ${over.map(([name, value]) => `${name} ${value}`).join(', ')}`);

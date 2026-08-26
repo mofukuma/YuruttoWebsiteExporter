@@ -40,6 +40,7 @@ func _init() -> void:
 	SiteConfig.ensure_all(PATH)
 	var custom: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://web/pages.json"))
 	result["custom_keys"] = custom.scenes.keys() if custom is Dictionary else []
+	result["preferred"] = SiteConfig.paths(PATH)[0]
 
 	print(JSON.stringify(result))
 	quit()

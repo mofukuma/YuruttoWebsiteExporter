@@ -27,18 +27,20 @@ Upload it to your site and you are done. A rented server works, and so does a fr
 
 Each file has its own job.
 
-- `index.html`: the site itself. Every page opens through this one and switches inside
+- `index.html`, `about/index.html`: real HTML for each public address. Once open, scenes switch without reloading
+- `yweb-<hash>.js`, `yweb-<hash>.wasm`: the shared engine at the top of the export folder
+- `site-<hash>.pck`: the shared scenes and resources at the top of the export folder
 - `sitemap.xml`, `robots.txt`: directions for search engines. The URLs inside come from the site URL you set on the export screen
 - `404.html`: shown when someone opens an address you don't have
 - files ending in `.br`: a lighter copy of the same content. A server that understands it picks it up and serves faster
 - `GODOT_LICENSE.txt`: Godot's notice. Keep it next to the rest
-- `nginx-yweb.conf*.example`: sample settings for people running their own server
 
 ## Adding pages
 
-Write `res://yweb-site.json` when you want more pages. List which scene shows at which address, plus a title and description.
+Open `Project > Tools > Yurutto Pages` when you want more pages. Add a page, choose its scene, enter its address and search text, then save. The screen updates the JSON selected by the export preset and preserves advanced entries such as `meta` and `json_ld`.
+Turn on `Not a page` for a scene used inside another scene. It remains available to Godot but does not get its own HTML, route, or sitemap entry.
 Scenes are matched by file location, so renaming a root node won't break anything.
-Site-wide things — the public URL, language, favicon, social image, address style, web font — live on the export screen.
+Site-wide things — the public URL, language, favicon, social image, and web font — live on the export screen.
 
 ## Text that stays searchable and copyable
 
@@ -60,10 +62,15 @@ Some decorative typefaces can't be reproduced in HTML. When you'd rather keep th
 
 ## Publishing
 
-You can choose how addresses look. Out of the box they read like `/#about`, which asks nothing of the server.
-For plain addresses like `/about/`, pick History. Each page is written out as a real `/about/index.html`, so a host like GitHub Pages opens direct links as they are.
+Every address is written as a real file, such as `/about/index.html`. Upload the folder to a static host and direct links work without URL rewrite rules. After the first load, Godot switches scenes and updates browser history without reloading the engine.
 
-Running your own nginx? Feed it the `nginx-yweb.conf.example` that comes along. It serves the lighter `.br` copies and catches unknown URLs back into the site.
+Each scene runs for three frames during export, then its visible labels are written into that page's initial HTML. Name a label `HeroH1`, `StoryH2`, or `IntroP` to choose its element. Names from `H1` through `H6` work. Without those names, one large early label becomes H1, section titles become H2, card titles become H3, and the remaining labels become paragraphs. A `LinkButton` is written as an anchor with its public URI.
+
+Visible image nodes with a source file are also written as real images with hashed URLs and dimensions. Set the `yweb_alt` metadata for an exact description. Otherwise, a nearby caption, the source filename, or the parent node name supplies it. Names such as `Background`, `Icon`, and `Mask` stay decorative and are omitted. Set `yweb_seo_image` metadata to `false` to exclude another image. Atlas, region, and multi-frame sprites are omitted rather than publishing the wrong part of a sheet.
+
+The snapshot runner enables Godot's `web` feature. If scene construction also branches on `macos`, `windows`, or `linux`, test `web` first so the exported structure is selected.
+
+Engine and PCK filenames include a content hash. Unchanged files keep the same URL for browser cache reuse, while changed files receive a new URL. HTML should be revalidated by the host; the included development server uses that policy.
 
 ## Showing a thumbnail on social media
 
@@ -139,18 +146,20 @@ Godotで作った作品を、そのままWebサイトにするアドオン。
 
 フォルダの中身は、それぞれこんな役目。
 
-- `index.html`: サイトの本体。どのページもここが開いて、中で切り替わる
+- `index.html`、`about/index.html`: 公開URLごとの本物のHTML。開いた後は再読込せずシーンが切り替わる
+- `yweb-<hash>.js`、`yweb-<hash>.wasm`: 書き出しフォルダ直下で共有するエンジン
+- `site-<hash>.pck`: 書き出しフォルダ直下で共有するシーンと素材
 - `sitemap.xml`、`robots.txt`: 検索に見つけてもらうための案内。中のURLはエクスポート画面の公開URLから作られる
 - `404.html`: 知らないアドレスを開かれたとき用
 - `.br`付き: 同じ中身の軽い版。対応しているサーバーなら勝手に選ばれて速い
 - `GODOT_LICENSE.txt`: Godotの表記。一緒に置いたままに
-- `nginx-yweb.conf*.example`: 自分でサーバーを立てる人向けの設定例
 
 ## ページを増やす
 
-ページを増やしたくなったら`res://yweb-site.json`を書こう。どのシーンをどのアドレスで見せるか、タイトルと説明を並べる。
+ページを増やしたくなったら`プロジェクト > ツール > Yurutto Pages`を開こう。ページを追加して、シーン、アドレス、検索用の文言を入れて保存できるよ。画面はExport presetで選んだJSONを更新し、`meta`や`json_ld`などの詳細設定は残す。
+ほかのシーン内で使うSceneは`Not a page`をオンにしよう。Godotからは使えるまま、専用HTML、route、sitemapには出なくなるよ。
 シーンはファイルの場所で見分けるから、ルートノードの名前を変えても壊れないよ。
-公開URL、言語、favicon、SNS用の画像、URLの見せかた、Webフォントみたいなサイト全体の話は、エクスポート画面のほうにあるよ。
+公開URL、言語、favicon、SNS用の画像、Webフォントみたいなサイト全体の話は、エクスポート画面のほうにあるよ。
 
 ## 文字を検索やコピーの効く形に
 
@@ -172,10 +181,15 @@ Godotで作った作品を、そのままWebサイトにするアドオン。
 
 ## 公開のしかた
 
-URLの見せかたを選べるよ。最初は`/#about`みたいな感じになっている。これはサーバー側の設定がいらない形。
-`/about/`みたいな普通のアドレスにしたいときはHistoryを選ぼう。ページごとに`/about/index.html`が本物のファイルとして書き出されるから、GitHub Pagesみたいな置き場ならそのままで直リンクも開くよ。
+`/about/`なら`/about/index.html`という本物のファイルが作られるよ。フォルダを静的な置き場へアップロードすれば、URL書換え設定なしで直リンクが開く。最初に開いた後は、Godotがシーンとブラウザ履歴を再読込なしで切り替えるよ。
 
-自分でnginxを立てる人は、一緒に出てくる`nginx-yweb.conf.example`を読ませると楽。軽い`.br`版を選んで配ったり、知らないURLをサイトで受け止めたりしてくれる。
+書き出し中に各シーンを3フレーム動かし、見えているLabelを最初のHTMLへ入れるよ。`HeroH1`、`StoryH2`、`IntroP`のようにノード名へ意味を付けると、その要素になる。`H1`から`H6`まで使える。指定がなければ、序盤の大きなLabelをH1、節のTitleをH2、card内のTitleをH3、残りを本文として選ぶ。LinkButtonは公開URI付きのリンクになるよ。
+
+元画像を持つTexture系Nodeも、本物の画像として最初のHTMLへ入るよ。正確な説明はmetaの`yweb_alt`へ書こう。未設定なら近くのCaption、画像ファイル名、親Node名の順で補う。`Background`、`Icon`、`Mask`のような装飾名は画像検索へ出さないよ。個別に除外したい画像はmetaの`yweb_seo_image`を`false`にしよう。Atlas、region、複数frameのSpriteは画像範囲を誤らないよう対象外になるよ。
+
+採取中はGodotの`web` featureを有効にする。シーン構築を`macos`、`windows`、`linux`でも分けるなら、`web`の判定を先に書こう。書き出し用のNode構成を選べるよ。
+
+エンジンとPCKの名前には中身のhashが入る。中身が同じなら同じURLをブラウザcacheで再利用し、変わったときは新しいURLになる。HTMLは公開先で更新確認される設定にしよう。同梱の開発serverも同じ方針だよ。
 
 ## SNSに貼ったときサムネイルを出す
 

@@ -1,0 +1,23 @@
+; WordPress型の企業サイトをDOM onlyで試すGodot作例。
+
+config_version=5
+
+[application]
+
+config/name="Luma Studio"
+run/main_scene="res://main.tscn"
+
+[display]
+
+window/size/viewport_width=1440
+window/size/viewport_height=900
+window/stretch/mode="disabled"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/yurutto_website_exporter/plugin.cfg")

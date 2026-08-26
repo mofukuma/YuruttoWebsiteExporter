@@ -30,6 +30,7 @@ assert.deepEqual([...result.minimal].sort(), ['scene', 'uri'], '既定値で足�
 assert.deepEqual(result.order, ['Main', 'Big', 'NewsList', 'Small'], `main scene優先とfile容量順が崩れた: ${result.order}`);
 assert.deepEqual(result.uris, ['/', '/big/', '/news-list/', '/small/'], `URIの割り当てが崩れた: ${result.uris}`);
 assert.deepEqual(result.custom_keys, ['Main', 'Big', 'NewsList', 'Small'], `preset指定pathへ生成されない: ${result.custom_keys}`);
+assert.equal(result.preferred, 'res://web/pages.json', 'preset指定pathを編集画面の初期値にしていない');
 assert.equal(result.kept_title, '手書きの題名', '手で書いた値が消えた');
 assert.equal(result.stable, true, '再実行でkeyが変わった');
 

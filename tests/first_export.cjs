@@ -81,7 +81,11 @@ child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 
 const html = fs.readFileSync(path.join(site, 'index.html'), 'utf8');
 assert.match(html, /<title>/, 'titleが無い');
 assert.match(html, /og:title/, 'OGPが無い');
-for (const name of ['index.js', 'index.wasm', 'index.pck', 'sitemap.xml', 'robots.txt', '404.html']) {
+const generated = fs.readdirSync(site);
+const engine = generated.find((name) => /^yweb-[0-9a-f]{12}\.js$/.test(name));
+const pack = generated.find((name) => /^site-[0-9a-f]{12}\.pck$/.test(name));
+assert.ok(engine && pack, `hash成果物が足りない: ${generated.join(', ')}`);
+for (const name of [engine, engine.replace(/\.js$/, '.wasm'), pack, 'sitemap.xml', 'robots.txt', '404.html']) {
 	assert.ok(fs.existsSync(path.join(site, name)), `成果物が足りない: ${name}`);
 }
 const sitemap = fs.readFileSync(path.join(site, 'sitemap.xml'), 'utf8');

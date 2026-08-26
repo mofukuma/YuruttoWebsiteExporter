@@ -56,6 +56,7 @@ assert.ok(levels.length > 0, '検査するtemplateがない');
 assert.equal(manifest.inputs.sourceLockSha256, sha(path.join(build, 'source.lock')));
 assert.equal(manifest.inputs.distributionLockSha256, sha(path.join(build, 'distribution.lock')));
 assert.equal(manifest.inputs.templateOptionsSha256, sha(path.join(build, 'template.options')));
+assert.equal(manifest.inputs.levelsOptionsSha256, sha(path.join(build, 'levels.options')));
 assert.equal(manifest.inputs.patchSha256, sha(path.join(build, 'patches/web_yweb_text.patch')));
 assert.equal(manifest.inputs.overlaySha256, treeHash(path.join(build, 'overlay')));
 assert.equal(manifest.inputs.buildSha256, filesHash(BUILD_FILES.map((file) => path.join(root, file))));
@@ -67,6 +68,7 @@ const counts = {}; // level別のentry数。
 // level別に、ZIPの中身がmanifestの記録と一致することを見る。
 for (const [level, item] of levels) {
 	const template = path.join(templateDir, item.file);
+	assert.equal(item.brotli.quality, Number(distribution.BROTLI_QUALITY), `Brotli品質が古い: ${level}`);
 	assert.equal(item.compileKey, compileKey(level), `compile入力が古い: ${level}`);
 	assert.equal(item.artifactKey, artifactKey(level), `配布入力が古い: ${level}`);
 	assert.equal(item.sha256, sha(template), `template hash不一致: ${level}`);

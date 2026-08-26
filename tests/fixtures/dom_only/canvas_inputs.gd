@@ -177,7 +177,6 @@ func _ready() -> void:
 	focus.size = Vector2(330, 38)
 	focus.add_theme_color_override("font_color", Color("f8fafc"))
 	add_child(focus)
-
 	# Browserの意味DOM操作をGodot signalへ通し、結果表示まで往復させる。
 	line.text_changed.connect(change_line)
 	line.text_submitted.connect(submit_line)

@@ -540,8 +540,8 @@ const YWebText = {
 		},
 		// Browser fontの実幅をGodotが確定した項目幅へ折返さず収める。
 		fit: function (element) {
-			const width = Number.parseFloat(element.style.width);
-			const natural = element.scrollWidth;
+			const width = Number(element.dataset.ywebContentWidth) || Number.parseFloat(element.style.width);
+			const natural = element.ywebGlyph?.scrollWidth || element.scrollWidth;
 			const scale = natural > width && natural > 0 ? width / natural : 1;
 			element.dataset.ywebTextScale = String(scale);
 			YWebText.place(element);
@@ -892,6 +892,17 @@ const YWebText = {
 		},
 		// Button系へkeyboard focusとnative keyboard clickを結ぶ。
 		bindAction: function (element) {
+			// DOM所有Buttonのhoverを標準Godot signalへ一本化する。
+			element.addEventListener('pointermove', (event) => event.stopPropagation());
+			element.addEventListener('pointerenter', () => {
+				element.dataset.ywebDomHover = 'true';
+				YWebText.send(element, 8);
+			});
+			element.addEventListener('pointerleave', () => {
+				if (!element.dataset.ywebDomHover) return;
+				delete element.dataset.ywebDomHover;
+				YWebText.send(element, 9);
+			});
 			element.addEventListener('focus', () => {
 				delete element.dataset.ywebBlurPending;
 				element.dataset.ywebFocusPending = 'true';
@@ -1485,6 +1496,7 @@ const YWebText = {
 			}
 			if (flags & 256) element.setAttribute('aria-disabled', 'true'); else element.removeAttribute('aria-disabled');
 			element.tabIndex = flags & 1024 && !(flags & 256) ? 0 : -1;
+			element.style.pointerEvents = flags & 2048 ? 'auto' : 'none';
 			if (flags & 64 && !YWebText.mouseDown && !element.dataset.ywebBlurPending) {
 				delete element.dataset.ywebFocusPending;
 				if (document.activeElement !== element) element.focus({ preventScroll: true });
@@ -1535,6 +1547,22 @@ const YWebText = {
 		YWebText.glyph(element);
 		if (kind === 5) YWebText.fit(element);
 		if (element.ywebGlyph) YWebText.loadFont(element);
+	},
+	yweb_action_sync__sig: 'vi' + 'f'.repeat(12),
+	// Button全体を意味DOMの操作域にし、文字をThemeのcontent領域へ収める。
+	yweb_action_sync: function (pUid, xx, xy, yx, yy, x, y, width, height, left, top, right, bottom) {
+		const uid = GodotRuntime.parseString(pUid);
+		const element = YWebText.elements.get(uid);
+		if (!element?.ywebGlyph) return;
+		const transform = [xx, xy, yx, yy, x, y].join(',');
+		element.dataset.ywebTransform = transform;
+		element.dataset.ywebMatrix = transform;
+		element.dataset.ywebContentWidth = String(Math.max(0, width - left - right));
+		element.style.width = `${width}px`;
+		element.style.height = `${height}px`;
+		element.style.padding = `${top}px ${right}px ${bottom}px ${left}px`;
+		YWebText.place(element);
+		YWebText.clip(element, uid, ...YWebText.scrollMatrix(uid, transform).split(',').map(Number));
 	},
 	yweb_code_sync__sig: 'vpp',
 	// CodeEditの構文色と行補助を、本文入力とは独立した背面DOMへ同期する。

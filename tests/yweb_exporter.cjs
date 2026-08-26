@@ -29,7 +29,8 @@ assert.equal(platform.includes('EditorExportPlatformWeb'), false, '標準Web実�
 assert.equal(platform.includes('find_export_template'), false, '公式template探索へ依存');
 assert.match(platform, /templates\/manifest\.json/, 'テンプレートmanifest参照なし');
 assert.equal(platform.includes('Godot 4.7.1専用'), false, '対応版をcodeへ固定');
-assert.equal(platform.includes('OS.execute'), false, '外部processへ依存');
+assert.match(platform, /site_snapshot_runner\.gd/, '初期HTMLのScene採取なし');
+assert.match(platform, /--frame=3/, '初期HTMLの判定frame不一致');
 assert.equal(fs.readdirSync(addon).some((name) => name.endsWith('.cjs')), false, '実行時CJSが残存');
 assert.equal(crypto.createHash('sha256').update(fs.readFileSync(template)).digest('hex'), expectedHash, '内蔵テンプレート hash不一致');
 
@@ -54,12 +55,19 @@ fs.mkdirSync(site, { recursive: true });
 child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], {
 	stdio: 'pipe', env: { ...process.env, PATH: emptyPath },
 });
-for (const name of ['index.html', 'index.js', 'index.wasm', 'index.pck', 'index.js.br', 'index.wasm.br', 'index.audio.worklet.js.br', 'index.audio.position.worklet.js.br', 'GODOT_LICENSE.txt']) {
+const names = fs.readdirSync(site);
+const engine = names.find((name) => /^yweb-[0-9a-f]{12}\.js$/.test(name));
+const pack = names.find((name) => /^site-[0-9a-f]{12}\.pck$/.test(name));
+assert.ok(engine && pack, `hash成果物なし: ${names.join(', ')}`);
+const base = engine.slice(0, -3);
+for (const name of ['index.html', `${base}.js`, `${base}.wasm`, `${base}.js.br`, `${base}.wasm.br`, `${base}.audio.worklet.js.br`, `${base}.audio.position.worklet.js.br`, pack, 'GODOT_LICENSE.txt']) {
 	assert.ok(fs.existsSync(path.join(site, name)), `公開成果物なし: ${name}`);
 }
 // 配布物の由来と、addonが読む正本が噛み合っているかを見る。
 const manifest = JSON.parse(fs.readFileSync(path.join(site, 'yweb-compression.json')));
 assert.equal(manifest.entries.length, 4, '固定テンプレートのBrotli対応数不一致');
+assert.equal(manifest.templateQuality, distribution.templates['2d'].brotli.quality, '内蔵Brotli品質不一致');
+assert.ok(manifest.entries.every((entry) => entry.quality === manifest.templateQuality), '内蔵runtime以外へ品質を流用した');
 for (const entry of manifest.entries) assert.ok(entry.brotliBytes < entry.originalBytes, `圧縮率不正: ${entry.file}`);
 const notice = ['GODOT-MIT.txt', 'GODOT-COPYRIGHT.txt'].map((file) => fs.readFileSync(path.join(root, 'LICENSES', file), 'utf8').replace(/\n*$/, '\n')).join('\n');
 assert.equal(child.execFileSync('unzip', ['-p', template, 'GODOT_LICENSE.txt'], { encoding: 'utf8' }), notice, 'テンプレートlicense不一致');
@@ -67,6 +75,7 @@ assert.equal(fs.readFileSync(path.join(site, 'GODOT_LICENSE.txt'), 'utf8'), noti
 const html = fs.readFileSync(path.join(site, 'index.html'), 'utf8');
 assert.match(html, /"canvasResizePolicy":2/, 'Browser全域表示なし');
 assert.match(html, /"gdextensionLibs":\[\]/, 'GDExtension無効境界なし');
+assert.ok(html.includes(`"mainPack":"${pack}"`), 'hash付きPCK参照なし');
 assert.equal(html.includes('$GODOT_'), false, 'HTML placeholder残留');
 const result = { ok: true, platform: 'Yurutto Website', godot: distribution.godot.version, profile: distribution.profile, nodeRequired: false, templateBytes: fs.statSync(template).size, entries: entries.length, compressed: manifest.entries.length, licenses: 1 };
 fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);

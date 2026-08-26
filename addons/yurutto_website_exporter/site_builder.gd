@@ -1,5 +1,5 @@
 # Godot Web成果物をscene別SEO、route、Web font、配信設定付きsiteへ変換する。
-# Editor内だけで完結し、外部processを起動しない設計。
+# 3フレーム目のScene文字と画像を初期HTMLへ埋め、Browser起動前にも内容が伝わる設計。
 
 extends RefCounted
 
@@ -7,15 +7,15 @@ const BEGIN := "<!-- YWEB_SITE_BEGIN -->" # 再生成headの開始印。
 const END := "<!-- YWEB_SITE_END -->" # 再生成headの終了印。
 const RUNTIME := "res://addons/yurutto_website_exporter/site_runtime.js" # Browser scene同期処理。
 const I18n := preload("i18n.gd") # 画面文言の言語選び。
-const NGINX := "res://addons/yurutto_website_exporter/nginx-yweb.conf" # 直接配信用設定。
-const NGINX_PROXY := "res://addons/yurutto_website_exporter/nginx-yweb-proxy.conf" # reverse proxy設定。
+const SiteConfig := preload("site_config.gd") # 画面とExportで共有する公開URI規則。
 const OPTIONS := [
 	"yweb/site/enabled", "yweb/site/config", "yweb/site/base_url", "yweb/site/title",
-	"yweb/site/description", "yweb/site/locale", "yweb/site/favicon", "yweb/routing/mode",
+	"yweb/site/description", "yweb/site/locale", "yweb/site/favicon",
 	"yweb/font/matching_webfont", "yweb/font/avoid_canvas_theme_font", "yweb/ogp/image", "yweb/ogp/alt",
 ] # Site生成へ渡すExport設定名。
 const STYLE_ATTRS := ["media", "integrity", "crossorigin", "referrerpolicy"] # styleで許可する属性。
 const SCRIPT_ATTRS := ["type", "defer", "async", "integrity", "crossorigin", "referrerpolicy"] # scriptで許可する属性。
+const PRERENDER_STYLE := "#yweb-site-summary{position:fixed;inset:0;z-index:3;overflow:auto;box-sizing:border-box;padding:clamp(24px,6vw,88px);background:#fff;color:#151b2d;font:16px/1.65 system-ui,sans-serif;touch-action:pan-y}#yweb-site-summary>*{max-width:72rem;margin:0 auto 1rem}#yweb-site-summary h1{font-size:clamp(2rem,6vw,4rem);line-height:1.1}#yweb-site-summary h2{margin-top:2.5rem;font-size:clamp(1.5rem,4vw,2.5rem);line-height:1.2}#yweb-site-summary h3{margin-top:2rem;font-size:1.3rem}#yweb-site-summary a{display:inline-block;margin:0 1rem 1rem 0;color:#244edb}#yweb-site-summary img{display:block;width:min(100%,72rem);height:auto;object-fit:contain}" # Engine準備前とJavaScript無効時に読める文書体裁。
 
 var error_message := "" # Export画面へ返す失敗理由。
 var project := "" # 現在projectの絶対path。
@@ -23,23 +23,26 @@ var output := "" # 起点HTMLの絶対path。
 var out := "" # Site成果物directory。
 
 # 設定、asset、route HTML、付属fileを一括生成する。
-func build(options: Dictionary, target: String) -> Error:
+func build(options: Dictionary, target: String, snapshots := {}, runtime := "", quality := 0) -> Error:
 	error_message = ""
 	project = ProjectSettings.globalize_path("res://").trim_suffix("/")
 	output = target
 	out = target.get_base_dir()
+	var old_pages := _published_pages()
 	if not FileAccess.file_exists(output):
 		return _fail(I18n.t("no_export_html", [output]))
-	# site機能を切っていても、Canvas文字の扱いだけはBrowserへ伝える。
+	# site機能を切っていても、Canvas文字の扱いはBrowserへ伝える。
 	var avoid := bool(options.get("yweb/font/avoid_canvas_theme_font", true))
 	if not bool(options.get("yweb/site/enabled", true)):
 		var error := _write_text_config(avoid)
-		return error if error != OK else _write_manifest()
+		if error != OK:
+			return error
+		error = _clean_site(old_pages)
+		return error if error != OK else _write_manifest(runtime, quality)
 	var data := _configuration(options)
 	if not error_message.is_empty():
 		return FAILED
 	data.avoid_canvas_theme_font = avoid
-	data.mode = "History" if int(options.get("yweb/routing/mode", 0)) == 1 else "Hash"
 	# 各sceneの公開URLを確定する。以後のcanonical、sitemap、route生成はこの値を使う。
 	var url := _urls(data.site.base_url)
 	if not error_message.is_empty():
@@ -47,6 +50,9 @@ func build(options: Dictionary, target: String) -> Error:
 	for scene in data.scenes.values():
 		scene.canonical = url.absolute.call(scene.uri.trim_prefix("/"))
 	_copy_assets(data, url)
+	if not error_message.is_empty():
+		return FAILED
+	var snapshot_images := _snapshot_images(snapshots, url.public_path)
 	if not error_message.is_empty():
 		return FAILED
 	var font_map := _webfonts(bool(options.get("yweb/font/matching_webfont", true)), url.public_path)
@@ -74,7 +80,7 @@ func build(options: Dictionary, target: String) -> Error:
 		if scene.uri == "/":
 			first = scene
 			break
-	var rendered := _render(base, data, first, image, url, font_map)
+	var rendered := _render(base, data, first, image, url, font_map, snapshots.get(first.scene, {}), snapshot_images)
 	if not error_message.is_empty():
 		return FAILED
 	var error := _write(output, rendered)
@@ -88,29 +94,24 @@ func build(options: Dictionary, target: String) -> Error:
 		"summary": I18n.t("not_found_text", [], data.site.locale),
 		"robots": "noindex,nofollow", "uri": "/404/",
 	}, true)
-	error = _write(out.path_join("404.html"), _render(base, data, missing, image, url, font_map))
+	error = _write(out.path_join("404.html"), _render(base, data, missing, image, url, font_map, {}, snapshot_images))
 	if error != OK:
 		return error
-	# History方式では、URLごとに実fileを置いて直リンクを開けるようにする。
-	if data.mode == "History":
-		for scene in scenes:
-			if scene.uri == "/":
-				continue
-			var directory := out.path_join(scene.uri.trim_prefix("/").trim_suffix("/"))
-			DirAccess.make_dir_recursive_absolute(directory)
-			error = _write(directory.path_join("index.html"), _render(base, data, scene, image, url, font_map))
-			if error != OK:
-				return error
+	# 全URLへ実HTMLを置き、静的hostへの直リンクを成立させる。
+	for scene in scenes:
+		if scene.uri == "/":
+			continue
+		var directory := out.path_join(scene.uri.trim_prefix("/").trim_suffix("/"))
+		DirAccess.make_dir_recursive_absolute(directory)
+		error = _write(directory.path_join("index.html"), _render(base, data, scene, image, url, font_map, snapshots.get(scene.scene, {}), snapshot_images))
+		if error != OK:
+			return error
+	error = _clean_pages(old_pages, scenes)
+	if error != OK:
+		return error
 	# Browser側のscene切替が読む設定を書き出す。
 	data.webfonts = font_map
 	error = _write(out.path_join("yweb-site.json"), JSON.stringify(data, "\t") + "\n")
-	if error != OK:
-		return error
-	# 直リンクを開ける配信設定の例を添える。
-	error = _write_nginx(NGINX, out.path_join("nginx-yweb.conf.example"), url.root)
-	if error != OK:
-		return error
-	error = _write_nginx(NGINX_PROXY, out.path_join("nginx-yweb-proxy.conf.example"), url.root)
 	if error != OK:
 		return error
 	# 検索へ知らせるため、全pageのURLを並べたsitemapとrobotsを出す。
@@ -121,7 +122,7 @@ func build(options: Dictionary, target: String) -> Error:
 	if error != OK:
 		return error
 	error = _write(out.path_join("robots.txt"), "User-agent: *\nAllow: /\nSitemap: %s\n" % url.absolute.call("sitemap.xml"))
-	return error if error != OK else _write_manifest()
+	return error if error != OK else _write_manifest(runtime, quality)
 
 # Project情報とJSONから既定値込みのsite設定を構築する。
 func _configuration(options: Dictionary) -> Dictionary:
@@ -166,6 +167,8 @@ func _configuration(options: Dictionary) -> Dictionary:
 			_fail(I18n.t("scene_json_object", [key]))
 			return {}
 		var value: Dictionary = entries[key]
+		if not bool(value.get("page", true)):
+			continue
 		var scene_file := _resource(String(value.get("scene", "")))
 		if scene_file.is_empty() or not FileAccess.file_exists(scene_file):
 			_fail(I18n.t("scene_missing", [key]))
@@ -183,6 +186,9 @@ func _configuration(options: Dictionary) -> Dictionary:
 			"meta": value.get("meta", []), "styles": value.get("styles", []), "scripts": value.get("scripts", []),
 			"json_ld": value.get("json_ld", {"@context": "https://schema.org", "@type": "WebPage", "name": title}),
 		}
+	if scenes.is_empty():
+		_fail(I18n.t("need_page"))
+		return {}
 	return {
 		"site": site, "scenes": scenes,
 		"ogp": String(options.get("yweb/ogp/image", "res://web/ogp.png")),
@@ -191,12 +197,67 @@ func _configuration(options: Dictionary) -> Dictionary:
 
 # URIをsite rootから始まるdirectory形式へ正規化する。
 func _route(value: String) -> String:
-	var uri := value.strip_edges()
-	if not uri.begins_with("/") or uri.contains("..") or uri.contains("?") or uri.contains("#"):
-		return ""
-	while uri.contains("//"):
-		uri = uri.replace("//", "/")
-	return uri if uri.ends_with("/") else uri + "/"
+	return SiteConfig.normalize_uri(value)
+
+# 前回生成した物理pageのURIを、削除routeの判定へ使う。
+func _published_pages() -> Array[String]:
+	var file := out.path_join("yweb-site.json")
+	if not FileAccess.file_exists(file):
+		return []
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(file))
+	if not data is Dictionary or not data.get("scenes", {}) is Dictionary:
+		return []
+	var saved: Dictionary = data
+	var known: Dictionary = saved.scenes
+	var pages: Array[String] = []
+	for scene in known.values():
+		if scene is Dictionary:
+			var uri := _route(String(scene.get("uri", "")))
+			if not uri.is_empty() and uri != "/":
+				pages.append(uri)
+	return pages
+
+# 現設定から消えた生成HTMLを回収し、未知URLを404へ戻す。
+func _clean_pages(old_pages: Array[String], scenes: Array) -> Error:
+	var current := {}
+	for scene in scenes:
+		current[scene.uri] = true
+	for uri in old_pages:
+		if current.has(uri):
+			continue
+		var directory := out.path_join(uri.trim_prefix("/").trim_suffix("/"))
+		var page := directory.path_join("index.html")
+		if FileAccess.file_exists(page):
+			var error := DirAccess.remove_absolute(page)
+			if error != OK:
+				return error
+		var dir := DirAccess.open(directory)
+		if dir and dir.get_files().is_empty() and dir.get_directories().is_empty():
+			var error := DirAccess.remove_absolute(directory)
+			if error != OK:
+				return error
+	return OK
+
+# Site無効時に前回のrouteと検索向け付属物を回収する。
+func _clean_site(old_pages: Array[String]) -> Error:
+	var error := _clean_pages(old_pages, [])
+	if error != OK:
+		return error
+	for name in ["yweb-site.json", "sitemap.xml", "robots.txt", "404.html"]:
+		var file := out.path_join(name)
+		if FileAccess.file_exists(file):
+			error = DirAccess.remove_absolute(file)
+			if error != OK:
+				return error
+	var images := out.path_join("yweb-images")
+	error = _clear_files(images)
+	if error != OK:
+		return error
+	if DirAccess.dir_exists_absolute(images):
+		error = DirAccess.remove_absolute(images)
+		if error != OK:
+			return error
+	return OK
 
 # 公開URLをbase URL配下へ組み立てる関数群を返す。
 func _urls(base: String) -> Dictionary:
@@ -330,6 +391,60 @@ func _copy_assets(data: Dictionary, url: Dictionary) -> void:
 			item[key] = url.public_path.call(relative.replace("\\", "/"))
 			list[index] = item
 
+# Sceneで使う画像を内容hash付きURLへまとめ、古い生成画像を回収する。
+func _snapshot_images(snapshots: Dictionary, public_path: Callable) -> Dictionary:
+	var target := out.path_join("yweb-images")
+	DirAccess.make_dir_recursive_absolute(target)
+	var images := {}
+	var keep := {}
+	for snapshot in snapshots.values():
+		if not snapshot is Dictionary:
+			continue
+		for value in snapshot.get("items", []):
+			if not value is Dictionary or value.get("tag", "") != "img":
+				continue
+			var source := String(value.get("source", ""))
+			if images.has(source):
+				continue
+			var file := _resource(source)
+			if file.is_empty() or not FileAccess.file_exists(file):
+				_fail(I18n.t("image_copy", [source]))
+				return {}
+			var extension := file.get_extension().to_lower()
+			var stem := _file_name(file.get_file().get_basename())
+			if stem.replace("-", "").replace("_", "").is_empty():
+				stem = "image"
+			var hash := FileAccess.get_sha256(file)
+			var digest := hash.substr(0, 12)
+			var name := "%s-%s.%s" % [stem, digest, extension]
+			var destination := target.path_join(name)
+			if (not FileAccess.file_exists(destination) or FileAccess.get_sha256(destination) != hash) and DirAccess.copy_absolute(file, destination) != OK:
+				_fail(I18n.t("image_copy", [source]))
+				return {}
+			images[source] = public_path.call("yweb-images/%s" % name)
+			keep[name] = true
+	# 現Scene集合から参照されなくなった旧世代を成功後に回収する。
+	var directory := DirAccess.open(target)
+	if directory:
+		for name in directory.get_files():
+			if keep.has(name):
+				continue
+			if DirAccess.remove_absolute(target.path_join(name)) != OK:
+				_fail(I18n.t("image_copy", [name]))
+				return {}
+	return images
+
+# 生成専用directoryのfileを次の書き出し前に空にする。
+func _clear_files(directory: String) -> Error:
+	var opened := DirAccess.open(directory)
+	if not opened:
+		return OK
+	for name in opened.get_files():
+		var error := DirAccess.remove_absolute(directory.path_join(name))
+		if error != OK:
+			return error
+	return OK
+
 # OGP画像を元の比率のまま外部assetへ複製する。
 func _ogp(value: String, asset_dir: String) -> Dictionary:
 	var file := _resource(value)
@@ -352,7 +467,6 @@ func _head(data: Dictionary, scene: Dictionary, image: Dictionary, url: Dictiona
 	var canonical: String = scene.canonical
 	var image_url: String = url.absolute.call("yweb-assets/%s" % image.file) if not image.is_empty() else ""
 	var tags := [
-		"<meta charset=\"utf-8\">", "<base href=\"%s\">" % _html(url.root),
 		"<meta name=\"description\" content=\"%s\">" % _html(scene.description),
 		"<meta name=\"robots\" content=\"%s\">" % _html(scene.robots),
 		"<link rel=\"canonical\" href=\"%s\">" % _html(canonical),
@@ -386,6 +500,7 @@ func _head(data: Dictionary, scene: Dictionary, image: Dictionary, url: Dictiona
 	for font in font_map.values():
 		faces += "@font-face{font-family:%s;src:url('%s') format('woff2');font-display:swap}" % [font.family, font.url]
 	tags.append("<style id=\"yweb-font-faces\">%s</style>" % faces)
+	tags.append("<style id=\"yweb-prerender-style\">%s</style>" % PRERENDER_STYLE)
 	tags.append(_metas(data.site.meta))
 	tags.append(_metas(scene.meta, true))
 	tags.append(_assets(data.site.styles, data.site.scripts))
@@ -393,14 +508,14 @@ func _head(data: Dictionary, scene: Dictionary, image: Dictionary, url: Dictiona
 	tags.append("<script id=\"yweb-json-ld\" type=\"application/ld+json\">%s</script>" % _json(scene.json_ld))
 	tags.append("<script>window.YWEB_FONT_MAP=%s</script>" % _json(font_map))
 	tags.append(_text_config(data.avoid_canvas_theme_font))
-	tags.append("<script id=\"yweb-site-config\" type=\"application/json\">%s</script>" % _json({"mode": data.mode, "root": url.root, "site": data.site, "scenes": data.scenes}))
+	tags.append("<script id=\"yweb-site-config\" type=\"application/json\">%s</script>" % _json({"root": url.root, "site": data.site, "scenes": data.scenes}))
 	var present: Array[String] = []
 	for tag in tags:
 		if not String(tag).is_empty():
 			present.append(tag)
 	return "%s\n%s\n%s" % [BEGIN, "\n".join(present), END]
 
-# 設定済みstyleとscriptを許可属性だけでhead tagへ変換する。
+# 設定済みstyleとscriptを許可属性に絞ってhead tagへ変換する。
 func _assets(styles: Array, scripts: Array, scene := false) -> String:
 	var tags: Array[String] = []
 	for entry in styles:
@@ -412,7 +527,7 @@ func _assets(styles: Array, scripts: Array, scene := false) -> String:
 		tags.append("<script src=\"%s\"%s%s></script>" % [_html(item.get("src", "")), _attrs(item, SCRIPT_ATTRS), marker])
 	return "\n".join(tags)
 
-# 許可した属性だけをhead tag用文字列へ変換する。
+# 許可した属性をhead tag用文字列へ変換する。
 func _attrs(item: Dictionary, names: Array) -> String:
 	var result := ""
 	for name in names:
@@ -432,9 +547,16 @@ func _metas(items: Array, scene := false) -> String:
 		tags.append("<meta %s=\"%s\" content=\"%s\"%s>" % [key, _html(item[key]), _html(item.content), " data-yweb-scene-meta=\"true\"" if scene else ""])
 	return "\n".join(tags)
 
-# Godot HTMLへtitle、head、概要、Browser同期処理を差し込む。
-func _render(base: String, data: Dictionary, scene: Dictionary, image: Dictionary, url: Dictionary, font_map: Dictionary) -> String:
+# Godot HTMLへtitle、head、初期文書、Browser同期処理を差し込む。
+func _render(base: String, data: Dictionary, scene: Dictionary, image: Dictionary, url: Dictionary, font_map: Dictionary, snapshot: Dictionary, snapshot_images: Dictionary) -> String:
 	var html := _remove_site(base)
+	# 文字コードとbaseを先頭へ置き、後続の相対preloadを公開rootへ解決する。
+	var charset := RegEx.new()
+	charset.compile("(?i)<meta\\s+charset\\s*=\\s*['\"]?[^>]+>")
+	html = charset.sub(html, "", true)
+	var head := RegEx.new()
+	head.compile("(?i)<head(?:\\s[^>]*)?>")
+	html = head.sub(html, "$0\n\t\t<meta charset=\"utf-8\">\n\t\t<base href=\"%s\">" % _html(url.root), false)
 	var title := RegEx.new()
 	title.compile("(?is)<title>.*?</title>")
 	html = title.sub(html, "<title>%s</title>" % _html(scene.title), true)
@@ -449,12 +571,66 @@ func _render(base: String, data: Dictionary, scene: Dictionary, image: Dictionar
 		tag = lang.sub(tag, "lang=\"%s\"" % _html(language)) if lang.search(tag) else tag.trim_suffix(">") + " lang=\"%s\">" % _html(language)
 		html = html.substr(0, found.get_start()) + tag + html.substr(found.get_end())
 	html = html.replace("</head>", "%s\n</head>" % _head(data, scene, image, url, font_map))
-	var summary := "<main id=\"yweb-site-summary\"><h1>%s</h1><p>%s</p></main><noscript>%s</noscript>" % [_html(scene.title), _html(scene.summary), _html(scene.summary)]
+	var summary := _semantic(scene, snapshot, url, snapshot_images)
 	var body := RegEx.new()
 	body.compile("(?i)<body([^>]*)>")
 	html = body.sub(html, "<body$1>%s" % summary)
 	var runtime := FileAccess.get_file_as_string(RUNTIME)
 	return html.replace("</body>", "<script id=\"yweb-site-runtime\">%s</script>\n</body>" % runtime)
+
+# 採取した順序を保って、見出し、本文、LinkButton、画像を検索可能な要素へ変換する。
+func _semantic(scene: Dictionary, snapshot: Dictionary, url: Dictionary, images: Dictionary) -> String:
+	var tags: Array[String] = []
+	var has_h1 := false
+	var image_count := 0
+	var seen_images := {}
+	var items: Array = snapshot.get("items", [])
+	for value in items:
+		if not value is Dictionary:
+			continue
+		var item: Dictionary = value
+		var tag := String(item.get("tag", "p"))
+		if tag == "img":
+			var source := String(item.get("source", ""))
+			var key := "%s\n%s" % [source, item.get("alt", "")]
+			if not images.has(source) or seen_images.has(key):
+				continue
+			seen_images[key] = true
+			var priority := " loading=\"eager\" fetchpriority=\"high\"" if image_count == 0 else " loading=\"lazy\""
+			tags.append("<img src=\"%s\" alt=\"%s\" width=\"%d\" height=\"%d\" decoding=\"async\"%s>" % [
+				_html(images[source]), _html(item.get("alt", "")), maxi(int(item.get("width", 1)), 1),
+				maxi(int(item.get("height", 1)), 1), priority,
+			])
+			image_count += 1
+			continue
+		if tag not in ["h1", "h2", "h3", "h4", "h5", "h6", "p", "a"]:
+			tag = "p"
+		var text := _html(item.get("text", "")).replace("\n", "<br>")
+		if text.is_empty():
+			continue
+		has_h1 = has_h1 or tag == "h1"
+		if tag == "a":
+			tags.append("<a href=\"%s\">%s</a>" % [_html(_href(item.get("href", "#"), url)), text])
+		else:
+			tags.append("<%s>%s</%s>" % [tag, text, tag])
+	if tags.is_empty():
+		tags = ["<h1>%s</h1>" % _html(scene.title), "<p>%s</p>" % _html(scene.summary)]
+	elif not has_h1:
+		tags.push_front("<h1>%s</h1>" % _html(scene.title))
+	return "<main id=\"yweb-site-summary\" data-yweb-prerender=\"true\">%s</main>" % "".join(tags)
+
+# LinkButtonのURIを公開rootへ揃え、実行形式のURIを初期HTMLへ持ち込まない。
+func _href(value: Variant, url: Dictionary) -> String:
+	var href := String(value).strip_edges()
+	if href.is_empty() or href == "#":
+		return "#"
+	if href.begins_with("/"):
+		return url.public_path.call(href.trim_prefix("/"))
+	if href.begins_with("https://") or href.begins_with("http://") or href.begins_with("mailto:") or href.begins_with("tel:"):
+		return href
+	if not href.contains(":") and not href.begins_with("//"):
+		return url.public_path.call(href)
+	return "#"
 
 # 既存のsite生成範囲と概要を再生成前に除く。
 func _remove_site(html: String) -> String:
@@ -462,13 +638,13 @@ func _remove_site(html: String) -> String:
 	head.compile("(?s)%s.*?%s\\n?" % [BEGIN, END])
 	html = head.sub(html, "", true)
 	var summary := RegEx.new()
-	summary.compile("(?s)<main id=\"yweb-site-summary\">.*?</main><noscript>.*?</noscript>")
+	summary.compile("(?s)<main id=\"yweb-site-summary\"[^>]*>.*?</main>(?:<noscript>.*?</noscript>)?")
 	html = summary.sub(html, "", true)
 	var runtime := RegEx.new()
 	runtime.compile("(?s)<script id=\"yweb-site-runtime\">.*?</script>\\n?")
 	return runtime.sub(html, "", true)
 
-# Site無効時も文字所有設定だけをHTMLへ反映する。
+# Site無効時も文字所有設定をHTMLへ反映する。
 func _write_text_config(avoid: bool) -> Error:
 	var html := FileAccess.get_file_as_string(output)
 	var pattern := RegEx.new()
@@ -481,8 +657,8 @@ func _write_text_config(avoid: bool) -> Error:
 func _text_config(avoid: bool) -> String:
 	return "<script id=\"yweb-text-config\">window.YWEB_TEXT_CONFIG=%s</script>" % _json({"avoidCanvasThemeFont": avoid})
 
-# 内蔵Brotliとraw成果物の対応をmanifestへ記録する。
-func _write_manifest() -> Error:
+# Brotliとraw成果物の対応を記録し、内蔵runtimeに限って既知の圧縮品質を示す。
+func _write_manifest(runtime: String, quality: int) -> Error:
 	var entries: Array[Dictionary] = []
 	var has_js := false
 	var has_wasm := false
@@ -491,6 +667,8 @@ func _write_manifest() -> Error:
 		var extension := raw.get_extension().to_lower()
 		if extension != "js" and extension != "wasm":
 			continue
+		if encoded.get_file().begins_with("yweb-") and not runtime.is_empty() and not encoded.get_file().begins_with(runtime + "."):
+			continue
 		if not FileAccess.file_exists(raw):
 			return _fail(I18n.t("brotli_source", [encoded.get_file()]))
 		var raw_size := _size(raw)
@@ -498,15 +676,18 @@ func _write_manifest() -> Error:
 		if encoded_size >= raw_size:
 			return _fail(I18n.t("brotli_size", [encoded.get_file()]))
 		var relative := raw.trim_prefix(out.trim_suffix("/") + "/").replace("\\", "/")
-		entries.append({
+		var entry := {
 			"file": relative, "originalBytes": raw_size, "brotliBytes": encoded_size,
 			"sha256": FileAccess.get_sha256(raw), "brotliSha256": FileAccess.get_sha256(encoded),
-		})
+		}
+		if encoded.get_file().begins_with(runtime + "."):
+			entry["quality"] = quality
+		entries.append(entry)
 		has_js = has_js or extension == "js"
 		has_wasm = has_wasm or extension == "wasm"
 	if not has_js or not has_wasm:
 		return _fail(I18n.t("brotli_template"))
-	return _write(out.path_join("yweb-compression.json"), JSON.stringify({"encoding": "br", "quality": 6, "entries": entries}, "\t") + "\n")
+	return _write(out.path_join("yweb-compression.json"), JSON.stringify({"encoding": "br", "templateQuality": quality, "entries": entries}, "\t") + "\n")
 
 # res:// pathをproject外へ出さず絶対pathへ変換する。
 func _resource(value: String) -> String:
@@ -528,16 +709,6 @@ func _json(value: Variant) -> String:
 # HTML属性と本文へ安全に埋め込む文字列へ変換する。
 func _html(value: Variant) -> String:
 	return String(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
-
-# 公開subpathを内部rewriteするnginx設定を生成する。
-func _write_nginx(source: String, target: String, root: String) -> Error:
-	var text := FileAccess.get_file_as_string(source)
-	var rule := ""
-	if root != "/":
-		var prefix := root.trim_suffix("/")
-		rule = "location = %s { return 308 %s; }\n    location ^~ %s { rewrite ^%s(.*)$ /$1 last; }" % [prefix, root, root, root]
-	text = text.replace("# YWEB_BASE_PATH", rule)
-	return _write(target, text)
 
 # 文字列をfileへ確実に保存する。
 func _write(path: String, text: String) -> Error:

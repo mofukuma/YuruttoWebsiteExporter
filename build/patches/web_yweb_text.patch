@@ -117,11 +117,85 @@
 +}
 +#endif
 +
+--- a/scene/main/viewport.cpp
++++ b/scene/main/viewport.cpp
+@@ -29,0 +30,4 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++#include "platform/web/yweb_text_sync.h"
++#endif
++
+@@ -1855,0 +1860,7 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	// DOM位置を正本にするButtonは全native hit-testから除外する。
++	if (c && yweb_text_dom_action_owns(c)) {
++		return nullptr;
++	}
++#endif
++
+@@ -3445,0 +3457,42 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++// DOMで確定したControlから標準mouse-over階層とsignalを更新する。
++void Viewport::yweb_update_mouse_over(Control *p_over) {
++	const ObjectID over_id = p_over ? p_over->get_instance_id() : ObjectID();
++	if (gui.yweb_mouse_over == over_id) return;
++	if (gui.mouse_over.is_valid() || !gui.mouse_over_hierarchy.is_empty()) _drop_mouse_over();
++	gui.yweb_mouse_over = over_id;
++	if (!p_over) {
++		return;
++	}
++	LocalVector<ObjectID> ancestors;
++	CanvasItem *ancestor = p_over;
++	while (ancestor) {
++		Control *control = Object::cast_to<Control>(ancestor);
++		if (control) {
++			const Control::MouseFilter filter = control->get_mouse_filter_with_override();
++			if (filter != Control::MOUSE_FILTER_IGNORE) ancestors.push_back(control->get_instance_id());
++			if (filter == Control::MOUSE_FILTER_STOP) break;
++		}
++		if (ancestor->is_set_as_top_level()) break;
++		ancestor = ancestor->get_parent_item();
++	}
++	if (ancestors.is_empty()) {
++		gui.yweb_mouse_over = ObjectID();
++		return;
++	}
++	gui.mouse_over = over_id;
++	gui.mouse_over_hierarchy.reserve(ancestors.size());
++	get_section_root_viewport()->gui.target_control = p_over;
++	gui.sending_mouse_enter_exit_notifications = true;
++	for (int i = ancestors.size() - 1; i >= 0; i--) {
++		Control *control = ObjectDB::get_instance<Control>(ancestors[i]);
++		if (!control) continue;
++		gui.mouse_over_hierarchy.push_back(ancestors[i]);
++		control->notification(Control::NOTIFICATION_MOUSE_ENTER);
++		control->emit_signal(SceneStringName(mouse_entered));
++	}
++	p_over->notification(Control::NOTIFICATION_MOUSE_ENTER_SELF);
++	gui.sending_mouse_enter_exit_notifications = false;
++}
++#endif
++
+@@ -3451,0 +3505,4 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	gui.yweb_mouse_over = ObjectID();
++#endif
++
+--- a/scene/main/viewport.h
++++ b/scene/main/viewport.h
+@@ -386,0 +387,3 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++		ObjectID yweb_mouse_over;
++#endif
+@@ -638,0 +642,4 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	// DOMで確定したControlを標準mouse-over階層へ反映する。
++	void yweb_update_mouse_over(Control *p_over);
++#endif
 --- a/scene/gui/base_button.h
 +++ b/scene/gui/base_button.h
 @@ -95,0 +96,4 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
-+	// DOMの意味要素から一回のButton操作を受ける。
++	// DOMの意味要素からButton操作を受ける。
 +	void yweb_click();
 +#endif
 --- a/scene/gui/button.cpp
@@ -135,7 +209,7 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +				// DOM所有Buttonは背景とiconをCanvasへ残し、確定した文字矩形を同期する。
 +				if (yweb_text_dom_owns(this)) {
-+					const int flags = (is_clipped ? 4 : 0) | (has_focus() ? 64 : 0) | (is_disabled() ? 256 : 0) | (get_focus_mode_with_override() == FOCUS_ALL ? 1024 : 0);
++					const int flags = (is_clipped ? 4 : 0) | (has_focus() ? 64 : 0) | (is_disabled() ? 256 : 0) | (get_focus_mode_with_override() == FOCUS_ALL ? 1024 : 0) | (get_mouse_filter_with_override() != MOUSE_FILTER_IGNORE ? 2048 : 0);
 +					yweb_text_sync_control(this, xl_text, Rect2(text_ofs, Size2(text_buf_width, text_buf->get_size().height)), 1, flags, align_rtl_checked, VERTICAL_ALIGNMENT_TOP, font_color, theme_cache.font_size, theme_cache.line_spacing, font_outline_color, outline_size);
 +					break;
 +				}
@@ -152,7 +226,7 @@
 +			// DOM所有LinkButtonはfocus枠をCanvasへ残し、文字とunderlineを同期する。
 +			if (yweb_text_dom_owns(this)) {
 +				const Vector2 text_offset = is_layout_rtl() ? Vector2(size.width - width, 0) : Vector2();
-+				const int flags = (do_underline ? 16 : 0) | (has_focus() ? 64 : 0) | (is_disabled() ? 256 : 0) | (get_focus_mode_with_override() == FOCUS_ALL ? 1024 : 0);
++				const int flags = (do_underline ? 16 : 0) | (has_focus() ? 64 : 0) | (is_disabled() ? 256 : 0) | (get_focus_mode_with_override() == FOCUS_ALL ? 1024 : 0) | (get_mouse_filter_with_override() != MOUSE_FILTER_IGNORE ? 2048 : 0);
 +				const float underline_offset = theme_cache.underline_spacing + text_buf->get_line_underline_position();
 +				const float underline_thickness = MAX(1, text_buf->get_line_underline_thickness());
 +				yweb_text_sync_control(this, xl_text, Rect2(text_offset, Size2(width, text_buf->get_size().height)), 2, flags, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_TOP, color, theme_cache.font_size, 0, font_outline_color, outline_size, Color(), Vector2(), underline_offset, underline_thickness, get_uri());

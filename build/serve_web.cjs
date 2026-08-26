@@ -12,14 +12,32 @@ const mime = {
 	'.pck': 'application/octet-stream',
 	'.woff2': 'font/woff2',
 	'.png': 'image/png',
+	'.jpg': 'image/jpeg',
+	'.jpeg': 'image/jpeg',
+	'.webp': 'image/webp',
+	'.gif': 'image/gif',
+	'.avif': 'image/avif',
+	'.svg': 'image/svg+xml',
 	'.json': 'application/json; charset=utf-8',
 }; // Godot Web成果物の応答型。
 
 // URLを公開directory内の安全なfileへ解決する。
 function resolveFile(root, requestUrl) {
-	const name = new URL(requestUrl, 'http://localhost').pathname === '/' ? 'index.html' : decodeURIComponent(new URL(requestUrl, 'http://localhost').pathname.slice(1));
+	let name;
+	try { name = decodeURIComponent(new URL(requestUrl, 'http://localhost').pathname.slice(1)); } catch { return null; }
+	if (!name || name.endsWith('/')) name += 'index.html';
 	const file = path.resolve(root, name);
 	return file.startsWith(`${root}${path.sep}`) ? file : null;
+}
+
+// 内容hash付き成果物は更新確認を省き、HTMLは毎回更新を確認する。
+function cache(file) {
+	const parts = file.split(/[\\/]/);
+	const name = parts.pop();
+	const runtime = /^(?:yweb|site)-[0-9a-f]{12}\.(?:js|wasm|pck|audio\.worklet\.js|audio\.position\.worklet\.js)$/.test(name);
+	const image = parts.at(-1) === 'yweb-images' && /-[0-9a-f]{12}\.(?:png|jpe?g|webp|gif|avif|svg)$/.test(name);
+	return runtime || image
+		? 'public, max-age=31536000, immutable' : 'no-cache';
 }
 
 // Brotli対応clientへ同じURLの圧縮fileを選ぶHTTP serverを作る。
@@ -41,7 +59,7 @@ function createServer(root, routes = {}) {
 		const headers = {
 			'Content-Type': mime[path.extname(file)] || 'application/octet-stream',
 			'Vary': 'Accept-Encoding',
-			'Cache-Control': 'no-cache',
+			'Cache-Control': cache(file),
 		};
 		if (useBrotli) headers['Content-Encoding'] = 'br';
 		response.writeHead(200, headers);
@@ -57,4 +75,4 @@ if (require.main === module) {
 	createServer(root).listen(port, '127.0.0.1', () => console.log(`http://127.0.0.1:${port}/`));
 }
 
-module.exports = { createServer };
+module.exports = { cache, createServer };

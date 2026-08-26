@@ -147,8 +147,13 @@ const ready = [...new Set(cases.map(({ level }) => level))].flatMap((level) => p
 						},
 					});
 				});
-				await page.goto(`http://127.0.0.1:${server.address().port}/#${item.uri}`, { waitUntil: 'domcontentloaded' });
-				await page.waitForFunction((scene) => globalThis.__ywebScene === scene, `res://${item.scene}.tscn`, { timeout: 20000 });
+				await page.goto(`http://127.0.0.1:${server.address().port}${item.uri}`, { waitUntil: 'domcontentloaded' });
+				try {
+					await page.waitForFunction((scene) => globalThis.__ywebScene === scene, `res://${item.scene}.tscn`, { timeout: 20000 });
+				} catch (error) {
+					const state = await page.evaluate(() => ({ scene: globalThis.__ywebScene || '', text: document.body.innerText.slice(0, 500) }));
+					throw new Error(`${item.name}のscene起動通知がない: ${JSON.stringify({ state, pageErrors })}`, { cause: error });
+				}
 				await page.waitForFunction(() => document.querySelector('#canvas') && document.querySelector('#yweb-text-root'), { timeout: 20000 });
 				page.setDefaultTimeout(3000);
 				await page.evaluate(() => document.fonts.ready);

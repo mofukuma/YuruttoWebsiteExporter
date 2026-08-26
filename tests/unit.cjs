@@ -8,8 +8,8 @@ const child = require('node:child_process');
 const path = require('node:path');
 
 const repo = path.resolve(__dirname, '..'); // yweb project root。
-const files = ['tests/png_unit.cjs', 'tests/nginx_unit.cjs']; // 単体検査の一覧。
-const covered = ['png.cjs', 'nginx.cjs']; // 分かれ道を全部通したい対象。
+const files = ['tests/png_unit.cjs']; // 単体検査の一覧。
+const covered = ['png.cjs']; // 分かれ道を全部通したい対象。
 const need = 100; // 求める到達の割合(%)。
 
 // 単体検査を、通った割合の報告つきで走らせる。

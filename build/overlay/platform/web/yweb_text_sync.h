@@ -16,6 +16,8 @@
 class Control;
 
 bool yweb_text_dom_owns(const Control *p_control);
+// Browser側へ操作を一本化するButtonか判定する。
+bool yweb_text_dom_action_owns(const Control *p_control);
 void yweb_text_parts_begin(Control *p_control);
 void yweb_text_capture_canvas(Control *p_control, RID p_canvas);
 bool yweb_text_capture_outline(RID p_canvas, ObjectID p_source, int p_size, const Color &p_color);

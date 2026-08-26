@@ -41,7 +41,7 @@ async function inspect(browser, enabled, output) {
 			const node = [...document.querySelectorAll('[data-yweb-text]')].find((item) => item.textContent.includes('Web Font'));
 			return { map: window.YWEB_FONT_MAP, dom: !!node, family: node ? getComputedStyle(node).fontFamily : '' };
 		});
-		const names = ['index.js', 'index.wasm', 'index.js.br', 'index.wasm.br'];
+		const names = fs.readdirSync(output).filter((name) => /^yweb-[0-9a-f]{12}\.(?:js|wasm)(?:\.br)?$/.test(name)).sort();
 		state.engine = Object.fromEntries(names.map((name) => [name, hash(path.join(output, name))]));
 		const fonts = path.join(output, 'yweb-fonts');
 		state.fontFiles = fs.existsSync(fonts) ? fs.readdirSync(fonts).filter((name) => name.endsWith('.woff2')).length : 0;

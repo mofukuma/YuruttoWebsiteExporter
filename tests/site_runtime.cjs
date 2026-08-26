@@ -1,5 +1,5 @@
-// History直リンク、Browser戻り、Godot scene変更を書き出したsiteとnginxで検査する。
-// URL、title、SceneTree.current_sceneを双方向に一回ずつ動かす。
+// 物理直リンク、Browser戻り、Godot scene変更を静的hostで検査する。
+// URL、title、SceneTree.current_sceneを再読込なしで双方向へ動かす設計。
 
 'use strict';
 
@@ -12,59 +12,46 @@ const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
 const repo = path.resolve(__dirname, '..'); // yweb project root。
 const work = path.join(repo, 'tmp/site-runtime'); // Project copyとWeb成果物。
 const project = path.join(work, 'project'); // addonを導入するfixture。
-const site = path.join(work, 'site'); // nginx配信成果物。
-const port = 49183; // 固定nginx検査port。
-const { browserPath } = require('./browser.cjs'); // 導入済みplaywright-coreの固定Chromium。
-const { runtime } = require('./nginx.cjs'); // 手元で動くcontainer command。
-const engine = runtime(); // 無ければtestを省略する。
-let container = '';
+const site = path.join(work, 'site'); // 静的配信成果物。
+const port = 49183; // Browser検査port。
+const { browserPath } = require('./browser.cjs'); // 固定Chromium。
+const { createServer } = require('../build/serve_web.cjs'); // 静的検査server。
 
-// Export、nginx、Browserを一つの失敗境界で検査する。
+// Export、静的配信、Browserを一つの失敗境界で検査する。
 async function main() {
 	fs.rmSync(work, { recursive: true, force: true });
 	fs.cpSync(path.join(repo, 'tests/fixtures/site_runtime'), project, { recursive: true });
 	child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), project, path.join(site, 'index.html')], { stdio: 'pipe' });
-	container = child.execFileSync(engine, ['run', '--rm', '-d', '-p', `127.0.0.1:${port}:8080`, '-v', `${site}:/usr/share/nginx/html:ro`, '-v', `${path.join(site, 'nginx-yweb.conf.example')}:/etc/nginx/conf.d/default.conf:ro`, 'nginx:alpine'], { encoding: 'utf8' }).trim();
-	child.execFileSync('curl', ['-fsS', '--retry', '20', '--retry-all-errors', '--retry-delay', '0', '--max-time', '5', `http://127.0.0.1:${port}/`], { stdio: 'ignore' });
+	assert.ok(fs.existsSync(path.join(site, 'about/index.html')), 'About物理HTMLなし');
+	const server = createServer(site);
+	await new Promise((resolve) => server.listen(port, '127.0.0.1', resolve));
 	const browser = await chromium.launch({ executablePath: browserPath, headless: true });
 	try {
 		const page = await browser.newPage({ viewport: { width: 640, height: 240 } });
 		const errors = [];
 		page.on('pageerror', (error) => errors.push(error.message));
-		page.on('console', (message) => { if (message.type() === 'error' || message.type() === 'warning') errors.push(message.text()); });
 		await page.goto(`http://127.0.0.1:${port}/about/`, { waitUntil: 'domcontentloaded' });
-		try {
-			await page.getByText('ABOUT SCENE', { exact: true }).waitFor({ timeout: 8000 });
-		} catch {
-			const state = await page.evaluate(() => ({ url: location.href, title: document.title, text: document.body.innerText, labels: [...document.querySelectorAll('[data-yweb-text]')].map((node) => node.textContent), site: !!window.YWebSite, status: document.querySelector('#status-notice')?.textContent }));
-			throw new Error(`初期route不一致: ${JSON.stringify({ state, errors })}`);
-		}
+		await page.getByText('ABOUT SCENE', { exact: true }).waitFor({ timeout: 8000 });
 		assert.equal(await page.title(), 'About Route');
+		const marker = await page.evaluate(() => window.ywebPageMarker = crypto.randomUUID());
 		await page.evaluate(() => { history.pushState({}, '', '/'); dispatchEvent(new PopStateEvent('popstate')); });
 		await page.getByText('MAIN SCENE', { exact: true }).waitFor();
-		assert.equal(new URL(page.url()).pathname, '/');
 		assert.equal(await page.title(), 'Main Route');
 		await page.keyboard.press('n');
 		await page.getByText('ABOUT SCENE', { exact: true }).waitFor();
 		await page.waitForFunction(() => location.pathname === '/about/');
 		assert.equal(await page.title(), 'About Route');
+		assert.equal(await page.evaluate(() => window.ywebPageMarker), marker, 'scene遷移で再読込');
 		assert.deepEqual(errors, []);
-		await page.screenshot({ path: path.join(work, 'history-scene.png') });
-		fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ direct: 'About', browserToGodot: 'Main', godotToBrowser: 'About', uri: '/about/' }, null, 2)}\n`);
+		await page.screenshot({ path: path.join(work, 'physical-scene.png') });
+		fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ direct: 'About', browserToGodot: 'Main', godotToBrowser: 'About', reloads: 1 }, null, 2)}\n`);
 	} finally {
 		await browser.close();
+		await new Promise((resolve) => server.close(resolve));
 	}
-}
-
-// container実行環境が無い手元では、nginxの検査を省略する。
-if (!engine) {
-	console.log(JSON.stringify({ skipped: 'no container runtime' }));
-	process.exit(0);
 }
 
 main().catch((error) => {
 	console.error(error);
 	process.exitCode = 1;
-}).finally(() => {
-	if (container) child.spawnSync(engine, ['stop', container], { stdio: 'ignore' });
 });

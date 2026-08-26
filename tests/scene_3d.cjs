@@ -67,7 +67,9 @@ async function main() {
 		const second = await shot();
 		assert.notEqual(first, second, '3Dが動いていない');
 		assert.deepEqual(errors, [], `Browser errorが出た: ${errors.join(' / ')}`);
-		console.log(JSON.stringify({ ok: true, threeD: true, spots: boxes, wasm: fs.statSync(path.join(site, 'index.wasm')).size }));
+		const wasm = fs.readdirSync(site).find((name) => /^yweb-[0-9a-f]{12}\.wasm$/.test(name));
+		assert.ok(wasm, 'hash付きWASMが無い');
+		console.log(JSON.stringify({ ok: true, threeD: true, spots: boxes, wasm: fs.statSync(path.join(site, wasm)).size }));
 	} finally {
 		await browser.close();
 		server.close();

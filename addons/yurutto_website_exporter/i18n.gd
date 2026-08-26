@@ -16,6 +16,7 @@ const TEXTS := {
 	"warn_https": ["Use an HTTPS URL for the public base URL.", "公開用base URLにはHTTPS URLを指定してください。"],
 	"warn_no_ogp": ["No social image yet. OGP Auto can make one from the current scene.", "OGP画像がありません。OGP Autoで現在Sceneから生成できます。"],
 	"need_main_scene": ["Set a main scene.", "main sceneを設定してください。"],
+	"need_page": ["Enable at least one page in Yurutto Pages.", "Yurutto Pagesで公開ページを1件以上有効にしてください。"],
 	# 導入状態の不一致。
 	"no_manifest": ["Template manifest is missing. Install the addon again.", "テンプレートmanifestがありません。アドオンを再導入してください。"],
 	"godot_mismatch": ["The bundled template is for Godot %s. Install the addon built for this Godot.", "内蔵テンプレートはGodot %s専用です。対応addonを導入してください。"],
@@ -32,6 +33,7 @@ const TEXTS := {
 	"template_write": ["Cannot write the template out: %s", "テンプレートを書き込めません: %s"],
 	"html_read": ["Cannot read the template HTML: %s", "テンプレートHTMLを読めません: %s"],
 	"html_write": ["Cannot write the template HTML: %s", "テンプレートHTMLを書けません: %s"],
+	"snapshot_failed": ["Cannot read the third-frame scene for initial HTML.", "初期HTML用の3フレーム目Sceneを読めません。"],
 	"license_copy": ["Cannot place a license file: %s", "licenseを配置できません: %s"],
 	"exported": ["Exported with the bundled template: %s", "内蔵テンプレートで書き出しました: %s"],
 	# 失敗の見出し。
@@ -62,6 +64,7 @@ const TEXTS := {
 	"asset_path": ["Public asset path is invalid: %s", "公開asset pathが不正です: %s"],
 	"asset_copy": ["Cannot place the public asset: %s", "公開assetを配置できません: %s"],
 	"asset_brotli": ["Cannot place the Brotli asset: %s", "Brotli assetを配置できません: %s"],
+	"image_copy": ["Cannot place the searchable image: %s", "検索用画像を配置できません: %s"],
 	"ogp_read": ["Cannot read the social image: %s", "OGP画像を読めません: %s"],
 	"ogp_copy": ["Cannot place the social image.", "OGP画像を配置できません。"],
 	"not_res_path": ["Not a res:// path: %s", "res:// pathではありません: %s"],

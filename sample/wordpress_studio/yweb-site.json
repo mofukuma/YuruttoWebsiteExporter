@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "site": {
+    "name": "Luma Studio",
+    "base_url": "http://127.0.0.1:4173",
+    "description": "ブランドとデジタル体験を設計するLuma StudioのGodot製Webサイト。",
+    "locale": "ja_JP"
+  },
+  "scenes": {
+    "Home": {
+      "scene": "res://main.tscn",
+      "uri": "/",
+      "title": "Luma Studio — らしさを、体験に。",
+      "description": "戦略、デザイン、テクノロジーをつなぎ、長く愛されるブランド体験をつくります。",
+      "summary": "Hero、サービス、カルーセル、About、実績、顧客の声を備えたGodot製企業サイトの作例です。",
+      "json_ld": {
+        "@context": "https://schema.org",
+        "@type": "ProfessionalService",
+        "name": "Luma Studio",
+        "inLanguage": "ja"
+      }
+    },
+    "About": {
+      "scene": "res://about.tscn",
+      "uri": "/about/",
+      "title": "About — Luma Studio",
+      "description": "Luma Studioの考え方、価値観、チームの働き方を紹介します。",
+      "summary": "対話と観察から本質を見つけ、ブランドの未来を一緒に設計するスタジオです。",
+      "json_ld": {
+        "@context": "https://schema.org",
+        "@type": "AboutPage",
+        "name": "About Luma Studio",
+        "inLanguage": "ja"
+      }
+    }
+  }
+}

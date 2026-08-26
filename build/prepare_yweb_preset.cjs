@@ -26,7 +26,6 @@ const defaults = {
 	'yweb/site/description': '"Godotで作成したWebサイトです。"',
 	'yweb/site/locale': '"ja_JP"',
 	'yweb/site/favicon': '""',
-	'yweb/routing/mode': '0',
 	'yweb/font/matching_webfont': 'true',
 	'yweb/font/avoid_canvas_theme_font': 'true',
 	'yweb/ogp/image': '"res://web/ogp.png"',

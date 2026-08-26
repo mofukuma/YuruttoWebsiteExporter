@@ -31,6 +31,7 @@ desktop.ini
 
 # 利用者projectへ複製した配布addon
 examples/*/addons/yurutto_website_exporter/
+sample/*/addons/yurutto_website_exporter/
 
 # Node
 node_modules/
@@ -50,6 +51,9 @@ __pycache__/
 # 検査成果物
 coverage/
 *.log
+
+# 作例から再生成できるWeb成果物
+sample/*/output/
 
 # Web fontはbuild/fetch_webfont.cjsで取得し、repositoryへ含めない
 *.ttf
