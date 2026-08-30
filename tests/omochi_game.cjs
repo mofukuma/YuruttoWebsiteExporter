@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
+const { chromium } = require('./browser.cjs');
 const { createServer } = require('../build/serve_web.cjs');
 
 const root = path.resolve(__dirname, '..'); // yweb project root。

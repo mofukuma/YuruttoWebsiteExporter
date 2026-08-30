@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const zlib = require('node:zlib');
-const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
+const { chromium, firefox, webkit, browserPath } = require('./browser.cjs');
 const { ensure, stem } = require('../build/fetch_webfont.cjs');
 const { cache, createServer } = require('../build/serve_web.cjs');
 
@@ -20,7 +20,7 @@ const project = path.join(root, 'project'); // exporter fixture project。
 const host = path.join(root, 'host'); // 静的hostの公開root。
 const site = path.join(host, 'sub'); // sub pathへ置く成果物。
 const port = 49182; // Browser検査port。
-const { browserPath } = require('./browser.cjs'); // 固定Chromium。
+const godotTimeout = 30000; // 重いGodot起動が停止したときのprocess上限。
 const { godot } = require('./godot.cjs'); // 対応版Godot。
 const font = ensure(); // 取得済みWeb font。
 
@@ -67,6 +67,9 @@ function fixture() {
 	fs.writeFileSync(path.join(site, 'yweb-site.json'), JSON.stringify({ scenes: { Removed: { uri: '/removed/' } } }));
 	fs.cpSync(path.join(repo, 'addons/yurutto_website_exporter'), path.join(project, 'addons/yurutto_website_exporter'), { recursive: true });
 	fs.writeFileSync(path.join(project, 'project.godot'), '[application]\nconfig/name="Site Test"\nrun/main_scene="res://main.tscn"\n[display]\nwindow/size/viewport_width=1200\nwindow/size/viewport_height=630\n[editor_plugins]\nenabled=PackedStringArray("res://addons/yurutto_website_exporter/plugin.cfg")\n');
+	fs.mkdirSync(path.join(project, 'web/licenses'));
+	fs.writeFileSync(path.join(project, 'web/licenses/index.html'), 'Project asset notice');
+	if (process.platform !== 'win32') fs.symlinkSync('../../project.godot', path.join(project, 'web/licenses/leak.txt'));
 	fs.writeFileSync(path.join(project, 'scene.gd'), `# 静的HTMLへ採取する文字と画像を持つ検査Scene。
 # routeごとのprocess分離と見出し推定を同じ構造で確かめる。
 
@@ -210,6 +213,18 @@ func _init():
 	hidden_3d.modulate.a = 0.0
 	hidden_3d.set_meta("yweb_alt", "非表示3D")
 	need(snapshot._image_item(hidden_3d, texture).is_empty(), "3D透明度を見落とした")
+	var private_root := Control.new()
+	private_root.set_meta("yweb_snapshot", false)
+	var private_label := Label.new()
+	private_label.text = "PRIVATE SNAPSHOT VALUE"
+	private_root.add_child(private_label)
+	need(snapshot.collect(private_root).items.is_empty(), "除外subtreeを初期HTMLへ公開した")
+	var public_root := Control.new()
+	var excluded_text := Label.new()
+	excluded_text.text = "PRIVATE TEXT VALUE"
+	excluded_text.set_meta("yweb_seo_text", false)
+	public_root.add_child(excluded_text)
+	need(snapshot.collect(public_root).items.is_empty(), "除外文字を初期HTMLへ公開した")
 	quit()
 `);
 	fs.writeFileSync(path.join(project, 'main.tscn'), '[gd_scene load_steps=2 format=3]\n[ext_resource path="res://scene.gd" type="Script" id="1"]\n[node name="Main" type="Control"]\nscript = ExtResource("1")\n');
@@ -227,7 +242,7 @@ func _ready():
 		FileAccess.open(marker, FileAccess.WRITE).store_string("started")
 `);
 	fs.writeFileSync(path.join(project, 'component.tscn'), '[gd_scene load_steps=2 format=3]\n[ext_resource path="res://component.gd" type="Script" id="1"]\n[node name="Component" type="Node"]\nscript = ExtResource("1")\n');
-	fs.writeFileSync(path.join(project, 'export_presets.cfg'), `[preset.0]\nname="Web"\nplatform="Yurutto Website"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\nhtml/focus_canvas_on_start=true\nyweb/site/enabled=true\nyweb/site/config="res://yweb-site.json"\nyweb/site/base_url="http://127.0.0.1:${port}/sub/"\nyweb/site/title="Site Test"\nyweb/site/description="既定概要"\nyweb/site/locale="ja_JP"\nyweb/site/favicon=""\nyweb/font/matching_webfont=true\nyweb/font/avoid_canvas_theme_font=true\nyweb/ogp/image="res://web/ogp.png"\nyweb/ogp/alt="自動生成OGP"\nvram_texture_compression/for_desktop=true\n`);
+	fs.writeFileSync(path.join(project, 'export_presets.cfg'), `[preset.0]\nname="Web"\nplatform="Yurutto Website"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\nhtml/focus_canvas_on_start=true\nyweb/site/enabled=true\nyweb/site/production=true\nyweb/site/config="res://yweb-site.json"\nyweb/site/base_url="http://127.0.0.1:${port}/sub/"\nyweb/site/title="Site Test"\nyweb/site/description="既定概要"\nyweb/site/locale="ja_JP"\nyweb/site/favicon=""\nyweb/font/matching_webfont=true\nyweb/font/avoid_canvas_theme_font=true\nyweb/ogp/image="res://web/ogp.png"\nyweb/ogp/alt="自動生成OGP"\nvram_texture_compression/for_desktop=true\n`);
 	fs.writeFileSync(path.join(project, 'yweb-site.json'), JSON.stringify({ version: 1, scenes: {
 		Main: { scene: 'res://main.tscn', uri: '/', title: 'メイン', description: 'メイン概要', scripts: [{ src: 'res://web/main.js', defer: true }], meta: [{ name: 'theme-color', content: '#111111' }] },
 		About: { scene: 'res://about.tscn', uri: '/about/', title: '概要ページ', description: '概要の説明', summary: '物理HTMLの概要', scripts: [{ src: 'res://web/about.js', defer: true }], meta: [{ name: 'theme-color', content: '#222222' }], json_ld: { '@context': 'https://schema.org', '@type': 'AboutPage' } },
@@ -246,10 +261,10 @@ func _ready():
 	const nonPageMarker = path.join(root, 'non-page-snapshot.txt');
 	fs.mkdirSync(empty, { recursive: true });
 	const env = { ...process.env, PATH: empty, YWEB_NON_PAGE_MARKER: nonPageMarker, YWEB_SNAPSHOT_VALUE: 'FIRST SNAPSHOT' };
-	child.execFileSync(godot, ['--headless', '--path', project, '--import'], { stdio: 'pipe', env });
-	child.execFileSync(godot, ['--headless', '--path', project, '--script', 'res://snapshot_unit.gd'], { stdio: 'pipe', env });
+	child.execFileSync(godot, ['--headless', '--path', project, '--import', '--quit'], { stdio: 'pipe', env, timeout: godotTimeout });
+	child.execFileSync(godot, ['--headless', '--path', project, '--script', 'res://snapshot_unit.gd'], { stdio: 'pipe', env, timeout: godotTimeout });
 	fs.rmSync(path.join(project, 'snapshot_unit.gd'));
-	child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe', env });
+	child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe', env, timeout: godotTimeout });
 	assert.match(fs.readFileSync(path.join(site, 'index.html'), 'utf8'), /FIRST SNAPSHOT/, '初回の環境値を採取していない');
 	// 同じ内容の再exportでhash画像を書き直さないことを確かめる。
 	const imageDir = path.join(site, 'yweb-images');
@@ -261,7 +276,7 @@ func _ready():
 	assert.ok(stale, '更新検査用のBrotliがない');
 	fs.writeFileSync(path.join(site, stale), 'old quality');
 	env.YWEB_SNAPSHOT_VALUE = 'SECOND SNAPSHOT';
-	child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe', env });
+	child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe', env, timeout: godotTimeout });
 	const after = Object.fromEntries(fs.readdirSync(imageDir).map((name) => {
 		const stat = fs.statSync(path.join(imageDir, name));
 		return [name, { ino: stat.ino, mtimeMs: stat.mtimeMs }];
@@ -296,7 +311,7 @@ function outputs() {
 async function main() {
 	fixture();
 	const files = outputs();
-	child.execFileSync(godot, ['--headless', '--path', site, '--main-pack', path.join(site, files.pack), '--script', path.join(repo, 'tests/non_page_pack_scene.gd')], { stdio: 'pipe' });
+	child.execFileSync(godot, ['--headless', '--path', site, '--main-pack', path.join(site, files.pack), '--script', path.join(repo, 'tests/non_page_pack_scene.gd')], { stdio: 'pipe', timeout: godotTimeout });
 	assert.equal(cache(`C:\\site\\${files.base}.js`), 'public, max-age=31536000, immutable', 'Windows cache判定不一致');
 	assert.equal(cache('C:\\site\\yweb-images\\photo-0123456789ab.jpg'), 'public, max-age=31536000, immutable', 'Windows画像cache判定不一致');
 	const index = fs.readFileSync(path.join(site, 'index.html'), 'utf8');
@@ -335,8 +350,23 @@ async function main() {
 	assert.equal(fs.readdirSync(site).some((name) => name.includes('000000000000')), false, '旧hash成果物が残留');
 	assert.equal(fs.existsSync(path.join(site, 'removed/index.html')), false, '削除routeが残留');
 	assert.equal(fs.existsSync(path.join(site, 'component/index.html')), false, 'ページではないSceneを物理routeへ出した');
+	assert.match(index, /Aurora Platform/, 'licenseがroot HTMLを上書きした');
+	assert.equal(fs.readFileSync(path.join(site, 'licenses/index.html'), 'utf8'), 'Project asset notice');
+	assert.equal(fs.existsSync(path.join(site, 'licenses/leak.txt')), false, 'license symlinkを公開した');
+	assert.ok(fs.existsSync(path.join(site, '_headers')), '静的host用header設定なし');
+	const security = JSON.parse(fs.readFileSync(path.join(site, 'yweb-security.json')));
+	for (const name of ['Content-Security-Policy', 'X-Content-Type-Options', 'Referrer-Policy', 'X-Frame-Options', 'Permissions-Policy']) {
+		assert.ok(security.headers[name], `防御headerなし: ${name}`);
+	}
+	assert.match(security.headers['Content-Security-Policy'], /script-src 'self' 'wasm-unsafe-eval' 'sha256-/, 'CSPのinline hashなし');
+	assert.doesNotMatch(security.headers['Content-Security-Policy'], /'unsafe-eval'/, '広いeval許可を含む');
+	assert.equal(security.clientTrust, 'untrusted');
+	assert.equal(security.paymentConfirmation, 'server-webhook');
 	const published = JSON.parse(fs.readFileSync(path.join(site, 'yweb-site.json'), 'utf8'));
+	const semantics = JSON.parse(fs.readFileSync(path.join(site, 'yweb-semantics.json'), 'utf8'));
 	assert.equal(Object.hasOwn(published.scenes, 'Component'), false, 'ページではないSceneをBrowser routeへ出した');
+	assert.equal(Object.values(published.scenes).some((scene) => Object.hasOwn(scene, 'semantic')), false, '意味文書を全HTMLへ重複埋込した');
+	assert.match(semantics['res://main.tscn'], /Aurora Platform/, '共有意味文書にmainがない');
 	assert.equal(fs.readFileSync(path.join(site, 'sitemap.xml'), 'utf8').includes('/component/'), false, 'ページではないSceneをsitemapへ出した');
 	const compression = JSON.parse(fs.readFileSync(path.join(site, 'yweb-compression.json')));
 	assert.equal(compression.templateQuality, 9, 'Site圧縮品質がtemplateと違う');
@@ -353,7 +383,11 @@ async function main() {
 	try {
 		assert.equal((await request('/sub/about/')).status, 200);
 		assert.equal((await request('/sub/%E4%BC%9A%E7%A4%BE%20%E6%A1%88%E5%86%85/')).status, 200);
-		assert.equal((await request('/sub/unknown/')).status, 404);
+		const missing = await request('/sub/unknown/');
+		assert.equal(missing.status, 404);
+		assert.match(missing.body.toString(), /noindex,nofollow/, '404のrobots指定なし');
+		assert.equal(missing.headers['x-content-type-options'], 'nosniff');
+		assert.match(missing.headers['content-security-policy'], /frame-ancestors 'none'/);
 		assert.equal((await request(`/sub/${files.base}.js`)).headers['cache-control'], 'public, max-age=31536000, immutable');
 		const imageResponse = await request(`/sub/yweb-images/${seoImages.find((name) => name.startsWith('ogp-'))}`);
 		assert.equal(imageResponse.headers['content-type'], 'image/png');
@@ -379,7 +413,11 @@ async function main() {
 		page.on('pageerror', (error) => errors.push(error.message));
 		page.on('response', (response) => { if (response.status() >= 400) failedResponses.push([response.status(), response.url()]); });
 		await page.goto(`http://127.0.0.1:${port}/sub/%E4%BC%9A%E7%A4%BE%20%E6%A1%88%E5%86%85/`, { waitUntil: 'domcontentloaded' });
-		await page.locator('#yweb-site-summary').waitFor({ state: 'detached', timeout: 5000 });
+		await page.locator('#yweb-site-summary[data-yweb-ready="true"]').waitFor({ timeout: 5000 });
+		assert.equal(await page.locator('main#yweb-site-summary').count(), 1, '起動後にmainを失った');
+		assert.equal(await page.locator('main#yweb-site-summary h1').count(), 1, '起動後にH1を失った');
+		assert.ok(await page.getByRole('heading').count() > 0, '起動後の読み上げ見出しを失った');
+		assert.equal(await page.locator('main#yweb-site-summary a:not([aria-hidden="true"])').count(), 0, '静的linkがTab操作へ重複した');
 		const preload = await page.evaluate(() => performance.getEntriesByType('resource')
 			.filter((entry) => entry.name.endsWith('.wasm') || entry.name.endsWith('.pck'))
 			.map((entry) => ({ name: new URL(entry.name).pathname, type: entry.initiatorType })));
@@ -397,13 +435,39 @@ async function main() {
 		const marker = await page.evaluate(() => window.ywebPageMarker = crypto.randomUUID());
 		await page.evaluate(() => YWebSite.scene('res://main.tscn'));
 		await page.waitForFunction(() => location.pathname === '/sub/' && window.mainLoads === 1);
+		await page.waitForFunction(() => document.querySelector('main#yweb-site-summary h1')?.textContent === 'Aurora Platform');
+		assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), 'Aurora Platform', '遷移後の読み上げ見出しが画面と違う');
+		assert.equal(await page.locator('main#yweb-site-summary p', { hasText: 'Web branch' }).count(), 1, '遷移後の読み上げ本文が画面と違う');
 		assert.equal(await page.evaluate(() => window.ywebPageMarker), marker, 'scene遷移で再読込');
 		await page.goBack();
 		await page.waitForFunction(() => location.pathname === '/sub/about/');
+		assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), 'About Aurora', '戻る操作後の読み上げ見出しが画面と違う');
 		assert.equal(await page.evaluate(() => window.ywebPageMarker), marker, '戻る操作で再読込');
 		assert.equal(await page.evaluate(() => window.aboutLoads), 1, '戻る操作でscript再実行');
+		await page.goto(`http://127.0.0.1:${port}/sub/unknown/`, { waitUntil: 'domcontentloaded' });
+		await page.waitForTimeout(100);
+		assert.match(await page.title(), /ページが見つかりません|Page not found/, '404 titleを通常pageへ変更した');
+		assert.equal(await page.locator('meta[name="robots"]').getAttribute('content'), 'noindex,nofollow');
+		assert.equal(await page.locator('main#yweb-site-summary').count(), 1, '404本文を削除した');
+		const missingResources = await page.evaluate(() => performance.getEntriesByType('resource').map((entry) => entry.name));
+		assert.equal(missingResources.some((name) => /\.(?:wasm|pck)(?:\?|$)/.test(name)), false, '404がEngineを取得した');
 		assert.deepEqual(errors, []);
 		await page.screenshot({ path: path.join(root, 'static-pages.png') });
+		// FirefoxとSafari相当でもEngine、意味文書、CSPを同じ公開物から起動する。
+		for (const engine of [firefox, webkit]) {
+			const compatible = await engine.launch({ headless: true });
+			try {
+				const other = await compatible.newPage({ viewport: { width: 1200, height: 630 } });
+				const otherErrors = [];
+				other.on('pageerror', (error) => otherErrors.push(error.message));
+				await other.goto(`http://127.0.0.1:${port}/sub/about/`, { waitUntil: 'domcontentloaded' });
+				await other.locator('#yweb-site-summary[data-yweb-ready="true"]').waitFor({ timeout: 12000 });
+				assert.equal(await other.locator('main#yweb-site-summary h1').count(), 1, `${engine.name()}でH1を失った`);
+				assert.deepEqual(otherErrors, [], `${engine.name()}の実行error`);
+			} finally {
+				await compatible.close();
+			}
+		}
 	} finally {
 		await browser.close();
 		await new Promise((resolve) => server.close(resolve));
@@ -413,7 +477,7 @@ async function main() {
 	const oldSite = treeState(site);
 	fs.appendFileSync(path.join(project, 'company.tscn'), '\n; transaction fixture\n');
 	fs.writeFileSync(preset, fs.readFileSync(preset, 'utf8').replace(/yweb\/site\/base_url="[^"]+"/, 'yweb/site/base_url="ftp://invalid.example/sub/"'));
-	const failed = child.spawnSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { encoding: 'utf8' });
+	const failed = child.spawnSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { encoding: 'utf8', timeout: godotTimeout });
 	assert.notEqual(failed.status, 0, '不正URLのexportが成功した');
 	assert.deepEqual(treeState(site), oldSite, '失敗時に公開成果物の組合せを変えた');
 	assert.ok(fs.existsSync(path.join(site, files.pack)), '失敗時に旧PCKを削除した');
@@ -428,18 +492,18 @@ async function main() {
 		.replace(/\n\s*caption_photo\("res:\/\/web\/team-photo\.png"\)/, '')
 		.replace(/\n\s*photo\("(?:TeamPhoto|Background|InvisiblePhoto)"[^\n]+/g, '');
 	fs.writeFileSync(scenePath, reduced);
-	const lateFailed = child.spawnSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { encoding: 'utf8' });
+	const lateFailed = child.spawnSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { encoding: 'utf8', timeout: godotTimeout });
 	assert.notEqual(lateFailed.status, 0, '不正metaのexportが成功した');
 	assert.deepEqual(treeState(site), oldSite, '後段失敗時に公開画像またはHTMLを変えた');
-	fs.writeFileSync(preset, fs.readFileSync(preset, 'utf8').replace('yweb/site/enabled=true', 'yweb/site/enabled=false'));
-	child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe' });
-	for (const name of ['about/index.html', '会社 案内/index.html', 'yweb-site.json', 'sitemap.xml', 'robots.txt', '404.html']) {
+	fs.writeFileSync(preset, fs.readFileSync(preset, 'utf8').replace('yweb/site/enabled=true', 'yweb/site/enabled=false').replace('yweb/site/production=true', 'yweb/site/production=false'));
+	child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', path.join(site, 'index.html')], { stdio: 'pipe', timeout: godotTimeout });
+	for (const name of ['about/index.html', '会社 案内/index.html', 'yweb-site.json', 'yweb-security.json', '_headers', 'sitemap.xml', 'robots.txt', '404.html']) {
 		assert.equal(fs.existsSync(path.join(site, name)), false, `Site無効後の付属物が残留: ${name}`);
 	}
 	assert.equal(fs.existsSync(path.join(site, 'yweb-images')), false, 'Site無効後の検索画像が残留');
 	// project内tmpを公開先にしても、作業stageを自己再帰させず完了する。
 	const nested = path.join(project, 'tmp/index.html');
-	child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', nested], { stdio: 'pipe' });
+	child.execFileSync(godot, ['--headless', '--path', project, '--export-release', 'Web', nested], { stdio: 'pipe', timeout: godotTimeout });
 	assert.ok(fs.existsSync(nested), 'project内tmpへのexportが完了しない');
 	const internalWork = path.join(project, 'tmp/yweb-exporter');
 	assert.equal(fs.existsSync(internalWork) && fs.readdirSync(internalWork).some((name) => name.startsWith('publish-')), false, '公開先内へstageを作った');

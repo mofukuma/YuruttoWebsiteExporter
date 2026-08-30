@@ -1,0 +1,6 @@
+; FileDialogのnativeとWebで同じ一件を表示する固定Resource。
+; 実行環境の作業ファイルを一覧へ混ぜず、Window描画を比較する。
+
+[gd_resource type="Resource" format=3]
+
+[resource]

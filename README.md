@@ -21,7 +21,7 @@ Then turn on `YuruttoWebsiteExporter` in `Project > Project Settings > Plugins`.
 
 Pick `Project > Export > Add > Yurutto Website`, choose the folder you want to export into, and your site is built.
 
-Upload it to your site and you are done. A rented server works, and so does a free host like GitHub Pages.
+Publish it on an HTTPS host that can apply the generated `_headers` file. The included server reproduces those headers for local checks.
 
 ## What lands in the folder
 
@@ -32,8 +32,9 @@ Each file has its own job.
 - `site-<hash>.pck`: the shared scenes and resources at the top of the export folder
 - `sitemap.xml`, `robots.txt`: directions for search engines. The URLs inside come from the site URL you set on the export screen
 - `404.html`: shown when someone opens an address you don't have
+- `_headers`, `yweb-security.json`: CSP and the HTTP security headers required by the published site
 - files ending in `.br`: a lighter copy of the same content. A server that understands it picks it up and serves faster
-- `GODOT_LICENSE.txt`: Godot's notice. Keep it next to the rest
+- `GODOT_LICENSE.txt`, `licenses/`: Godot's notice and project-specific notices
 
 ## Adding pages
 
@@ -72,6 +73,26 @@ The snapshot runner enables Godot's `web` feature. If scene construction also br
 
 Engine and PCK filenames include a content hash. Unchanged files keep the same URL for browser cache reuse, while changed files receive a new URL. HTML should be revalidated by the host; the included development server uses that policy.
 
+Keep `Production` enabled for a public export. It rejects non-HTTPS public URLs, insecure third-party assets, missing SRI, and common secret-key formats before the PCK is made. The export also writes CSP, HSTS, `nosniff`, referrer, frame, and permissions policies. Your host must apply `_headers`; the CSP meta element is a second line of defense, not a replacement for HTTP headers.
+
+Scene snapshots execute project code. Do not export an untrusted project or pull request in a CI job that carries deployment or payment credentials, and do not pass payment secrets to the export job. Use an isolated job with no service credentials and restricted network access.
+
+For GitHub Releases, protect the `production` environment with a required reviewer and allow deployments from `main`. The workflow fixes the candidate before its browser test and publishes it only after that unprivileged test succeeds.
+
+The raw WebAssembly file may exceed a host's per-file limit even when its Brotli copy is smaller. Check the generated file sizes against the chosen host before deployment. GitHub Pages is suitable for non-commercial demos, but its terms and lack of custom response headers make it unsuitable for a paid service.
+
+### Payments
+
+This exporter can provide the public site and a `LinkButton` that leads to a hosted checkout. It does not make a browser trustworthy. Never put secret keys, authoritative prices, payment status, or access rights in scenes, PCK, JavaScript, HTML, or URLs.
+
+Create checkout sessions from a trusted backend, calculate prices there, and grant access after a signed webhook has been verified and matched to the order. Handle duplicate webhook events idempotently. A success page is not proof of payment. Publish privacy, terms, refund, contact, and any commerce disclosures required in your jurisdiction as physical pages reachable before checkout.
+
+Set `commerce.enabled` in `yweb-site.json` when exporting a paid site. Use `mode: "hosted"`, list the permitted HTTPS origins in `checkout_hosts`, and map `privacy`, `terms`, `refund`, `contact`, and `disclosure` to public scene URIs. Use the disclosure page for the seller, address, contact, prices, extra charges, payment timing, delivery, and return terms required by the service's jurisdiction. The export fails if this boundary is incomplete, but legal review remains the operator's responsibility.
+
+If the selected host has a per-file limit, set its exact byte value as `hosting.max_file_bytes`. Export then fails before publication when the raw WASM, PCK, or another file exceeds it. `yweb-security.json` records the five largest generated files for verification.
+
+Deploy hashed assets first, then manifests and HTML. Keep the previous hashed generation until the new site passes health checks, and switch the host or release pointer back if it fails. Verify a normal page, hosted-checkout handoff, CSP headers, WASM startup, and an unknown URL that returns HTTP 404 with `noindex,nofollow` and no WASM/PCK request. Configure the host's custom 404 feature to serve the generated `404.html`; uploading that file does not by itself guarantee a 404 status.
+
 ## Showing a thumbnail on social media
 
 Prepare one image. It gets written out for each service's format (Open Graph and Twitter Card).
@@ -107,8 +128,10 @@ Use `2d` or `3d` in place of `dom` to build and test that level. `sh build/build
 The browser tests need Chromium. Install it with this.
 
 ```sh
-npm --prefix tmp/playwright install playwright-core@1.56.0
-node tmp/playwright/node_modules/playwright-core/cli.js install chromium
+mkdir -p tmp/playwright
+cp tests/browser/package.json tests/browser/package-lock.json tmp/playwright/
+npm ci --prefix tmp/playwright --ignore-scripts
+PLAYWRIGHT_BROWSERS_PATH="$PWD/tmp/playwright-browsers" node tmp/playwright/node_modules/playwright-core/cli.js install chromium firefox webkit
 ```
 
 ## License
@@ -140,7 +163,7 @@ Godotで作った作品を、そのままWebサイトにするアドオン。
 
 `プロジェクト > エクスポート > 追加 > Yurutto Website`を選び、書き出ししたいフォルダを選ぼう。するとサイトのデータが完成するよ。
 
-あとは君のサイトにアップロードすればオーケー。レンタルサーバーでも、GitHub Pagesみたいな無料の置き場でも大丈夫。
+生成した`_headers`を適用できるHTTPS配信先へ公開しよう。同梱serverでは、同じheaderを手元で確認できるよ。
 
 ## フォルダの中身
 
@@ -151,8 +174,9 @@ Godotで作った作品を、そのままWebサイトにするアドオン。
 - `site-<hash>.pck`: 書き出しフォルダ直下で共有するシーンと素材
 - `sitemap.xml`、`robots.txt`: 検索に見つけてもらうための案内。中のURLはエクスポート画面の公開URLから作られる
 - `404.html`: 知らないアドレスを開かれたとき用
+- `_headers`、`yweb-security.json`: 公開時に必要なCSPとHTTP防御header
 - `.br`付き: 同じ中身の軽い版。対応しているサーバーなら勝手に選ばれて速い
-- `GODOT_LICENSE.txt`: Godotの表記。一緒に置いたままに
+- `GODOT_LICENSE.txt`、`licenses/`: Godotとproject固有の表記
 
 ## ページを増やす
 
@@ -191,6 +215,26 @@ Godotで作った作品を、そのままWebサイトにするアドオン。
 
 エンジンとPCKの名前には中身のhashが入る。中身が同じなら同じURLをブラウザcacheで再利用し、変わったときは新しいURLになる。HTMLは公開先で更新確認される設定にしよう。同梱の開発serverも同じ方針だよ。
 
+公開用Exportでは`Production`を有効にしよう。HTTPSではない公開URL、安全ではない外部asset、SRI不足、代表的な秘密鍵形式がPCK生成前に拒否されるよ。CSP、HSTS、`nosniff`、参照元、frame、権限のpolicyも生成する。配信先では`_headers`を適用しよう。CSPのmeta要素は補助で、HTTP headerの代用にはならないよ。
+
+Scene snapshotではproject codeが実行される。信頼していないprojectやpull requestを、配信鍵や決済鍵を持つCI jobでExportしてはいけないよ。Export jobへ決済秘密を渡さず、service credentialのない分離jobでnetworkも制限しよう。
+
+GitHub Releaseを使う場合は、`production` environmentへ承認者を設定し、`main`からのdeployに制限しよう。workflowはBrowser試験前に候補を確定し、権限のない試験jobが通った場合に公開するよ。
+
+Brotli版が小さくても、圧縮前のWebAssemblyが配信先の一file上限を超える場合がある。生成後の容量と配信先の上限を照合しよう。GitHub Pagesは非商用demoには使えるけど、利用条件と任意headerを設定できない点から課金サービスには向かないよ。
+
+### 課金を使う場合
+
+このExporterが担当するのは、公開siteとHosted Checkoutへ進む`LinkButton`まで。Browserは信頼できないので、秘密鍵、正式な価格、支払済み状態、利用権限をScene、PCK、JavaScript、HTML、URLへ入れてはいけないよ。
+
+信頼できるbackendでCheckout Sessionを作り、そこで価格を計算しよう。署名済みWebhookの検証と注文照合が終わってから利用権限を一度付与する。重複Webhookも安全に無視できるようにしよう。成功pageは支払いの証明にはならないよ。privacy、terms、refund、contactと、地域ごとに必要な取引表示を、決済前に辿れる物理pageとして用意しよう。
+
+課金siteは`yweb-site.json`で`commerce.enabled`を有効にする。`mode`は`hosted`、`checkout_hosts`には許可するHTTPS origin、`privacy`、`terms`、`refund`、`contact`、`disclosure`には公開SceneのURIを指定しよう。`disclosure`には事業者名、住所、連絡先、価格、追加費用、支払時期、提供時期、返品条件など、運営地域で必要な取引表示を置こう。不足があればExportは停止するけど、法的適合の確認は運営者の責任だよ。
+
+配信先に一fileごとの上限がある場合は、正確なbyte数を`hosting.max_file_bytes`へ指定しよう。圧縮前のWASM、PCK、ほかのfileが超えると公開前にExportを停止する。`yweb-security.json`には生成物のうち大きい5件が記録されるよ。
+
+配信はhash付きasset、manifest、HTMLの順で反映しよう。新siteの疎通が終わるまで前世代のhash資源を残し、失敗時はhostやreleaseの参照先を前世代へ戻す。正常page、Hosted Checkoutへの遷移、CSP header、WASM起動、未知URLを確認しよう。未知URLはHTTP 404、`noindex,nofollow`、WASM/PCK取得なしが合格条件だよ。生成した`404.html`を返すcustom 404機能は配信先で設定しよう。fileのuploadでは404 statusまで保証されないよ。
+
 ## SNSに貼ったときサムネイルを出す
 
 用意するのは画像一枚。あとはSNSごとの書き方(Open GraphとTwitter Card)へまとめて出るよ。
@@ -226,8 +270,10 @@ sh build/check_template.sh dom
 ブラウザを見るテストにはChromiumが要る。入れるのはこれ。
 
 ```sh
-npm --prefix tmp/playwright install playwright-core@1.56.0
-node tmp/playwright/node_modules/playwright-core/cli.js install chromium
+mkdir -p tmp/playwright
+cp tests/browser/package.json tests/browser/package-lock.json tmp/playwright/
+npm ci --prefix tmp/playwright --ignore-scripts
+PLAYWRIGHT_BROWSERS_PATH="$PWD/tmp/playwright-browsers" node tmp/playwright/node_modules/playwright-core/cli.js install chromium firefox webkit
 ```
 
 ## ライセンス

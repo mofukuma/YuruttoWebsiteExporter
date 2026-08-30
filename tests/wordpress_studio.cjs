@@ -8,7 +8,7 @@ const child = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
+const { chromium } = require('./browser.cjs');
 const { createServer } = require('../build/serve_web.cjs');
 const { browserPath } = require('./browser.cjs');
 

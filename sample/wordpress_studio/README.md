@@ -30,7 +30,7 @@ node ../../tests/wordpress_studio.cjs
 ## 作例で確認できること
 
 - HeroとCTAを持つ企業サイトの構成
-- 自動送り、左右Button、hoverを持つ写真カルーセル
+- 左右Button、hoverを持つ手動の写真カルーセル
 - 縦scrollと画面幅に応じた1列・複数列の切替
 - HomeとAboutの物理HTML、再読込なしのscene遷移
 - DOMとして選択できる文字と、ブラウザから押せるButton

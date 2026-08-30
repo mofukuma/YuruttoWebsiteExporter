@@ -1,5 +1,5 @@
 // Web書き出しのBrotli生成、配信選択、公開header gateを一括検査する。
-// 圧縮fileが存在するだけの未設定配信を成功扱いしない。
+// 圧縮fileの存在と配信設定を組み合わせて成功を判定する。
 
 const assert = require('node:assert/strict');
 const childProcess = require('node:child_process');

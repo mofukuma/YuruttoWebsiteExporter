@@ -107,13 +107,22 @@
 +
 --- a/scene/gui/base_button.cpp
 +++ b/scene/gui/base_button.cpp
-@@ -136,0 +137,9 @@
+@@ -136,0 +137,18 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +// DOMのnative clickを標準アクセシビリティ操作と同じ状態遷移へ渡す。
 +void BaseButton::yweb_click() {
 +	if (!status.disabled) {
 +		_accessibility_action_click(Variant());
 +	}
++}
++
++// DOMのpointer押下と解放をhover座標に依存しない標準操作として処理する。
++void BaseButton::yweb_pointer(bool p_pressed) {
++	Ref<InputEventAction> event;
++	event.instantiate();
++	event->set_action(SNAME("ui_accept"));
++	event->set_pressed(p_pressed);
++	gui_input(event);
 +}
 +#endif
 +
@@ -193,10 +202,11 @@
 +#endif
 --- a/scene/gui/base_button.h
 +++ b/scene/gui/base_button.h
-@@ -95,0 +96,4 @@
+@@ -95,0 +96,5 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +	// DOMの意味要素からButton操作を受ける。
 +	void yweb_click();
++	void yweb_pointer(bool p_pressed);
 +#endif
 --- a/scene/gui/button.cpp
 +++ b/scene/gui/button.cpp
@@ -315,16 +325,10 @@
 +	if (v_scroll->is_visible_in_tree() || yweb_dom) {
 --- a/scene/gui/text_edit.h
 +++ b/scene/gui/text_edit.h
-@@ -860,0 +861,10 @@
+@@ -860,0 +861,4 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +	// Browserで確定した本文を設定し、通常編集と同じ変更通知へ流す。
 +	void yweb_set_text(const String &p_text);
-+	// 非表示Canvas scrollbarへDOMの縦横scroll位置を保持する。
-+	void yweb_set_scroll(double p_vertical, int p_horizontal) {
-+		first_visible_col = p_horizontal;
-+		set_v_scroll(p_vertical);
-+		set_h_scroll(p_horizontal);
-+	}
 +#endif
 --- a/scene/gui/tree.cpp
 +++ b/scene/gui/tree.cpp

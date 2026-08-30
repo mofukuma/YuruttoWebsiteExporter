@@ -129,6 +129,14 @@ func _build_controls() -> void:
 	link.set_meta("yweb_dom_text", true)
 	link.pressed.connect(_link_pressed)
 	ui.add_child(link)
+	var unsafe_link := LinkButton.new()
+	unsafe_link.name = "UnsafeLink"
+	unsafe_link.text = "UNSAFE LINK"
+	unsafe_link.position = Vector2(300, 142)
+	unsafe_link.size = Vector2(170, 26)
+	unsafe_link.uri = "http://payments.example/checkout"
+	unsafe_link.set_meta("yweb_dom_text", true)
+	ui.add_child(unsafe_link)
 
 	line_input = LineEdit.new()
 	line_input.name = "ImeLineInput"
@@ -138,6 +146,11 @@ func _build_controls() -> void:
 	line_input.max_length = 24
 	line_input.text_submitted.connect(_line_submitted)
 	line_input.set_meta("yweb_dom_text", true)
+	line_input.set_meta("yweb_aria_label", "Account email")
+	line_input.set_meta("yweb_name", "email")
+	line_input.set_meta("yweb_autocomplete", "email")
+	line_input.set_meta("yweb_inputmode", "email")
+	line_input.set_meta("yweb_description", "Contact address")
 	ui.add_child(line_input)
 
 	text_area = TextEdit.new()
@@ -146,14 +159,15 @@ func _build_controls() -> void:
 	text_area.size = Vector2(220, 56)
 	text_area.placeholder_text = "複数行 IME"
 	text_area.set_meta("yweb_dom_text", true)
+	text_area.set_meta("yweb_aria_label", "Comment")
 	ui.add_child(text_area)
 
 	line_state = _label(ui, "LineModelState", "LINE MODEL::0:0", Vector2.ZERO, Vector2(1, 1), 1, WHITE)
-	line_state.visible = false
+	line_state.self_modulate.a = 0.0
 	area_state = _label(ui, "AreaModelState", "AREA MODEL::0:0:0:0:0:0", Vector2.ZERO, Vector2(1, 1), 1, WHITE)
-	area_state.visible = false
+	area_state.self_modulate.a = 0.0
 	button_state = _label(ui, "ButtonModelState", "BUTTON MODEL:IDLE:0:0", Vector2.ZERO, Vector2(1, 1), 1, WHITE)
-	button_state.visible = false
+	button_state.self_modulate.a = 0.0
 
 	press_button = _button(ui, "PressModeButton", "PRESS MODE", Vector2(1010, 302), Vector2(220, 46))
 	press_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS

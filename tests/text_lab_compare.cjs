@@ -5,7 +5,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
+const { chromium } = require('./browser.cjs');
 
 const { ensure, ensureStandard } = require('./site.cjs'); // 比較する二方式の書き出し。
 const project = path.resolve(__dirname, '../examples/text_lab'); // 同一の検査対象Godot project。

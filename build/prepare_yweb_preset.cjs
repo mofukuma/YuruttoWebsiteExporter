@@ -10,6 +10,8 @@ const path = require('node:path');
 
 const project = path.resolve(process.argv[2] || '.'); // Godot project root。
 const name = process.argv[3] || 'Web'; // 正規化するpreset名。
+const level = { dom: 0, '2d': 1, '3d': 2 }[process.env.YWEB_LEVEL || '2d']; // 開発templateと同じ書き出し段。
+const production = process.env.YWEB_PRODUCTION === '1'; // 公開条件を明示した検査で本番安全検査を有効にする。
 const file = path.join(project, 'export_presets.cfg'); // Godot export設定。
 const prefixes = ['custom_template/', 'variant/', 'progressive_web_app/', 'threads/']; // 標準Webだけの設定群。
 const removed = new Set([
@@ -18,9 +20,11 @@ const removed = new Set([
 	'html/canvas_resize_policy', 'html/experimental_virtual_keyboard',
 ]); // 独立テンプレートが受け取らない個別設定。
 const defaults = {
+	'yweb/level': String(level),
 	'vram_texture_compression/for_desktop': 'true',
 	'html/focus_canvas_on_start': 'true',
 	'yweb/site/enabled': 'true',
+	'yweb/site/production': String(production),
 	'yweb/site/config': '"res://yweb-site.json"',
 	'yweb/site/base_url': '"https://example.com"',
 	'yweb/site/description': '"Godotで作成したWebサイトです。"',

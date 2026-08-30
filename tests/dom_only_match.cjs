@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const child = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
+const { chromium } = require('./browser.cjs');
 const { browserPath } = require('./browser.cjs');
 const { exerciseHover, exerciseUi } = require('./browser_ui.cjs');
 const { createServer } = require('../build/serve_web.cjs');
@@ -27,7 +27,7 @@ const containerTypes = JSON.parse(fs.readFileSync(path.join(repo, 'tests/fixture
 const allScreens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d', 'animated_sprite', 'mesh_3d', 'themes', 'particles_2d', 'controls_extended', 'nodes_2d_extended', 'windows_media', 'affects_extended', 'scroll_layout', 'container_overflow', 'input_3d', 'code_edit', 'canvas_inputs', 'hover_scroll']; // 比べられる全画面。
 const selected = (process.env.YWEB_SCREEN || '').split(',').filter(Boolean); // 変更箇所へ絞る画面名。
 const screens = selected.length ? selected : allScreens; // 未指定時は全画面を一括検査する。
-const comparedScreens = screens.filter((name) => !['canvas_inputs', 'hover_scroll'].includes(name)); // 画素比較する画面。操作fixtureはBrowser往復へ専念する。
+const comparedScreens = screens.filter((name) => !['canvas_inputs', 'hover_scroll', 'affects_extended'].includes(name)); // 画素比較する画面。操作と副作用型のfixtureは構造検査へ専念する。
 const structureOnly = process.env.YWEB_STRUCTURE_ONLY === '1'; // DOM構造の開発検査ではRMSE結果を記録して終了値から外す。
 const settle = { physics: 320, omochi: 950, particles_2d: 30 }; // 物理と粒子を速く回した画面で、形が決まるまで進めるframe数。
 
@@ -65,7 +65,7 @@ fs.rmSync(work, { recursive: true, force: true });
 fs.cpSync(path.join(repo, 'tests/fixtures/dom_only'), project, { recursive: true, filter: (source) => path.basename(source) !== '.godot' });
 if (fs.existsSync(godotCache)) fs.cpSync(godotCache, path.join(project, '.godot'), { recursive: true });
 child.execFileSync(process.execPath, [path.join(repo, 'build/install_site_addon.cjs'), project], { stdio: 'pipe' });
-fs.writeFileSync(path.join(project, 'export_presets.cfg'), '[preset.0]\n\nname="Web"\nplatform="Yurutto Website"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\nexport_path=""\n\n[preset.0.options]\n\nyweb/level=0\n');
+fs.writeFileSync(path.join(project, 'export_presets.cfg'), '[preset.0]\n\nname="Web"\nplatform="Yurutto Website"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\nexport_path=""\n\n[preset.0.options]\n\nyweb/level=0\nyweb/site/production=false\n');
 fs.writeFileSync(path.join(project, 'capture.gd'), capture);
 fs.writeFileSync(path.join(project, 'yweb-site.json'), `${JSON.stringify({ version: 1, scenes: Object.fromEntries(screens.map((name, index) => [name, { scene: `res://${name}.tscn`, uri: index === 0 ? '/' : `/${name}/` }])) }, null, 2)}\n`);
 install(path.join(project, 'fonts'), 'Match'); // Godotとブラウザで同じ字形を使う。
@@ -175,7 +175,7 @@ for (const name of comparedScreens) {
 				assert.equal(await page.locator('[data-yweb-plane3d]').count(), 4, '画像、文字、animation、Decalを平面DOMへ置けていない');
 			}
 			if (name === 'themes') {
-				assert.equal(await page.getByText('CHANGE THEME', { exact: true }).count(), 1, '通常Buttonの文字を複数DOMへ分解している');
+				assert.equal(await page.locator('#yweb-text-root').getByText('CHANGE THEME', { exact: true }).count(), 1, '通常Buttonの文字を複数DOMへ分解している');
 				// 同じDOM要素のまま三Themeへ切り替わり、全描画層が変わることを確かめる。
 				const readTheme = () => page.evaluate(() => ({
 					status: [...document.querySelectorAll('[data-yweb-text]')].map((element) => element.textContent).find((text) => text.startsWith('THEME ')),
@@ -342,20 +342,34 @@ for (const name of comparedScreens) {
 				assert.ok(tiles.every(({ source }) => source[2] === 32 && source[3] === 32), 'TileMap cellを32x32で切り抜いていない');
 			}
 			if (name === 'windows_media') {
+				// Window装飾が内容矩形で途切れず、Themeの外側余白まで覆うことを確認する。
 				const text = await page.locator('[data-yweb-text]').allTextContents();
 				const expected = ['AcceptDialog', 'ConfirmationDialog', 'FileDialog', 'PopupMenu', 'PopupPanel', 'SUBVIEWPORT', 'VideoStreamPlayer'];
 				assert.ok(expected.every((type) => text.includes(type)), 'Window、Viewport、Videoの型名をDOMへ置けていない');
+				const frames = await page.evaluate(() => {
+					const box = (title) => {
+						const text = [...document.querySelectorAll('[data-yweb-text]')].find((element) => element.textContent === title && element.id.endsWith('-window-title'));
+						return text ? document.getElementById(text.id.replace(/-window-title$/, '-window'))?.getBoundingClientRect().toJSON() : null;
+					};
+					return { accept: box('Accept'), confirm: box('Confirm'), files: box('Files'), menu: document.querySelector('[data-yweb-box$="-popup"]')?.getBoundingClientRect().toJSON() };
+				});
+				assert.deepEqual(Object.fromEntries(Object.entries(frames).map(([key, value]) => [key, value && [value.x, value.y, value.width, value.height]])), {
+					accept: [10, 198, 246, 163],
+					confirm: [262, 198, 266, 163],
+					files: [10, 338, 540, 248],
+					menu: [540, 48, 220, 150],
+				}, 'WindowのTheme枠がGodotの描画範囲と一致しない');
 				assert.equal(await page.locator('[data-yweb-image$="-video"]').count(), 1, 'Video frameを画像DOMへ置けていない');
-				const sub = await page.getByText('SUBVIEWPORT', { exact: true }).boundingBox();
+				const sub = await page.locator('#yweb-text-root').getByText('SUBVIEWPORT', { exact: true }).boundingBox();
 				assert.ok(sub && sub.x >= 18 && sub.x + sub.width <= 268 && sub.y >= 48 && sub.y + sub.height <= 198, 'SubViewportの最終座標または切り抜きがContainerと合っていない');
 			}
 			if (name === 'affects_extended') {
 				const expected = 'AnimationPlayer AnimationTree AspectRatioContainer BackBufferCopy Bone2D BoxContainer Camera2D CanvasGroup CanvasLayer CanvasModulate CenterContainer Container DirectionalLight2D FlowContainer GridContainer HBoxContainer HFlowContainer LightOccluder2D MarginContainer Parallax2D ParallaxBackground ParallaxLayer PathFollow2D PointLight2D Popup RemoteTransform2D Skeleton2D SubViewport VBoxContainer VFlowContainer VisibleOnScreenEnabler2D Window AimModifier3D AreaLight3D BoneAttachment3D BoneConstraint3D BoneTwistDisperser3D CCDIK3D ConvertTransformModifier3D CopyTransformModifier3D DirectionalLight3D FABRIK3D GeometryInstance3D GPUParticlesAttractorBox3D GPUParticlesAttractorSphere3D GPUParticlesAttractorVectorField3D GPUParticlesCollisionBox3D GPUParticlesCollisionHeightField3D GPUParticlesCollisionSDF3D GPUParticlesCollisionSphere3D LightmapGI LightmapProbe LimitAngularVelocityModifier3D LookAtModifier3D ModifierBoneTarget3D OccluderInstance3D OmniLight3D PathFollow3D ReflectionProbe RemoteTransform3D RetargetModifier3D ShaderGlobalsOverride Skeleton3D SkeletonIK3D SkeletonModifier3D SplineIK3D SpotLight3D SpringArm3D SpringBoneSimulator3D TwoBoneIK3D VisibleOnScreenEnabler3D VoxelGI WorldEnvironment'.split(' ');
-				const report = (await page.getByText(/^AFFECTS /).textContent()).slice('AFFECTS '.length).split(',');
+				const report = (await page.locator('#yweb-text-root').getByText(/^AFFECTS /).textContent()).slice('AFFECTS '.length).split(',');
 				assert.deepEqual(report, expected, '描画へ影響する全NodeをWeb実行環境で生成できていない');
 			}
 			if (name === 'scroll_layout') {
-				await page.getByText('GODOT OFFSET 0 0 NESTED 0 0', { exact: true }).waitFor();
+				await page.locator('#yweb-text-root').getByText('GODOT OFFSET 0 0 NESTED 0 0', { exact: true }).waitFor();
 				const read = () => page.evaluate(() => {
 					const text = (value) => [...document.querySelectorAll('[data-yweb-text]')].find((element) => element.textContent === value);
 					const info = (value) => {
@@ -426,7 +440,7 @@ for (const name of comparedScreens) {
 					return scroll && scroll.scrollTop > 152;
 				}, outerBefore.uid);
 				await page.waitForTimeout(100);
-				await page.getByText('GODOT OFFSET 0 0 NESTED 0 0', { exact: true }).waitFor();
+				await page.locator('#yweb-text-root').getByText('GODOT OFFSET 0 0 NESTED 0 0', { exact: true }).waitFor();
 				await page.screenshot({ path: path.join(work, 'browser-scroll_layout-scrolled.png') });
 			}
 			if (name === 'container_overflow') {
@@ -480,7 +494,7 @@ for (const name of comparedScreens) {
 					assert.ok(before.front.find(({ index }) => index === expected.indexOf(item.type)).z > item.z, `${item.type}の前面兄弟が子より後ろにある`);
 				}
 				await page.getByRole('button', { name: 'REFLOW ALL', exact: true }).click();
-				await page.getByText('REFLOW 1', { exact: true }).waitFor();
+				await page.locator('#yweb-text-root').getByText('REFLOW 1', { exact: true }).waitFor();
 				const after = await read();
 				const stability = await page.evaluate(() => {
 					const current = [...document.querySelectorAll('#yweb-text-root > [data-yweb-uid]')];
@@ -511,19 +525,19 @@ for (const name of comparedScreens) {
 
 				await line3d.fill('alpha');
 				await area3d.fill('one\ntwo');
-				await page.getByText('3D VALUE:alpha|one/two|0|set0', { exact: true }).waitFor();
+				await page.locator('#yweb-text-root').getByText('3D VALUE:alpha|one/two|0|set0', { exact: true }).waitFor();
 				const button3d = page.getByRole('button', { name: 'APPLY 3D', exact: true });
 				assert.equal(await button3d.evaluate((element) => element.tagName), 'BUTTON', '3D Button文字の上がnative buttonになっていない');
 				await button3d.click();
-				await page.getByText('3D VALUE:alpha|one/two|1|set0', { exact: true }).waitFor();
+				await page.locator('#yweb-text-root').getByText('3D VALUE:alpha|one/two|1|set0', { exact: true }).waitFor();
 
 				await line2d.fill('beta');
 				await area2d.fill('left\nright');
-				await page.getByText('2D VALUE:beta|left/right|0|set0', { exact: true }).waitFor();
+				await page.locator('#yweb-text-root').getByText('2D VALUE:beta|left/right|0|set0', { exact: true }).waitFor();
 				const button2d = page.getByRole('button', { name: 'APPLY 2D', exact: true });
 				assert.equal(await button2d.evaluate((element) => element.tagName), 'BUTTON', '2D Button文字の上がnative buttonになっていない');
 				await button2d.click();
-				await page.getByText('2D VALUE:beta|left/right|1|set0', { exact: true }).waitFor();
+				await page.locator('#yweb-text-root').getByText('2D VALUE:beta|left/right|1|set0', { exact: true }).waitFor();
 				assert.deepEqual(await Promise.all([line3d.inputValue(), area3d.inputValue(), line2d.inputValue(), area2d.inputValue()]), ['alpha', 'one\ntwo', 'beta', 'left\nright'], 'Godotへ渡した入力値をDOM表示へ戻せていない');
 				await page.screenshot({ path: path.join(work, 'browser-input_3d-filled.png') });
 			}
@@ -609,7 +623,7 @@ for (const name of comparedScreens) {
 					const lines = [...owner.querySelectorAll('[data-yweb-code-line]')].map((row) => Number(row.dataset.ywebCodeLine));
 					return lines.length > 0 && Math.min(...lines) > 0;
 				}, await wrapper.getAttribute('data-yweb-uid'));
-				await page.getByText(/^CHANGES 0 /).waitFor();
+				await page.locator('#yweb-text-root').getByText(/^CHANGES 0 /).waitFor();
 				await editor.evaluate((input) => {
 					input.scrollTop = 0;
 					input.dispatchEvent(new Event('scroll', { bubbles: true }));
@@ -626,7 +640,7 @@ for (const name of comparedScreens) {
 					input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertCompositionText', data: '日本語のコメントを確定', isComposing: true }));
 				}, japanese);
 				await page.waitForTimeout(40);
-				await page.getByText(/^CHANGES 0 /).waitFor();
+				await page.locator('#yweb-text-root').getByText(/^CHANGES 0 /).waitFor();
 				assert.deepEqual(await editor.evaluate((input) => [getComputedStyle(input).webkitTextFillColor, input.ywebOwner.ywebLayer.style.visibility]), ['rgb(23, 32, 51)', 'hidden'], 'IME変換中の平文表示へ切り替えていない');
 
 				// compositionend後にinputが来る順でも、確定文章を一回にまとめる。
@@ -634,7 +648,7 @@ for (const name of comparedScreens) {
 					input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '日本語のコメントを確定' }));
 					input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromComposition', data: '日本語のコメントを確定' }));
 				});
-				await page.getByText('CHANGES 1 LINES 3 COMMENT     # 日本語のコメントを確定', { exact: true }).waitFor();
+				await page.locator('#yweb-text-root').getByText('CHANGES 1 LINES 3 COMMENT     # 日本語のコメントを確定', { exact: true }).waitFor();
 				await page.waitForFunction(() => [...document.querySelectorAll('[data-yweb-code-text]')].some((row) => row.textContent.includes('日本語のコメントを確定')));
 				assert.equal(await editor.evaluate((input) => getComputedStyle(input).webkitTextFillColor), 'rgba(0, 0, 0, 0)', 'IME確定後に平文層が残っている');
 				assert.equal(await wrapper.locator('[data-yweb-code-layer]').evaluate((layer) => layer.style.visibility), 'visible', 'IME確定後に構文層が戻っていない');
@@ -645,9 +659,9 @@ for (const name of comparedScreens) {
 					input.setSelectionRange(input.value.length, input.value.length);
 					input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste', data: '# 貼り付け文章' }));
 				});
-				await page.getByText('CHANGES 2 LINES 4 COMMENT     # 日本語のコメントを確定', { exact: true }).waitFor();
+				await page.locator('#yweb-text-root').getByText('CHANGES 2 LINES 4 COMMENT     # 日本語のコメントを確定', { exact: true }).waitFor();
 				await editor.press('Tab');
-				await page.getByText('CHANGES 3 LINES 4 COMMENT     # 日本語のコメントを確定', { exact: true }).waitFor();
+				await page.locator('#yweb-text-root').getByText('CHANGES 3 LINES 4 COMMENT     # 日本語のコメントを確定', { exact: true }).waitFor();
 				assert.ok((await editor.inputValue()).endsWith('    '), 'CodeEditのspaces indentをBrowser Tabへ反映していない');
 
 				const stable = await wrapper.evaluate((element) => ({
@@ -667,7 +681,7 @@ for (const name of comparedScreens) {
 				await page.waitForFunction((uid) => [...document.querySelectorAll(`[data-yweb-uid="${uid}"] [data-yweb-code-text] span`)].some((span) => span.textContent === 'extends' && getComputedStyle(span).color === 'rgb(234, 88, 12)'), miniUid);
 				await miniInput.evaluate((input) => input.setSelectionRange(0, 0));
 				await miniInput.press('Tab');
-				await page.getByText('MINIMAP FIRST 0 TAB 1', { exact: true }).waitFor();
+				await page.locator('#yweb-text-root').getByText('MINIMAP FIRST 0 TAB 1', { exact: true }).waitFor();
 				assert.ok((await miniInput.inputValue()).startsWith('\t'), '下段CodeEditのTab入力をGodotへ返していない');
 				const minimap = page.locator('[data-yweb-code-minimap]');
 				const miniBox = await minimap.boundingBox();
@@ -676,7 +690,7 @@ for (const name of comparedScreens) {
 				assert.equal(await minimap.evaluate((element) => getComputedStyle(element.ywebViewport).backgroundColor), 'rgba(15, 23, 42, 0.25)', 'minimap drag中のTheme表示へ切り替えていない');
 				await page.mouse.move(miniBox.x + miniBox.width / 2, miniBox.y + miniBox.height * 0.82);
 				await page.mouse.up();
-				await page.getByText(/^MINIMAP FIRST ([1-9]|[1-9][0-9]+) TAB 1$/).waitFor();
+				await page.locator('#yweb-text-root').getByText(/^MINIMAP FIRST ([1-9]|[1-9][0-9]+) TAB 1$/).waitFor();
 				const miniMoved = await miniOwner.evaluate((element) => {
 					const previous = globalThis.__ywebMiniRefs;
 					const rows = element.ywebMinimap.ywebRows;
@@ -707,6 +721,10 @@ for (const name of comparedScreens) {
 				ui.push('hover');
 				await page.close();
 				continue; // hover fixtureはBrowser scrollとsignal往復へ専念する。
+			}
+			if (!comparedScreens.includes(name)) {
+				await page.close();
+				continue; // 副作用型は生成一覧の構造検査で判定し、描画先のないNodeを画素値へ混ぜない。
 			}
 			if (!shotBeforeInteraction) await page.screenshot({ path: shot });
 			await page.close();

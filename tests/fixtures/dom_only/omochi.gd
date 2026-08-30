@@ -10,18 +10,26 @@ const YWEB_FREEZE := 900 # 形を固定するまでの物理frame数。
 var _yweb_ticks := 0 # 経過した物理frame。
 
 # 決まったframe数で全体を止め、撮る時刻で結果が変わらないようにする。
-func _yweb_settle() -> void:
+func _yweb_settle() -> bool:
 	_yweb_ticks += 1
-	if _yweb_ticks == YWEB_FREEZE:
-		# nativeとWebAssemblyの物理丸め差を画面比較へ持ち込まない。
-		var bodies := get_tree().get_nodes_in_group("omochi")
-		bodies.sort_custom(func(left: Node, right: Node) -> bool: return left.name < right.name)
-		for index in bodies.size():
-			var body := bodies[index] as RigidBody2D
-			body.freeze = true
-			body.position = Vector2(210 + index % 8 * 78, 125 + index / 8 * 74)
-			body.rotation = (index % 5 - 2) * 0.12
-		get_tree().paused = true
+	if _yweb_ticks != YWEB_FREEZE:
+		return false
+	# nativeとWebAssemblyの物理丸め差を画面比較へ持ち込まない。
+	var bodies := get_tree().get_nodes_in_group("omochi")
+	bodies.sort_custom(func(left: Node, right: Node) -> bool: return left.name < right.name)
+	for index in bodies.size():
+		var body := bodies[index] as RigidBody2D
+		body.freeze = true
+		body.position = Vector2(210 + index % 8 * 78, 125 + index / 8 * 74)
+		body.rotation = (index % 5 - 2) * 0.12
+	score = 0
+	machine_contacts = 0
+	score_label.text = "捕獲 0"
+	contact_label.text = "接触 0"
+	status_label.text = "日本語テーマ"
+	frame_label.text = "投下 %d / フレーム %d" % [drops, frames]
+	get_tree().paused = true
+	return true
 
 const BG := Color("07101f") # 物理盤の背景色。
 const BOARD := Color("10213b") # 遊技盤の内側色。
@@ -84,7 +92,8 @@ func _draw() -> void:
 
 # マウス位置へ捕獲機を追従させ、30物理frameごとにOmochiを追加する。
 func _physics_process(delta: float) -> void:
-	_yweb_settle()
+	if _yweb_settle():
+		return
 	frames += 1
 	if frames == THEME_FRAME:
 		_apply_japanese_theme()

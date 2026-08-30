@@ -40,6 +40,33 @@ function cache(file) {
 		? 'public, max-age=31536000, immutable' : 'no-cache';
 }
 
+// 要求位置から親へ辿り、同じsiteに属する404 pageを見つける。
+function notFound(root, requestUrl) {
+	const wanted = resolveFile(root, requestUrl);
+	let current = wanted ? path.dirname(wanted) : root;
+	while (current.startsWith(root)) {
+		const file = path.join(current, '404.html');
+		if (fs.existsSync(file)) return file;
+		if (current === root) break;
+		current = path.dirname(current);
+	}
+	return null;
+}
+
+// 生成manifestの防御headerを成果物と同じsite範囲から読む。
+function security(root, file) {
+	let current = path.dirname(file);
+	while (current.startsWith(root)) {
+		const manifest = path.join(current, 'yweb-security.json');
+		if (fs.existsSync(manifest)) {
+			try { return JSON.parse(fs.readFileSync(manifest, 'utf8')).headers || {}; } catch { return {}; }
+		}
+		if (current === root) break;
+		current = path.dirname(current);
+	}
+	return {};
+}
+
 // Brotli対応clientへ同じURLの圧縮fileを選ぶHTTP serverを作る。
 // routesを渡すと、file配信より先にそのURLだけを自前で応答できる。
 function createServer(root, routes = {}) {
@@ -50,19 +77,25 @@ function createServer(root, routes = {}) {
 			route(request, response);
 			return;
 		}
-		const file = resolveFile(site, request.url || '/');
+		let file = resolveFile(site, request.url || '/');
+		let status = 200;
 		if (!file || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+			file = notFound(site, request.url || '/');
+			status = 404;
+		}
+		if (!file) {
 			response.writeHead(404).end();
 			return;
 		}
 		const useBrotli = /(?:^|,)\s*br\s*(?:,|$)/.test(request.headers['accept-encoding'] || '') && fs.existsSync(`${file}.br`);
 		const headers = {
+			...security(site, file),
 			'Content-Type': mime[path.extname(file)] || 'application/octet-stream',
 			'Vary': 'Accept-Encoding',
 			'Cache-Control': cache(file),
 		};
 		if (useBrotli) headers['Content-Encoding'] = 'br';
-		response.writeHead(200, headers);
+		response.writeHead(status, headers);
 		if (request.method === 'HEAD') response.end();
 		else fs.createReadStream(useBrotli ? `${file}.br` : file).pipe(response);
 	});

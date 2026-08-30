@@ -140,6 +140,8 @@ func add_windows() -> void:
 	files.position = Vector2i(18, 370)
 	files.size = Vector2i(500, 210)
 	files.title = "Files"
+	files.current_dir = "res://file_dialog_fixture"
+	files.filters = PackedStringArray(["*.png ; Images"])
 	window_label(files, "FileDialog")
 	add_child(files)
 	files.show()

@@ -6,7 +6,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
+const { chromium } = require('./browser.cjs');
 const { ensure } = require('../build/fetch_webfont.cjs');
 const { createServer } = require('../build/serve_web.cjs');
 

@@ -28,6 +28,8 @@ const distribution = lock(path.join(build, 'distribution.lock'));
 const options = fs.readFileSync(path.join(build, 'template.options'), 'utf8').split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
 const dockerfile = fs.readFileSync(path.join(build, 'distribution/Dockerfile'), 'utf8');
 const distributionScript = fs.readFileSync(path.join(build, 'build_distribution.sh'), 'utf8');
+const workflow = fs.readFileSync(path.join(root, '.github/workflows/template.yml'), 'utf8');
+const browserLock = fs.readFileSync(path.join(root, 'tests/browser/package-lock.json'), 'utf8');
 
 // Godot版とtoolchainが、lockの固定値どおりmanifestへ入っているかを見る。
 assert.equal(manifest.schema, 1);
@@ -47,9 +49,23 @@ assert.ok(options.includes('dlink_enabled=no'));
 assert.match(dockerfile, new RegExp(distribution.BUILDER_IMAGE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 assert.match(dockerfile, new RegExp(`SCONS_VERSION=${distribution.SCONS_VERSION.replaceAll('.', '\\.')}`));
 assert.match(dockerfile, new RegExp(`UV_VERSION=${distribution.UV_VERSION.replaceAll('.', '\\.')}`));
+assert.match(dockerfile, new RegExp(`UV_SHA256=${distribution.UV_SHA256}`));
+assert.match(dockerfile, new RegExp(`SCONS_SHA256=${distribution.SCONS_SHA256}`));
+assert.match(dockerfile, /sha256sum -c -/);
 assert.equal(dockerfile.includes('python3 -m pip'), false, 'Python道具の導入がuv以外');
+assert.equal(dockerfile.includes('curl |'), false, '取得物を検証せず実行している');
 assert.match(distributionScript, /--platform "\$BUILDER_PLATFORM"/);
+assert.match(distributionScript, /--build-arg "UV_SHA256=\$UV_SHA256"/);
+assert.match(distributionScript, /--build-arg "SCONS_SHA256=\$SCONS_SHA256"/);
 assert.match(distributionScript, /tests\/template_distribution\.cjs/);
+// Release候補を外部Browser取得前に確定し、無権限jobの合格後にmainから公開する。
+assert.doesNotMatch(workflow.split('\n  test:')[0], /playwright|npm ci/, '候補確定前にBrowserを実行している');
+assert.match(workflow, /cp tests\/browser\/package\.json tests\/browser\/package-lock\.json tmp\/playwright\//);
+assert.match(workflow, /npm ci --prefix tmp\/playwright --ignore-scripts/);
+assert.match(browserLock, /"integrity": "sha512-/);
+assert.match(workflow, /github\.ref == 'refs\/heads\/main'/);
+assert.match(workflow, /environment: production/);
+assert.match(workflow, /needs: \[template, test\]/);
 assert.ok(levels.length > 0, '検査するtemplateがない');
 
 // build入力fileの内容が、manifestへ記録したhashと一致するかを見る。

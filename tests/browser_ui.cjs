@@ -8,17 +8,18 @@ const assert = require('node:assert/strict');
 // 入力、送信、clickを順に行い、signal回数とDOM要素の寿命を確かめる。
 async function exerciseUi(page, name, forbidden = '') {
 	const wait = (value) => page.waitForFunction((text) => [...document.querySelectorAll('[data-yweb-text]')].some((element) => element.textContent === text), value, { timeout: 3000 });
+	const root = page.locator('#yweb-text-root');
 	await page.evaluate(() => {
 		globalThis.__ywebUiNodes = new Map([...document.querySelectorAll('[data-yweb-text]')].map((element) => [element.dataset.ywebText, element]));
 	});
-	const line = page.getByPlaceholder('LINE INPUT');
-	const area = page.getByPlaceholder('TEXT AREA');
-	const button = page.getByRole('button', { name: 'CANVAS BUTTON', exact: true });
-	const link = page.getByRole('link', { name: 'CANVAS LINK', exact: true });
-	const disabledButton = page.getByRole('button', { name: 'DISABLED BUTTON', exact: true });
-	const disabledLink = page.getByRole('link', { name: 'DISABLED LINK', exact: true });
-	const noTabLine = page.getByPlaceholder('NO TAB LINE');
-	const noTabArea = page.getByPlaceholder('NO TAB AREA');
+	const line = root.getByPlaceholder('LINE INPUT');
+	const area = root.getByPlaceholder('TEXT AREA');
+	const button = root.getByRole('button', { name: 'CANVAS BUTTON', exact: true });
+	const link = root.getByRole('link', { name: 'CANVAS LINK', exact: true });
+	const disabledButton = root.getByRole('button', { name: 'DISABLED BUTTON', exact: true });
+	const disabledLink = root.getByRole('link', { name: 'DISABLED LINK', exact: true });
+	const noTabLine = root.getByPlaceholder('NO TAB LINE');
+	const noTabArea = root.getByPlaceholder('NO TAB AREA');
 
 	await line.fill('alpha');
 	await wait('LINE alpha');
@@ -77,7 +78,7 @@ async function exerciseUi(page, name, forbidden = '') {
 	await disabledButton.dispatchEvent('click');
 	await disabledLink.dispatchEvent('click');
 	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-	assert.equal(await page.getByText('COUNTS 1/1/1/2/1/0', { exact: true }).count(), 1, `${name}の無効Controlからsignalが届いている`);
+	assert.equal(await root.getByText('COUNTS 1/1/1/2/1/0', { exact: true }).count(), 1, `${name}の無効Controlからsignalが届いている`);
 
 	assert.equal(await line.inputValue(), 'alpha', `${name}のLineEdit値がBrowserへ残っていない`);
 	assert.equal(await area.inputValue(), 'one\ntwo', `${name}のTextEdit値がBrowserへ残っていない`);
@@ -91,19 +92,20 @@ async function exerciseUi(page, name, forbidden = '') {
 
 // Browser scroll後のhover色、親子順、除外、非表示回収、Godot offsetを検査する。
 async function exerciseHover(page, name) {
+	const root = page.locator('#yweb-text-root');
 	const wait = async (value) => {
 		try {
-			await page.getByText(value, { exact: true }).waitFor();
+			await root.getByText(value, { exact: true }).waitFor();
 		} catch (error) {
 			const current = await page.locator('[data-yweb-text]').evaluateAll((nodes) => nodes.map((node) => node.textContent).find((text) => text.startsWith('HOVER ')) || '');
 			throw new Error(`${name}のhover状態が違う: 期待=${value} 実際=${current}`, { cause: error });
 		}
 	};
-	const active = page.getByRole('button', { name: 'SCROLLED HOVER', exact: true });
-	const disabled = page.getByRole('button', { name: 'DISABLED HOVER', exact: true });
-	const ignored = page.getByRole('button', { name: 'IGNORED HOVER', exact: true });
-	const hidden = page.getByRole('button', { name: 'HIDE ON HOVER', exact: true });
-	const recursive = page.getByRole('button', { name: 'RECURSIVE DISABLED', exact: true });
+	const active = root.getByRole('button', { name: 'SCROLLED HOVER', exact: true });
+	const disabled = root.getByRole('button', { name: 'DISABLED HOVER', exact: true });
+	const ignored = root.getByRole('button', { name: 'IGNORED HOVER', exact: true });
+	const hidden = root.getByRole('button', { name: 'HIDE ON HOVER', exact: true });
+	const recursive = root.getByRole('button', { name: 'RECURSIVE DISABLED', exact: true });
 	const scroll = page.locator('[data-yweb-scroll]').last();
 	await scroll.evaluate((element) => {
 		element.scrollLeft = 100;
@@ -125,20 +127,20 @@ async function exerciseHover(page, name) {
 	assert.ok(Math.abs(actionStyle.width - actionStyle.boxWidth) <= 1 && actionStyle.padding >= 20, `${name}のButton全体と文字余白が分離されていない: ${JSON.stringify(actionStyle)}`);
 	await active.hover({ position: { x: 4, y: 4 } });
 	await wait('HOVER 1/0/0/0/1/0/0/0/0/0/0/0 1/0/0');
-	await page.getByText('ORDER parent-enter,active-enter', { exact: true }).waitFor();
+	await root.getByText('ORDER parent-enter,active-enter', { exact: true }).waitFor();
 	assert.notEqual(await box(), normal, `${name}のhover色が変わらない`);
 	const activeBox = await active.boundingBox();
 	await page.mouse.move(activeBox.x + activeBox.width + 2, activeBox.y + activeBox.height / 2);
 	await wait('HOVER 1/1/0/0/1/1/0/0/0/0/0/0 0/0/0');
-	await page.getByText('ORDER parent-enter,active-enter,active-exit,parent-exit', { exact: true }).waitFor();
+	await root.getByText('ORDER parent-enter,active-enter,active-exit,parent-exit', { exact: true }).waitFor();
 	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-	assert.equal(await page.getByText(/^CANVAS /).textContent(), 'CANVAS 1/0', `${name}の背面Canvasへhoverが届かない`);
+	assert.equal(await root.getByText(/^CANVAS /).textContent(), 'CANVAS 1/0', `${name}の背面Canvasへhoverが届かない`);
 	await page.mouse.move(activeBox.x + activeBox.width + 4, activeBox.y + activeBox.height / 2);
 	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 	await wait('HOVER 1/1/0/0/1/1/0/0/0/0/0/0 0/0/0');
 	assert.equal(await box(), normal, `${name}のhover色が戻らない`);
 	await page.mouse.move(780, 580);
-	await page.getByText('CANVAS 1/1', { exact: true }).waitFor();
+	await root.getByText('CANVAS 1/1', { exact: true }).waitFor();
 	await scroll.evaluate((element) => {
 		element.scrollLeft = 410;
 		element.dispatchEvent(new Event('scroll'));
@@ -156,7 +158,7 @@ async function exerciseHover(page, name) {
 	const ignoredBox = await ignored.boundingBox();
 	await page.mouse.move(ignoredBox.x + ignoredBox.width / 2, ignoredBox.y + ignoredBox.height / 2);
 	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-	const ignoredCounts = await page.getByText(/^HOVER /).textContent();
+	const ignoredCounts = await root.getByText(/^HOVER /).textContent();
 	assert.match(ignoredCounts, /^HOVER 1\/1\/1\/1\/\d+\/\d+\/0\/0\/0\/0\/0\/0 /, `${name}のMOUSE_FILTER_IGNOREからsignalが届いている`);
 	await page.mouse.move(780, 580);
 	await scroll.evaluate((element) => {
@@ -164,8 +166,8 @@ async function exerciseHover(page, name) {
 		element.dispatchEvent(new Event('scroll'));
 	});
 	await hidden.hover();
-	await page.getByText(/^HOVER 1\/1\/1\/1\/\d+\/\d+\/0\/0\/1\/0\/0\/0 0\/0\/1$/).waitFor();
-	await page.getByText(/^HOVER 1\/1\/1\/1\/\d+\/\d+\/0\/0\/1\/1\/0\/0 0\/0\/0$/).waitFor();
+	await root.getByText(/^HOVER 1\/1\/1\/1\/\d+\/\d+\/0\/0\/1\/0\/0\/0 0\/0\/1$/).waitFor();
+	await root.getByText(/^HOVER 1\/1\/1\/1\/\d+\/\d+\/0\/0\/1\/1\/0\/0 0\/0\/0$/).waitFor();
 	assert.equal(await hidden.isVisible(), false, `${name}のhover中非表示がDOMへ反映されない`);
 	await scroll.evaluate((element) => {
 		element.scrollLeft = 970;
@@ -175,7 +177,7 @@ async function exerciseHover(page, name) {
 	const recursiveBox = await recursive.boundingBox();
 	await page.mouse.move(recursiveBox.x + recursiveBox.width / 2, recursiveBox.y + recursiveBox.height / 2);
 	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-	const recursiveCounts = await page.getByText(/^HOVER /).textContent();
+	const recursiveCounts = await root.getByText(/^HOVER /).textContent();
 	assert.match(recursiveCounts, /^HOVER 1\/1\/1\/1\/\d+\/\d+\/0\/0\/1\/1\/0\/0 /, `${name}のrecursive無効Buttonからsignalが届いている`);
 	await wait('GODOT OFFSET 0');
 }

@@ -14,6 +14,7 @@ const SiteConfig := preload("site_config.gd") # Scene情報JSONの用意と補�
 const CONFIG_PATH := "res://yweb-site.json" # Scene情報JSONの既定位置。
 const I18n := preload("i18n.gd") # 画面文言の言語選び。
 const ProjectCheck := preload("project_check.gd") # 2D以下の3D境界検査。
+const ProductionCheck := preload("production_check.gd") # 本番公開へ秘密と危険な通信を持ち込まない検査。
 const OGP_PATH := "res://web/ogp.png" # OGP画像の既定位置。
 const LEVELS := ["dom", "2d", "3d"] # 書き出しlevel。表示順とmanifestのkeyを揃える。
 const LEVEL_HINT := "DOM only,2D,3D" # Export画面へ出すlevelの選択肢。
@@ -65,6 +66,7 @@ func _get_export_options() -> Array[Dictionary]:
 		_option("html/focus_canvas_on_start", TYPE_BOOL, true), # 起動直後に操作対象をCanvasへ移すか。
 		_option("yweb/level", TYPE_INT, 1, PROPERTY_HINT_ENUM, LEVEL_HINT, true), # 書き出しの段。使うテンプレートが変わる。
 		_option("yweb/site/enabled", TYPE_BOOL, true, PROPERTY_HINT_NONE, "", true), # SEOとroute生成を行うか。
+		_option("yweb/site/production", TYPE_BOOL, true), # HTTPSと公開前安全検査を必須にするか。
 		_option("yweb/site/config", TYPE_STRING, CONFIG_PATH, PROPERTY_HINT_FILE, "*.json"), # Sceneと公開URLの対応表の位置。
 		_option("yweb/site/base_url", TYPE_STRING, "https://example.com"), # 公開先の基点URL。canonicalとsitemapへ使う。
 		_option("yweb/site/title", TYPE_STRING, ProjectSettings.get_setting("application/config/name", "Godot Web Site")), # pageのtitle。既定はproject名。
@@ -163,6 +165,9 @@ func _build_project(preset: EditorExportPreset, debug: bool, path: String, flags
 	if not blocked.is_empty():
 		return _fail(I18n.t("topic_project"), "\n".join(blocked), ERR_UNAVAILABLE)
 	var site_options := _site_options(preset)
+	var production_errors := ProductionCheck.new().inspect(site_options)
+	if not production_errors.is_empty():
+		return _fail(I18n.t("topic_project"), "\n".join(production_errors), ERR_UNAVAILABLE)
 	var base := path.get_file().get_basename()
 	var pack := path.get_basename() + ".pck"
 	var saved: Dictionary = save_pack(preset, debug, pack)
@@ -185,18 +190,22 @@ func _build_project(preset: EditorExportPreset, debug: bool, path: String, flags
 	error = _write_html(preset, path, base, pack, flags)
 	if error != OK:
 		return error
+	# transaction用stage内で旧世代を先に除き、容量と秘密検査を最終構成へ限定する。
+	error = _clean_versions(directory, base, pack.get_file())
+	if error != OK:
+		return error
+	error = _copy_licenses(directory)
+	if error != OK:
+		return error
 	var builder := SiteBuilder.new()
 	var quality := int(_entry(level).get("brotli", {}).get("quality", 0))
 	error = builder.build(site_options, path, snapshots, base, quality)
 	if error != OK:
 		return _fail(I18n.t("topic_site"), builder.error_message, error)
-	error = _copy_licenses(directory)
-	if error != OK:
-		return error
-	# 全成果物の生成成功後に旧世代を消し、途中失敗から公開済みpageを守る。
-	error = _clean_versions(directory, base, pack.get_file())
-	if error != OK:
-		return error
+	if bool(site_options.get("yweb/site/production", true)):
+		var output_errors := ProductionCheck.new().inspect_output(directory)
+		if not output_errors.is_empty():
+			return _fail(I18n.t("topic_project"), "\n".join(output_errors), ERR_UNAVAILABLE)
 	return OK
 
 # 公開Sceneごとに独立したGodotを並列で3フレーム動かし、文字と画像を受け取る。
@@ -427,7 +436,7 @@ func _publish(stage: String, live: String, rollback: String) -> Error:
 func _publish_order(relative: String) -> int:
 	if relative.get_extension().to_lower() == "html":
 		return 2
-	if relative.get_file() in ["yweb-site.json", "sitemap.xml", "robots.txt"]:
+	if relative.get_file() in ["yweb-site.json", "yweb-security.json", "_headers", "sitemap.xml", "robots.txt"]:
 		return 1
 	return 0
 
@@ -441,6 +450,7 @@ func _prepare_file(source: String, target: String, index: int) -> Dictionary:
 		DirAccess.remove_absolute(temporary)
 	error = DirAccess.copy_absolute(source, temporary)
 	if error != OK:
+		push_error(I18n.t("publish_copy", [source, temporary, error]))
 		if FileAccess.file_exists(temporary):
 			DirAccess.remove_absolute(temporary)
 		return {"error": error}
@@ -700,17 +710,25 @@ func _write_html(preset: EditorExportPreset, path: String, base: String, pack: S
 	file.store_string(html)
 	return OK
 
-# project固有licenseを成果物へそのまま伝える。
+# project固有licenseを専用directoryへ伝え、公開成果物との名前衝突を防ぐ。
 func _copy_licenses(directory: String) -> Error:
 	var source := ProjectSettings.globalize_path("res://web/licenses")
+	var target := directory.path_join("licenses")
+	if DirAccess.dir_exists_absolute(target):
+		_remove_tree(target)
+		if DirAccess.dir_exists_absolute(target):
+			return _fail(I18n.t("topic_license"), I18n.t("license_copy", [target]), ERR_CANT_CREATE)
 	var dir := DirAccess.open(source)
 	if dir == null:
 		return OK
+	var made := DirAccess.make_dir_recursive_absolute(target)
+	if made != OK:
+		return _fail(I18n.t("topic_license"), I18n.t("license_copy", [target]), made)
 	dir.list_dir_begin()
 	var name := dir.get_next()
 	while not name.is_empty():
-		if not dir.current_is_dir():
-			var error := DirAccess.copy_absolute(source.path_join(name), directory.path_join(name))
+		if not dir.current_is_dir() and not dir.is_link(name) and name == name.get_file() and name not in [".", ".."]:
+			var error := DirAccess.copy_absolute(source.path_join(name), target.path_join(name))
 			if error != OK:
 				dir.list_dir_end()
 				return _fail(I18n.t("topic_license"), I18n.t("license_copy", [name]), error)

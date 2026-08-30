@@ -12,7 +12,6 @@ const WHITE := Color("ffffff") # cardと反転文字。
 const MUTED := Color("667085") # 本文の灰色。
 const LINE := Color("dde2ea") # card境界線。
 const MOBILE_WIDTH := 760.0 # 1列へ切り替える画面幅。
-const SLIDE_SECONDS := 2.8 # carouselを自動で送る秒数。
 
 @export_enum("Home", "About") var page := "Home" # sceneごとの公開page種別。
 
@@ -29,7 +28,6 @@ var carousel_title: Label # 現在の事例名。
 var carousel_body: Label # 現在の事例説明。
 var carousel_count: Label # carouselの現在位置。
 var carousel_index := 0 # 表示中slide番号。
-var carousel_timer: Timer # 自動送りの時計。
 var contact_status: Label # CTA操作結果を伝える文字。
 var slides: Array[Dictionary] = [] # 事例写真と説明の正本。
 
@@ -199,12 +197,6 @@ func _build_carousel() -> void:
 	next.pressed.connect(_next_slide)
 	controls.add_child(next)
 	copy.add_child(carousel_count)
-	carousel_timer = Timer.new()
-	carousel_timer.name = "CarouselTimer"
-	carousel_timer.wait_time = SLIDE_SECONDS
-	carousel_timer.autostart = true
-	carousel_timer.timeout.connect(_next_slide)
-	add_child(carousel_timer)
 	_show_slide(0)
 
 # Aboutへの導線を写真と文章の2列で示す。
@@ -526,15 +518,13 @@ func _show_slide(index: int) -> void:
 	var tween := create_tween()
 	tween.tween_property(carousel_image, "modulate:a", 1.0, 0.35)
 
-# 一つ前の事例へ戻し、自動送りを数え直す。
+# 一つ前の事例へ戻す。
 func _previous_slide() -> void:
 	_show_slide(carousel_index - 1)
-	carousel_timer.start()
 
-# 一つ次の事例へ進み、自動送りを数え直す。
+# 一つ次の事例へ進む。
 func _next_slide() -> void:
 	_show_slide(carousel_index + 1)
-	carousel_timer.start()
 
 # Home sceneへ切り替える。
 func _go_home() -> void:

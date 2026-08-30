@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const child = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
+const { chromium } = require('./browser.cjs');
 
 const repo = path.resolve(__dirname, '..'); // yweb project root。
 const work = path.join(repo, 'tmp/site-runtime'); // Project copyとWeb成果物。
@@ -31,14 +31,14 @@ async function main() {
 		const errors = [];
 		page.on('pageerror', (error) => errors.push(error.message));
 		await page.goto(`http://127.0.0.1:${port}/about/`, { waitUntil: 'domcontentloaded' });
-		await page.getByText('ABOUT SCENE', { exact: true }).waitFor({ timeout: 8000 });
+		await page.locator('[data-yweb-text]', { hasText: /^ABOUT SCENE$/ }).waitFor({ timeout: 8000 });
 		assert.equal(await page.title(), 'About Route');
 		const marker = await page.evaluate(() => window.ywebPageMarker = crypto.randomUUID());
 		await page.evaluate(() => { history.pushState({}, '', '/'); dispatchEvent(new PopStateEvent('popstate')); });
-		await page.getByText('MAIN SCENE', { exact: true }).waitFor();
+		await page.locator('[data-yweb-text]', { hasText: /^MAIN SCENE$/ }).waitFor();
 		assert.equal(await page.title(), 'Main Route');
 		await page.keyboard.press('n');
-		await page.getByText('ABOUT SCENE', { exact: true }).waitFor();
+		await page.locator('[data-yweb-text]', { hasText: /^ABOUT SCENE$/ }).waitFor();
 		await page.waitForFunction(() => location.pathname === '/about/');
 		assert.equal(await page.title(), 'About Route');
 		assert.equal(await page.evaluate(() => window.ywebPageMarker), marker, 'scene遷移で再読込');

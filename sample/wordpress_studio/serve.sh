@@ -1,5 +1,6 @@
 #!/bin/sh
 # 書き出し済み作例をBrotli対応の静的serverで試す。
+# 公開前のBrowser確認を本番に近いheaderと経路で行う設計。
 
 set -eu
 

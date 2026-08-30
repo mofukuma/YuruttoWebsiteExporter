@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "dependencies": {
+    "playwright-core": "1.56.0"
+  }
+}

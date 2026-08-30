@@ -24,6 +24,8 @@ if ! docker image inspect "$image" >/dev/null 2>&1; then
 	  --platform "$BUILDER_PLATFORM" \
 	  --build-arg "SCONS_VERSION=$SCONS_VERSION" \
 	  --build-arg "UV_VERSION=$UV_VERSION" \
+	  --build-arg "UV_SHA256=$UV_SHA256" \
+	  --build-arg "SCONS_SHA256=$SCONS_SHA256" \
 	  -f "$repo/build/distribution/Dockerfile" \
 	  -t "$image" "$repo"
 fi

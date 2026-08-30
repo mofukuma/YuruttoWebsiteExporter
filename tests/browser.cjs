@@ -3,8 +3,10 @@
 
 'use strict';
 
-const { chromium } = require('../tmp/playwright/node_modules/playwright-core');
+const path = require('node:path');
+process.env.PLAYWRIGHT_BROWSERS_PATH ||= path.resolve(__dirname, '../tmp/playwright-browsers');
+const { chromium, firefox, webkit } = require('../tmp/playwright/node_modules/playwright-core');
 
 const browserPath = chromium.executablePath(); // package-lock.jsonで固定したChromium。
 
-module.exports = { browserPath };
+module.exports = { browserPath, chromium, firefox, webkit };

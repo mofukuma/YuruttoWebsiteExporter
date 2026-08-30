@@ -59,8 +59,8 @@ for (const item of pages) {
 	fs.writeFileSync(path.join(project, `${item.name}.gd`), page(item));
 	fs.writeFileSync(path.join(project, `${item.name}.tscn`), scene(item));
 }
-// 既定値だけで書き出せるかを見るため、presetへはplatformと出力先しか書かない。
-fs.writeFileSync(path.join(project, 'export_presets.cfg'), '[preset.0]\n\nname="Web"\nplatform="Yurutto Website"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\nexport_path=""\n\n[preset.0.options]\n\n');
+// 本番公開に必要なURLを入れ、ほかの項目は既定値で書き出す。
+fs.writeFileSync(path.join(project, 'export_presets.cfg'), '[preset.0]\n\nname="Web"\nplatform="Yurutto Website"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\nexport_path=""\n\n[preset.0.options]\n\nyweb/site/base_url="https://first-export.example.jp"\n');
 
 // Editorを一度起動し、addonにScene情報JSONを用意させる。
 child.execFileSync(godot, ['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 120000 });
@@ -90,7 +90,7 @@ for (const name of [engine, engine.replace(/\.js$/, '.wasm'), pack, 'sitemap.xml
 }
 const sitemap = fs.readFileSync(path.join(site, 'sitemap.xml'), 'utf8');
 for (const uri of ['/', '/news/', '/contact/']) {
-	assert.ok(sitemap.includes(`<loc>https://example.com${uri}</loc>`), `sitemapにURIが無い: ${uri}`);
+	assert.ok(sitemap.includes(`<loc>https://first-export.example.jp${uri}</loc>`), `sitemapにURIが無い: ${uri}`);
 }
 const exported = JSON.parse(fs.readFileSync(path.join(site, 'yweb-site.json'), 'utf8'));
 assert.equal(Object.keys(exported.scenes).length, 3, '公開Scene数が3枚でない');

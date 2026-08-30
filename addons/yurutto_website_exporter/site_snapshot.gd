@@ -22,6 +22,8 @@ func collect(root: Node) -> Dictionary:
 
 # 子の順序を変えずに、公開できる文字と画像を集める。
 func _visit(node: Node, items: Array[Dictionary]) -> void:
+	if node.has_meta("yweb_snapshot") and not bool(node.get_meta("yweb_snapshot")):
+		return
 	if node is CanvasItem and not node.is_visible_in_tree():
 		return
 	if node is Node3D and not node.is_visible_in_tree():
@@ -32,14 +34,15 @@ func _visit(node: Node, items: Array[Dictionary]) -> void:
 		var image := _image_item(node, texture)
 		if not image.is_empty():
 			items.append(image)
-	if node is Label or node is RichTextLabel:
+	var publish_text := not node.has_meta("yweb_seo_text") or bool(node.get_meta("yweb_seo_text"))
+	if publish_text and (node is Label or node is RichTextLabel):
 		var text := _text(node)
 		if not text.is_empty():
 			items.append({
 				"tag": _named_tag(node.name), "text": text, "node": String(root_path(node)),
 				"font": _font_size(node), "parent": String(root_path(node.get_parent())),
 			})
-	elif node is LinkButton:
+	elif publish_text and node is LinkButton:
 		var text := _clean(String(node.text))
 		if not text.is_empty():
 			items.append({

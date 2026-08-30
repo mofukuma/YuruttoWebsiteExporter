@@ -208,7 +208,9 @@ static HashMap<ObjectID, int> node_orders; // nodeごとの重なり順。描画
 static HashSet<String> sent_images; // Browserへ渡し終えた画像の識別値。
 static bool event_ready = false; // Browser入力callbackの登録状態。
 static ObjectID site_scene; // Browserへ通知済みのcurrent scene識別子。
+#ifndef GLES3_ENABLED
 static const int DOM_ORDER_STEP = 100000; // z値の間へ同じzの木順を収める幅。
+#endif
 #ifndef _3D_DISABLED
 static HashMap<ObjectID, ObjectID> viewport_sprites; // SubViewportを表示するSprite3Dの対応。
 #endif
@@ -232,6 +234,7 @@ static Transform2D canvas_transform(CanvasItem *p_item) {
 	return transform;
 }
 
+#ifndef GLES3_ENABLED
 // 親Controlごとの切り抜き範囲を渡し、Browserスクロール後にも正しい交差を作れるようにする。
 static void sync_clip(CanvasItem *p_item) {
 	const CharString uid = String::num_uint64((uint64_t)p_item->get_instance_id()).utf8();
@@ -248,6 +251,7 @@ static void sync_clip(CanvasItem *p_item) {
 		yweb_clip_sync(uid.get_data(), owner.get_data(), area.position.x, area.position.y, area.get_end().x, area.get_end().y, 1);
 	}
 }
+#endif
 
 // ObjectIDをDOM IDへ直接使える十進文字列へ変換する。
 static CharString text_uid(ObjectID p_object) {
@@ -507,6 +511,7 @@ static void sync_label(Label *p_label) {
 	sync_text(p_label, state);
 }
 
+#ifndef GLES3_ENABLED
 // RichTextLabelの整形後本文を、確定内側矩形へ意味DOMとして置く。
 static void sync_rich_text(RichTextLabel *p_label) {
 	TextState state;
@@ -519,6 +524,7 @@ static void sync_rich_text(RichTextLabel *p_label) {
 	state.line_spacing = font_spacing(p_label, state.font_size, p_label->get_theme_constant(SNAME("line_separation")));
 	sync_text(p_label, state);
 }
+#endif
 
 // StyleBox内側をBrowser入力が所有する矩形へ変換する。
 static Rect2 input_rect(Control *p_control, const Ref<StyleBox> &p_style) {
@@ -527,11 +533,23 @@ static Rect2 input_rect(Control *p_control, const Ref<StyleBox> &p_style) {
 	return Rect2(p_style->get_offset(), Size2(MAX(0.0f, size.x), MAX(0.0f, size.y)));
 }
 
+// 入力目的をGodot metadataから意味DOMへ渡す。
+static String input_aux(Control *p_control, const String &p_placeholder) {
+	Dictionary value;
+	value["placeholder"] = p_placeholder;
+	const String names[] = { "aria_label", "name", "autocomplete", "inputmode", "description" };
+	for (const String &name : names) {
+		const StringName meta = StringName("yweb_" + name);
+		if (p_control->has_meta(meta)) value[name] = String(p_control->get_meta(meta));
+	}
+	return JSON::stringify(value);
+}
+
 // LineEditの値、Theme、caret、selectionをinput状態へまとめる。
 static void sync_line_input(LineEdit *p_line) {
 	TextState state;
 	state.text = p_line->get_text();
-	state.aux = p_line->get_placeholder();
+	state.aux = input_aux(p_line, p_line->get_placeholder());
 	state.kind = TEXT_LINE_INPUT;
 	state.flags = TEXT_CLIP;
 	if (p_line->is_editable()) state.flags |= TEXT_EDITABLE;
@@ -651,23 +669,151 @@ static String code_font_signature(const Ref<Font> &p_font) {
 	return signature;
 }
 
-// CodeEditの見えている行と補助表示を、再利用可能なDOM行へまとめて渡す。
-static void sync_code(CodeEdit *p_edit, const Rect2 &p_text_rect, float p_line_height, const Ref<Font> &p_font, int p_font_size) {
-	Dictionary state;
-	state["gutter"] = p_edit->get_total_gutter_width();
-	// 行番号と記号をGodotが確定した各gutterの位置へ置く。
+// 行番号と記号をGodotが確定した各gutterの位置へ置く。
+static int code_gutters(CodeEdit *p_edit, Dictionary &r_state) {
+	r_state["gutter"] = p_edit->get_total_gutter_width();
 	int gutter_x = 0;
 	int number_gutter = -1;
 	for (int index = 0; index < p_edit->get_gutter_count(); index++) {
 		if (!p_edit->is_gutter_drawn(index)) continue;
 		const String name = p_edit->get_gutter_name(index);
 		if (name == "main_gutter" || name == "line_numbers" || name == "fold_gutter") {
-			state[name + "_x"] = gutter_x;
-			state[name + "_width"] = p_edit->get_gutter_width(index);
+			r_state[name + "_x"] = gutter_x;
+			r_state[name + "_width"] = p_edit->get_gutter_width(index);
 		}
 		if (name == "line_numbers") number_gutter = index;
 		gutter_x += p_edit->get_gutter_width(index);
 	}
+	return number_gutter;
+}
+
+// Minimapの範囲と操作色を、文字ではない小矩形として渡す。
+static Vector2i code_minimap(CodeEdit *p_edit, const Rect2 &p_text_rect, Dictionary &r_state) {
+	if (!p_edit->is_drawing_minimap()) return Vector2i(-1, 0);
+	const Ref<StyleBox> style = p_edit->get_theme_stylebox(p_edit->is_editable() ? SNAME("normal") : SNAME("read_only"));
+	const float width = p_edit->get_minimap_width();
+	const int visible = MAX(1, p_edit->get_minimap_visible_lines());
+	ScrollBar *bar = p_edit->get_v_scroll_bar();
+	Dictionary minimap;
+	minimap["x"] = p_edit->get_size().x - Math::floor(style->get_margin(SIDE_RIGHT)) - width + 2 - p_text_rect.position.x;
+	minimap["y"] = -p_text_rect.position.y;
+	minimap["width"] = width;
+	minimap["total"] = p_edit->get_line_count();
+	minimap["height"] = visible * 3;
+	minimap["viewport"] = (p_edit->get_visible_line_count() + 1) * 3;
+	Color viewport = p_edit->get_theme_color(SNAME("caret_color"));
+	viewport.a = 0.1;
+	minimap["viewport_color"] = String("#") + viewport.to_html();
+	viewport.a = 0.175;
+	minimap["viewport_hover_color"] = String("#") + viewport.to_html();
+	viewport.a = 0.25;
+	minimap["viewport_pressed_color"] = String("#") + viewport.to_html();
+	r_state["minimap"] = minimap;
+	return Vector2i(Math::round(bar->get_as_ratio() * MAX(0, p_edit->get_line_count() - visible)), visible);
+}
+
+// 内蔵VScrollBarの確定矩形とThemeをOS非依存の表示層へ渡す。
+static void code_scrollbar(CodeEdit *p_edit, const Rect2 &p_text_rect, Dictionary &r_state) {
+	ScrollBar *bar = p_edit->get_v_scroll_bar();
+	const Ref<StyleBoxFlat> track = bar->get_theme_stylebox(SNAME("scroll"));
+	const Ref<StyleBoxFlat> grabber = bar->get_theme_stylebox(SNAME("grabber"));
+	if (track.is_null() || grabber.is_null() || bar->get_size().x <= 0 || bar->get_size().y <= 0) return;
+	const Size2 size = bar->get_size();
+	const float range = bar->get_max() - bar->get_min();
+	const float knob_min = grabber->get_minimum_size().y;
+	const float travel = MAX(0.0f, size.y - track->get_minimum_size().y - knob_min);
+	Dictionary scroll;
+	scroll["x"] = bar->get_position().x - p_text_rect.position.x;
+	scroll["y"] = bar->get_position().y - p_text_rect.position.y;
+	scroll["width"] = size.x;
+	scroll["height"] = size.y;
+	scroll["knob"] = range > 0 ? knob_min + MAX(0.0, bar->get_page()) / range * travel : knob_min;
+	scroll["track_color"] = String("#") + track->get_bg_color().to_html();
+	scroll["grabber_color"] = String("#") + grabber->get_bg_color().to_html();
+	scroll["track_radius"] = track->get_corner_radius(CORNER_TOP_LEFT);
+	scroll["grabber_radius"] = grabber->get_corner_radius(CORNER_TOP_LEFT);
+	r_state["scroll"] = scroll;
+}
+
+// 行長guideをFont実幅へ合わせた列位置へ変換する。
+static Array code_guides(CodeEdit *p_edit, const Ref<Font> &p_font, int p_font_size) {
+	Array guides;
+	for (const Variant &value : p_edit->get_line_length_guidelines()) {
+		const int column = value;
+		Dictionary guide;
+		guide["column"] = column;
+		guide["x"] = p_edit->get_total_gutter_width() + (p_font.is_valid() ? p_font->get_string_size(String("0").repeat(column), HORIZONTAL_ALIGNMENT_LEFT, -1, p_font_size).x : 0.0f);
+		guides.push_back(guide);
+	}
+	return guides;
+}
+
+// 可視行の記号と個別色を、再同期判定用の短い値へまとめる。
+static String code_row_signature(CodeEdit *p_edit, int p_first, int p_last, int p_number_gutter) {
+	String result;
+	for (int line = p_first; line <= p_last; line++) {
+		if (line >= p_edit->get_first_visible_line() && line <= p_edit->get_last_full_visible_line() && !p_edit->is_line_in_viewport(line)) continue;
+		result += itos(line) + ":" + itos(p_edit->is_line_folded(line)) + itos(p_edit->can_fold_line(line));
+		result += itos(p_edit->is_line_breakpointed(line)) + itos(p_edit->is_line_bookmarked(line)) + itos(p_edit->is_line_executing(line));
+		if (p_number_gutter >= 0) result += p_edit->get_line_gutter_item_color(line, p_number_gutter).to_html();
+	}
+	return result;
+}
+
+// 可視行の本文、gutter記号、字形補正値をDOM転送用へまとめる。
+static Array code_rows(CodeEdit *p_edit, const String &p_uid, int p_first, int p_last, int p_digits, int p_number_gutter, const Ref<Font> &p_font, int p_font_size, float p_line_height) {
+	Array lines;
+	for (int line = p_first; line <= p_last; line++) {
+		if (line >= p_edit->get_first_visible_line() && line <= p_edit->get_last_full_visible_line() && !p_edit->is_line_in_viewport(line)) continue;
+		Dictionary row;
+		const String number = String::num_int64(line + 1).lpad(p_digits, p_edit->is_line_numbers_zero_padded() ? "0" : " ");
+		row["line"] = line;
+		row["number"] = number;
+		Color line_color = p_number_gutter >= 0 ? p_edit->get_line_gutter_item_color(line, p_number_gutter) : Color(1, 1, 1);
+		if (line_color == Color(1, 1, 1)) line_color = p_edit->get_theme_color(SNAME("line_number_color"));
+		row["line_color"] = String("#") + line_color.to_html();
+		const GlyphState glyph = glyph_state(p_uid + "-code-" + itos(line), p_edit->get_line(line), p_font, p_font_size);
+		row["glyph_ascent"] = glyph.ascent;
+		row["glyph_top"] = glyph.top;
+		row["glyph_bottom"] = glyph.bottom;
+		row["glyph_edge"] = glyph.edge;
+		const GlyphState number_glyph = glyph_state(p_uid + "-code-number-" + itos(line), number, p_font, p_font_size);
+		row["number_ascent"] = number_glyph.ascent;
+		row["number_top"] = number_glyph.top;
+		row["number_bottom"] = number_glyph.bottom;
+		row["number_edge"] = number_glyph.edge;
+		row["y"] = p_edit->get_scroll_pos_for_line(line) * p_line_height;
+		row["fold"] = p_edit->is_line_folded(line) ? "closed" : p_edit->can_fold_line(line) ? "open" : "";
+		row["breakpoint"] = p_edit->is_drawing_breakpoints_gutter() && p_edit->is_line_breakpointed(line);
+		row["bookmark"] = p_edit->is_drawing_bookmarks_gutter() && p_edit->is_line_bookmarked(line);
+		row["executing"] = p_edit->is_drawing_executing_lines_gutter() && p_edit->is_line_executing(line);
+		row["segments"] = code_segments(p_edit, line, p_edit->get_font_color());
+		lines.push_back(row);
+	}
+	return lines;
+}
+
+// Minimapの可視範囲を1行ごとの色区間へ変換する。
+static void code_minimap_rows(CodeEdit *p_edit, int p_first, int p_visible, Dictionary &r_state) {
+	if (p_first < 0) return;
+	Dictionary minimap = r_state["minimap"];
+	Array lines;
+	for (int line = p_first; line < MIN(p_edit->get_line_count(), p_first + p_visible); line++) {
+		Dictionary row;
+		row["line"] = line;
+		row["at"] = line - p_first;
+		row["current"] = p_edit->is_highlight_current_line_enabled() && line == p_edit->get_caret_line();
+		row["segments"] = code_segments(p_edit, line, p_edit->get_font_color());
+		lines.push_back(row);
+	}
+	minimap["lines"] = lines;
+	r_state["minimap"] = minimap;
+}
+
+// CodeEditの見えている行と補助表示を、再利用可能なDOM行へまとめて渡す。
+static void sync_code(CodeEdit *p_edit, const Rect2 &p_text_rect, float p_line_height, const Ref<Font> &p_font, int p_font_size) {
+	Dictionary state;
+	const int number_gutter = code_gutters(p_edit, state);
 	state["tab"] = p_edit->get_tab_size();
 	state["indent"] = p_edit->is_indent_using_spaces() ? String(" ").repeat(p_edit->get_indent_size()) : String("\t");
 	state["line_height"] = p_line_height;
@@ -685,123 +831,26 @@ static void sync_code(CodeEdit *p_edit, const Rect2 &p_text_rect, float p_line_h
 	state["caret_color"] = String("#") + p_edit->get_theme_color(SNAME("caret_color")).to_html();
 	state["text_color"] = String("#") + p_edit->get_font_color().to_html();
 	state["current"] = p_edit->get_caret_line();
-	ScrollBar *bar = p_edit->get_v_scroll_bar();
-	int mini_first = -1;
-	int mini_visible = 0;
-	// Minimapは文字でなく、Godotと同じ1x2pxの色付き区間として渡す。
-	if (p_edit->is_drawing_minimap()) {
-		const Ref<StyleBox> style = p_edit->get_theme_stylebox(p_edit->is_editable() ? SNAME("normal") : SNAME("read_only"));
-		const float width = p_edit->get_minimap_width();
-		Dictionary minimap;
-		minimap["x"] = p_edit->get_size().x - Math::floor(style->get_margin(SIDE_RIGHT)) - width + 2 - p_text_rect.position.x;
-		minimap["y"] = -p_text_rect.position.y;
-		minimap["width"] = width;
-		mini_visible = MAX(1, p_edit->get_minimap_visible_lines());
-		mini_first = Math::round(bar->get_as_ratio() * MAX(0, p_edit->get_line_count() - mini_visible));
-		minimap["total"] = p_edit->get_line_count();
-		minimap["height"] = mini_visible * 3;
-		minimap["viewport"] = (p_edit->get_visible_line_count() + 1) * 3;
-		Color viewport = p_edit->get_theme_color(SNAME("caret_color"));
-		viewport.a = 0.1;
-		minimap["viewport_color"] = String("#") + viewport.to_html();
-		viewport.a = 0.175;
-		minimap["viewport_hover_color"] = String("#") + viewport.to_html();
-		viewport.a = 0.25;
-		minimap["viewport_pressed_color"] = String("#") + viewport.to_html();
-		state["minimap"] = minimap;
-	}
-	// 内蔵VScrollBarの確定矩形とThemeを、OS依存の見た目を持たない表示層へ渡す。
-	const Ref<StyleBoxFlat> track = bar->get_theme_stylebox(SNAME("scroll"));
-	const Ref<StyleBoxFlat> grabber = bar->get_theme_stylebox(SNAME("grabber"));
-	if (track.is_valid() && grabber.is_valid() && bar->get_size().x > 0 && bar->get_size().y > 0) {
-		const Size2 size = bar->get_size();
-		const float range = bar->get_max() - bar->get_min();
-		const float knob_min = grabber->get_minimum_size().y;
-		const float travel = MAX(0.0f, size.y - track->get_minimum_size().y - knob_min);
-		const float knob_size = range > 0 ? knob_min + MAX(0.0, bar->get_page()) / range * travel : knob_min;
-		Dictionary scroll;
-		scroll["x"] = bar->get_position().x - p_text_rect.position.x;
-		scroll["y"] = bar->get_position().y - p_text_rect.position.y;
-		scroll["width"] = size.x;
-		scroll["height"] = size.y;
-		scroll["knob"] = knob_size;
-		scroll["track_color"] = String("#") + track->get_bg_color().to_html();
-		scroll["grabber_color"] = String("#") + grabber->get_bg_color().to_html();
-		scroll["track_radius"] = track->get_corner_radius(CORNER_TOP_LEFT);
-		scroll["grabber_radius"] = grabber->get_corner_radius(CORNER_TOP_LEFT);
-		state["scroll"] = scroll;
-	}
+	const Vector2i minimap_range = code_minimap(p_edit, p_text_rect, state);
+	const int mini_first = minimap_range.x;
+	const int mini_visible = minimap_range.y;
+	code_scrollbar(p_edit, p_text_rect, state);
 
 	const String uid_text = String::num_uint64((uint64_t)p_edit->get_instance_id());
 	const int first = MAX(0, p_edit->get_first_visible_line());
 	const int last = MIN(p_edit->get_line_count() - 1, p_edit->get_last_full_visible_line() + 1);
 	const int digits = MAX(p_edit->get_line_numbers_min_digits(), String::num_int64(p_edit->get_line_count()).length());
-	Array guides;
-	for (const Variant &value : p_edit->get_line_length_guidelines()) {
-		const int column = value;
-		Dictionary guide;
-		guide["column"] = column;
-		guide["x"] = p_edit->get_total_gutter_width() + (p_font.is_valid() ? p_font->get_string_size(String("0").repeat(column), HORIZONTAL_ALIGNMENT_LEFT, -1, p_font_size).x : 0.0f);
-		guides.push_back(guide);
-	}
-	state["guides"] = guides;
+	state["guides"] = code_guides(p_edit, p_font, p_font_size);
 	// 本文、見える行、Themeが同じframeは構文解析とWASM転送を省く。
-	String row_state;
-	for (int line = first; line <= last; line++) {
-		if (line >= p_edit->get_first_visible_line() && line <= p_edit->get_last_full_visible_line() && !p_edit->is_line_in_viewport(line)) continue;
-		row_state += itos(line) + ":" + itos(p_edit->is_line_folded(line)) + itos(p_edit->can_fold_line(line));
-		row_state += itos(p_edit->is_line_breakpointed(line)) + itos(p_edit->is_line_bookmarked(line)) + itos(p_edit->is_line_executing(line));
-		if (number_gutter >= 0) row_state += p_edit->get_line_gutter_item_color(line, number_gutter).to_html();
-	}
+	const String row_state = code_row_signature(p_edit, first, last, number_gutter);
 	const Ref<SyntaxHighlighter> highlighter = p_edit->get_syntax_highlighter();
 	const String signature = itos(p_edit->get_version()) + "/" + itos(mini_first) + "/" + syntax_signature(highlighter) + "/" + code_font_signature(p_font) + "/" + row_state + "/" + JSON::stringify(state);
 	const ObjectID object = p_edit->get_instance_id();
 	const String *cached = code_states.getptr(object);
 	if (cached && *cached == signature) return;
 
-	Array lines;
-	for (int line = first; line <= last; line++) {
-		if (line >= p_edit->get_first_visible_line() && line <= p_edit->get_last_full_visible_line() && !p_edit->is_line_in_viewport(line)) continue;
-		Dictionary row;
-		const String number = String::num_int64(line + 1).lpad(digits, p_edit->is_line_numbers_zero_padded() ? "0" : " ");
-		row["line"] = line;
-		row["number"] = number;
-		Color line_color = number_gutter >= 0 ? p_edit->get_line_gutter_item_color(line, number_gutter) : Color(1, 1, 1);
-		if (line_color == Color(1, 1, 1)) line_color = p_edit->get_theme_color(SNAME("line_number_color"));
-		row["line_color"] = String("#") + line_color.to_html();
-		const GlyphState glyph = glyph_state(uid_text + "-code-" + itos(line), p_edit->get_line(line), p_font, p_font_size);
-		row["glyph_ascent"] = glyph.ascent;
-		row["glyph_top"] = glyph.top;
-		row["glyph_bottom"] = glyph.bottom;
-		row["glyph_edge"] = glyph.edge;
-		const GlyphState number_glyph = glyph_state(uid_text + "-code-number-" + itos(line), number, p_font, p_font_size);
-		row["number_ascent"] = number_glyph.ascent;
-		row["number_top"] = number_glyph.top;
-		row["number_bottom"] = number_glyph.bottom;
-		row["number_edge"] = number_glyph.edge;
-		row["y"] = p_edit->get_scroll_pos_for_line(line) * p_line_height;
-		row["fold"] = p_edit->is_line_folded(line) ? "closed" : p_edit->can_fold_line(line) ? "open" : "";
-		row["breakpoint"] = p_edit->is_drawing_breakpoints_gutter() && p_edit->is_line_breakpointed(line);
-		row["bookmark"] = p_edit->is_drawing_bookmarks_gutter() && p_edit->is_line_bookmarked(line);
-		row["executing"] = p_edit->is_drawing_executing_lines_gutter() && p_edit->is_line_executing(line);
-		row["segments"] = code_segments(p_edit, line, p_edit->get_font_color());
-		lines.push_back(row);
-	}
-	state["lines"] = lines;
-	if (mini_first >= 0) {
-		Dictionary minimap = state["minimap"];
-		Array mini_lines;
-		for (int line = mini_first; line < MIN(p_edit->get_line_count(), mini_first + mini_visible); line++) {
-			Dictionary row;
-			row["line"] = line;
-			row["at"] = line - mini_first;
-			row["current"] = p_edit->is_highlight_current_line_enabled() && line == p_edit->get_caret_line();
-			row["segments"] = code_segments(p_edit, line, p_edit->get_font_color());
-			mini_lines.push_back(row);
-		}
-		minimap["lines"] = mini_lines;
-		state["minimap"] = minimap;
-	}
+	state["lines"] = code_rows(p_edit, uid_text, first, last, digits, number_gutter, p_font, p_font_size, p_line_height);
+	code_minimap_rows(p_edit, mini_first, mini_visible, state);
 	const CharString uid = uid_text.utf8();
 	const CharString json = JSON::stringify(state).utf8();
 	yweb_code_sync(uid.get_data(), json.get_data());
@@ -816,7 +865,7 @@ static void sync_text_area(TextEdit *p_edit) {
 	content.seen = sends;
 	TextState state;
 	state.text = content.text;
-	state.aux = p_edit->get_placeholder();
+	state.aux = input_aux(p_edit, p_edit->get_placeholder());
 	CodeEdit *code = Object::cast_to<CodeEdit>(p_edit);
 	state.kind = code ? TEXT_CODE : TEXT_AREA;
 	state.flags = TEXT_CLIP;
@@ -939,6 +988,8 @@ static void text_event(const char *p_uid, int p_kind, const char *p_text, int p_
 		if (control->has_focus()) control->release_focus();
 	} else if (p_kind == 6) {
 		if (BaseButton *button = Object::cast_to<BaseButton>(control)) button->yweb_click();
+	} else if (p_kind == 10 || p_kind == 11) {
+		if (BaseButton *button = Object::cast_to<BaseButton>(control)) button->yweb_pointer(p_kind == 10);
 	} else if (p_kind == 8 || p_kind == 9) {
 		if (BaseButton *button = Object::cast_to<BaseButton>(control)) {
 			if (Viewport *viewport = button->get_viewport()) viewport->yweb_update_mouse_over(p_kind == 8 ? button : nullptr);
@@ -951,9 +1002,10 @@ static void text_event(const char *p_uid, int p_kind, const char *p_text, int p_
 		if (start == end) line->deselect(); else line->select(start, end);
 		if (p_kind == 5) line->emit_signal(SNAME("text_submitted"), line->get_text());
 	} else if (TextEdit *edit = Object::cast_to<TextEdit>(control)) {
-		if (p_kind == 7) {
+		if (p_kind == 7 && Object::cast_to<CodeEdit>(edit)) {
 			const float line_height = MAX(1.0f, (float)edit->get_theme_font_size(SNAME("font_size")) + edit->get_theme_constant(SNAME("line_spacing")));
-			edit->yweb_set_scroll((double)p_start / line_height, p_end);
+			edit->set_v_scroll((double)p_start / line_height);
+			edit->set_h_scroll(p_end);
 			dirty.insert(object);
 			return;
 		}
@@ -1148,8 +1200,13 @@ static void sync_button_text(Control *p_control, const String &p_text, int p_kin
 		else if (mode == BaseButton::DRAW_HOVER) color = SNAME("font_hover_color");
 		else if (mode == BaseButton::DRAW_DISABLED) color = SNAME("font_disabled_color");
 	}
-	// LinkButtonはhrefも意味DOMへ渡し、Browserのlink roleとkeyboard操作を有効にする。
-	if (const LinkButton *link = Object::cast_to<LinkButton>(p_control)) state.aux = link->get_uri();
+	// LinkButtonはhrefと現在の下線状態を意味DOMへ渡す。
+	if (const LinkButton *link = Object::cast_to<LinkButton>(p_control)) {
+		state.aux = link->get_uri();
+		const BaseButton::DrawMode mode = link->get_draw_mode();
+		const bool active = mode == BaseButton::DRAW_HOVER || mode == BaseButton::DRAW_HOVER_PRESSED || mode == BaseButton::DRAW_PRESSED;
+		if (link->get_underline_mode() == LinkButton::UNDERLINE_MODE_ALWAYS || (active && link->get_underline_mode() != LinkButton::UNDERLINE_MODE_NEVER)) state.flags |= TEXT_UNDERLINE;
+	}
 	// StyleBoxと内蔵iconが確保する領域を除き、Godotの文字配置へ合わせる。
 	StringName style_name = SNAME("normal");
 	if (const BaseButton *button = Object::cast_to<BaseButton>(p_control)) style_name = button_style(button);
@@ -1177,6 +1234,12 @@ static void sync_button_text(Control *p_control, const String &p_text, int p_kin
 	state.color = p_control->get_theme_color(color);
 	state.font_size = p_control->get_theme_font_size(SNAME("font_size"));
 	state.line_spacing = font_spacing(p_control, state.font_size);
+	// 下線はGodotの書体寸法とTheme間隔を使ってBrowserへ揃える。
+	if (Object::cast_to<LinkButton>(p_control)) {
+		const Ref<Font> font = control_font(p_control);
+		state.underline_offset = p_control->get_theme_constant(SNAME("underline_spacing")) + font->get_underline_position(state.font_size);
+		state.underline_thickness = MAX(1.0f, font->get_underline_thickness(state.font_size));
+	}
 	sync_text(p_control, state);
 }
 
@@ -2262,23 +2325,24 @@ void yweb_draw_texture_region(CanvasItem *p_item, const Ref<Texture2D> &p_textur
 			draw_order(p_item), color.r, color.g, color.b, color.a);
 }
 
+// StyleBoxFlatの面、枠、角丸を同じDOM箱転送へまとめる。
+static void sync_flat_box(const CharString &p_uid, Transform2D p_transform, const Rect2 &p_rect, int p_order, const Ref<StyleBoxFlat> &p_flat, const Color &p_modulate = Color(1, 1, 1, 1)) {
+	p_transform[2] = p_transform.xform(p_rect.position);
+	const Color background = p_flat->get_bg_color() * p_modulate;
+	const Color border = p_flat->get_border_color() * p_modulate;
+	yweb_box_sync(p_uid.get_data(), p_transform[0].x, p_transform[0].y, p_transform[1].x, p_transform[1].y, p_transform[2].x, p_transform[2].y,
+			p_rect.size.x, p_rect.size.y, p_order, background.r, background.g, background.b, background.a,
+			p_flat->get_border_width(SIDE_LEFT), p_flat->get_border_width(SIDE_TOP), p_flat->get_border_width(SIDE_RIGHT), p_flat->get_border_width(SIDE_BOTTOM),
+			border.r, border.g, border.b, border.a,
+			p_flat->get_corner_radius(CORNER_TOP_LEFT), p_flat->get_corner_radius(CORNER_TOP_RIGHT), p_flat->get_corner_radius(CORNER_BOTTOM_RIGHT), p_flat->get_corner_radius(CORNER_BOTTOM_LEFT));
+}
+
 // StyleBoxFlatをGodotが確定した背景、枠、角丸の値でDOMへ出す。
 void yweb_draw_style_box(CanvasItem *p_item, const Ref<StyleBox> &p_style, const Rect2 &p_rect) {
 	const Ref<StyleBoxFlat> flat = p_style;
-	if (flat.is_null()) {
-		return;
-	}
-	Transform2D transform = draw_basis(p_item);
-	transform[2] = transform.xform(p_rect.position);
-	const Color modulate = p_item->get_modulate() * p_item->get_self_modulate();
-	const Color background = flat->get_bg_color() * modulate;
-	const Color border = flat->get_border_color() * modulate;
+	if (flat.is_null()) return;
 	const CharString uid = draw_uid(p_item, "b");
-	yweb_box_sync(uid.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
-			p_rect.size.x, p_rect.size.y, draw_order(p_item), background.r, background.g, background.b, background.a,
-			flat->get_border_width(SIDE_LEFT), flat->get_border_width(SIDE_TOP), flat->get_border_width(SIDE_RIGHT), flat->get_border_width(SIDE_BOTTOM),
-			border.r, border.g, border.b, border.a,
-			flat->get_corner_radius(CORNER_TOP_LEFT), flat->get_corner_radius(CORNER_TOP_RIGHT), flat->get_corner_radius(CORNER_BOTTOM_RIGHT), flat->get_corner_radius(CORNER_BOTTOM_LEFT));
+	sync_flat_box(uid, draw_basis(p_item), p_rect, draw_order(p_item), flat, p_item->get_modulate() * p_item->get_self_modulate());
 }
 #endif
 
@@ -2308,27 +2372,27 @@ static void sync_window(Window *p_window, int p_order) {
 	const Vector2 at = p_window->get_position();
 	const Size2 size = p_window->get_size();
 	const ObjectID object = p_window->get_instance_id();
-	Ref<StyleBoxFlat> border = p_window->get_theme_stylebox(SNAME("embedded_border"), SNAME("Window"));
+	const StringName frame_name = p_window->has_focus() ? SNAME("embedded_border") : SNAME("embedded_unfocused_border");
+	Ref<StyleBoxFlat> border = p_window->get_theme_stylebox(frame_name, SNAME("Window"));
+	if (border.is_null()) border = p_window->get_theme_stylebox(SNAME("embedded_border"), SNAME("Window"));
 	if (border.is_valid() && !p_window->get_flag(Window::FLAG_BORDERLESS)) {
-		const Vector2 frame_at = p_window->get_position_with_decorations();
-		const Size2 frame_size = p_window->get_size_with_decorations();
+		const float left = border->get_expand_margin(SIDE_LEFT);
+		const float top = border->get_expand_margin(SIDE_TOP);
+		const float right = border->get_expand_margin(SIDE_RIGHT);
+		const float bottom = border->get_expand_margin(SIDE_BOTTOM);
+		const Vector2 frame_at = at - Vector2(left, top);
+		const Size2 frame_size = size + Size2(left + right, top + bottom);
 		const CharString uid = (String::num_uint64((uint64_t)object) + "-window").utf8();
-		const Color background = border->get_bg_color();
-		const Color edge = border->get_border_color();
-		yweb_box_sync(uid.get_data(), 1, 0, 0, 1, frame_at.x, frame_at.y, frame_size.x, frame_size.y, p_order,
-				background.r, background.g, background.b, background.a,
-				border->get_border_width(SIDE_LEFT), border->get_border_width(SIDE_TOP), border->get_border_width(SIDE_RIGHT), border->get_border_width(SIDE_BOTTOM),
-				edge.r, edge.g, edge.b, edge.a,
-				border->get_corner_radius(CORNER_TOP_LEFT), border->get_corner_radius(CORNER_TOP_RIGHT), border->get_corner_radius(CORNER_BOTTOM_RIGHT), border->get_corner_radius(CORNER_BOTTOM_LEFT));
+		sync_flat_box(uid, Transform2D(), Rect2(frame_at, frame_size), p_order, border);
 		const int title_height = p_window->get_theme_constant(SNAME("title_height"), SNAME("Window"));
-		sync_window_text(p_window, "-window-title", p_window->get_title(), Rect2(frame_at, Size2(frame_size.x, title_height)), SNAME("title_font"), SNAME("title_font_size"), SNAME("title_color"), p_order + 1, HORIZONTAL_ALIGNMENT_CENTER);
+		sync_window_text(p_window, "-window-title", p_window->get_displayed_title(), Rect2(Vector2(at.x, at.y - title_height), Size2(size.x, title_height)), SNAME("title_font"), SNAME("title_font_size"), SNAME("title_color"), p_order + 1, HORIZONTAL_ALIGNMENT_CENTER);
 		const Ref<Texture2D> close = p_window->get_theme_icon(SNAME("close"), SNAME("Window"));
 		const String key = image_key(close);
 		if (close.is_valid() && !key.is_empty()) {
 			const CharString image_uid = (String::num_uint64((uint64_t)object) + "-window-close").utf8();
 			const CharString image = key.utf8();
-			const float x = frame_at.x + frame_size.x - p_window->get_theme_constant(SNAME("close_h_offset"), SNAME("Window")) - close->get_width() * 0.5f;
-			const float y = frame_at.y + p_window->get_theme_constant(SNAME("close_v_offset"), SNAME("Window")) - close->get_height() * 0.5f;
+			const float x = at.x + size.x - p_window->get_theme_constant(SNAME("close_h_offset"), SNAME("Window"));
+			const float y = at.y - p_window->get_theme_constant(SNAME("close_v_offset"), SNAME("Window"));
 			yweb_image_sync(image_uid.get_data(), image.get_data(), 1, 0, 0, 1, x, y, close->get_width(), close->get_height(), p_order + 2, 1, 1, 1, 1);
 		}
 	}
@@ -2338,21 +2402,22 @@ static void sync_window(Window *p_window, int p_order) {
 	Ref<StyleBoxFlat> panel = menu->get_theme_stylebox(SNAME("panel"));
 	if (panel.is_valid()) {
 		const CharString uid = (String::num_uint64((uint64_t)object) + "-popup").utf8();
-		const Color background = panel->get_bg_color();
-		const Color edge = panel->get_border_color();
-		yweb_box_sync(uid.get_data(), 1, 0, 0, 1, at.x, at.y, size.x, size.y, p_order,
-				background.r, background.g, background.b, background.a,
-				panel->get_border_width(SIDE_LEFT), panel->get_border_width(SIDE_TOP), panel->get_border_width(SIDE_RIGHT), panel->get_border_width(SIDE_BOTTOM),
-				edge.r, edge.g, edge.b, edge.a,
-				panel->get_corner_radius(CORNER_TOP_LEFT), panel->get_corner_radius(CORNER_TOP_RIGHT), panel->get_corner_radius(CORNER_BOTTOM_RIGHT), panel->get_corner_radius(CORNER_BOTTOM_LEFT));
+		sync_flat_box(uid, Transform2D(), Rect2(at, size), p_order, panel);
 	}
-	const Ref<Font> font = menu->get_theme_font(SNAME("font"));
-	const float font_size = menu->get_theme_font_size(SNAME("font_size"));
+}
+
+// PopupMenuの項目文字を内蔵Panelより後へ置き、Godotと同じ前面表示を実現する。
+static void sync_popup_items(PopupMenu *p_menu, int p_order) {
+	if (!p_menu->is_visible()) return;
+	const Vector2 at = p_menu->get_position();
+	const Size2 size = p_menu->get_size();
+	const Ref<Font> font = p_menu->get_theme_font(SNAME("font"));
+	const float font_size = p_menu->get_theme_font_size(SNAME("font_size"));
 	const float item_height = MAX(24.0f, font.is_valid() ? font->get_height(font_size) + 8.0f : font_size + 8.0f);
-	for (int index = 0; index < menu->get_item_count(); index++) {
-		if (menu->is_item_separator(index)) continue;
-		const StringName color = menu->is_item_disabled(index) ? SNAME("font_disabled_color") : SNAME("font_color");
-		sync_window_text(menu, "-popup-item" + itos(index), menu->get_item_text(index), Rect2(at + Vector2(10, 4 + index * item_height), Size2(MAX(0.0f, size.x - 20), item_height)), SNAME("font"), SNAME("font_size"), color, p_order + 1);
+	for (int index = 0; index < p_menu->get_item_count(); index++) {
+		if (p_menu->is_item_separator(index)) continue;
+		const StringName color = p_menu->is_item_disabled(index) ? SNAME("font_disabled_color") : SNAME("font_color");
+		sync_window_text(p_menu, "-popup-item" + itos(index), p_menu->get_item_text(index), Rect2(at + Vector2(10, 4 + index * item_height), Size2(MAX(0.0f, size.x - 20), item_height)), SNAME("font"), SNAME("font_size"), color, p_order);
 	}
 }
 
@@ -2449,6 +2514,7 @@ static void sync_boxes(Node *p_node, int &r_order) {
 	for (int index = 0; index < p_node->get_child_count(true); index++) {
 		sync_boxes(p_node->get_child(index, true), r_order);
 	}
+	if (PopupMenu *menu = Object::cast_to<PopupMenu>(p_node)) sync_popup_items(menu, r_order++ * 2);
 }
 #endif
 
