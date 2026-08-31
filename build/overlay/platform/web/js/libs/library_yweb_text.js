@@ -779,15 +779,15 @@ const YWebText = {
 			return Array.from(value).slice(0, index).join('').length;
 		},
 		// 入力値と選択を一つの確定通知としてGodotへ返す。
-		send: function (element, kind) {
+		send: function (element, kind, wantedStart, wantedEnd, wantedUid) {
 			if (!YWebText.event) return;
 			const value = 'value' in element ? element.value : '';
-			const start = kind === 7 ? Math.round(element.scrollTop) : YWebText.index(value, element.selectionStart || 0);
-			const end = kind === 7 ? Math.round(element.scrollLeft) : YWebText.index(value, element.selectionEnd || 0);
+			const start = wantedStart ?? (kind === 7 ? Math.round(element.scrollTop) : YWebText.index(value, element.selectionStart || 0));
+			const end = wantedEnd ?? (kind === 7 ? Math.round(element.scrollLeft) : YWebText.index(value, element.selectionEnd || 0));
 			const state = `${kind}:${value}:${start}:${end}`;
 			if (YWebText.sent.get(element) === state) return;
 			YWebText.sent.set(element, state);
-			const uid = GodotRuntime.allocString(element.dataset.ywebText);
+			const uid = GodotRuntime.allocString(wantedUid || element.dataset.ywebText);
 			const text = GodotRuntime.allocString(value);
 			YWebText.event(uid, kind, text, start, end);
 			GodotRuntime.free(text);
@@ -979,6 +979,18 @@ const YWebText = {
 				if (event.detail === 0) YWebText.activate(element);
 			});
 			element.addEventListener('keydown', (event) => { YWebText.tab(element, event); });
+		},
+		// PopupMenuの各実項目をhoverと選択へ結び、座標推定をBrowserへ持たせない。
+		bindPopup: function (element) {
+			const [owner, item] = element.dataset.ywebText.split('-');
+			const index = Number(item);
+			element.addEventListener('pointerenter', () => YWebText.send(element, 12, index, index, owner));
+			element.addEventListener('pointerleave', () => YWebText.send(element, 13, index, index, owner));
+			element.addEventListener('click', (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				YWebText.send(element, 14, index, index, owner);
+			});
 		},
 		// Control種別に合う意味要素を既定装飾なしで作る。
 		create: function (uid, kind) {
@@ -1570,6 +1582,12 @@ const YWebText = {
 				YWebText.link(element, aux);
 			}
 			if (flags & 256) element.setAttribute('aria-disabled', 'true'); else element.removeAttribute('aria-disabled');
+			if (flags & 4096 && !element.dataset.ywebPopupBound) {
+				element.dataset.ywebPopupBound = 'true';
+				element.setAttribute('role', 'menuitem');
+				element.style.userSelect = 'none';
+				YWebText.bindPopup(element);
+			}
 			element.tabIndex = flags & 1024 && !(flags & 256) ? 0 : -1;
 			element.style.pointerEvents = flags & 2048 ? 'auto' : 'none';
 			if (flags & 64 && !YWebText.mouseDown && !element.dataset.ywebBlurPending) {

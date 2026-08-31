@@ -58,6 +58,7 @@
 #include "scene/gui/video_stream_player.h"
 #include "scene/resources/style_box.h"
 #include "scene/resources/style_box_flat.h"
+#include "scene/resources/style_box_line.h"
 #include "scene/resources/atlas_texture.h"
 #include "scene/resources/sprite_frames.h"
 #include "scene/resources/texture.h"
@@ -136,6 +137,7 @@ enum TextFlag {
 	TEXT_DISABLED = 256,
 	TEXT_KEYBOARD_FOCUS = 1024,
 	TEXT_MOUSE = 2048, // BrowserがButton全体のpointer入力を所有する。
+	TEXT_POPUP = 4096, // PopupMenuの実項目をhoverと選択へ結ぶ。
 };
 
 struct TextState {
@@ -264,7 +266,7 @@ static bool capture_control(const Control *p_control) {
 	return p_control->is_class(SNAME("MenuBar")) || p_control->is_class(SNAME("TabBar")) ||
 			p_control->is_class(SNAME("ItemList")) || p_control->is_class(SNAME("Tree")) ||
 			p_control->is_class(SNAME("FoldableContainer")) || p_control->is_class(SNAME("ProgressBar")) ||
-			p_control->is_class(SNAME("RichTextLabel"));
+			p_control->is_class(SNAME("RichTextLabel")) || p_control->is_class(SNAME("PopupMenuItems"));
 }
 
 // 標準文字Controlを既定DOM対象にし、明示falseを除外する。
@@ -951,6 +953,8 @@ bool yweb_text_capture_line(RID p_canvas, ObjectID p_source, const String &p_tex
 	state.horizontal = p_horizontal;
 	state.color = p_color;
 	state.font_size = p_font_size;
+	// PopupMenuは影を別描画しておらず、影なしの字形補正を有効にする。
+	if (control->is_class(SNAME("PopupMenuItems"))) state.shadow = Color(0, 0, 0, 0);
 	if (const OutlineState *outline = outlines.getptr(p_source)) {
 		state.outline = outline->color;
 		state.outline_size = outline->size;
@@ -982,7 +986,16 @@ static void text_event(const char *p_uid, int p_kind, const char *p_text, int p_
 	Control *control = Object::cast_to<Control>(ObjectDB::get_instance(object));
 	if (!control || !control->is_inside_tree() || !yweb_text_dom_owns(control)) return;
 	const String incoming = String::utf8(p_text);
-	if (p_kind == 3) {
+	if (p_kind >= 12 && p_kind <= 14 && control->is_class(SNAME("PopupMenuItems"))) {
+		Node *owner = control;
+		while (owner && !Object::cast_to<PopupMenu>(owner)) owner = owner->get_parent();
+		PopupMenu *menu = Object::cast_to<PopupMenu>(owner);
+		if (menu) {
+			if (p_kind == 12) menu->yweb_hover(p_start);
+			else if (p_kind == 13) menu->yweb_hover(-1);
+			else menu->yweb_activate(p_start);
+		}
+	} else if (p_kind == 3) {
 		control->grab_focus();
 	} else if (p_kind == 4) {
 		if (control->has_focus()) control->release_focus();
@@ -2095,6 +2108,7 @@ static void sync_3d(Node *p_node, int p_order) {
 #ifndef GLES3_ENABLED
 static HashMap<ObjectID, int> draw_counts; // 描画命令ごとに一意なDOM IDを作る連番。
 static HashMap<ObjectID, Transform2D> draw_transforms; // draw_set_transformで指定された座標系。
+static HashSet<ObjectID> dom_drawn; // 内部描画を初回DOM取得まで再実行したControl。
 
 // 一回の描画の初めに、連番と座標系を戻す。
 void yweb_draw_begin(CanvasItem *p_item) {
@@ -2340,9 +2354,34 @@ static void sync_flat_box(const CharString &p_uid, Transform2D p_transform, cons
 // StyleBoxFlatをGodotが確定した背景、枠、角丸の値でDOMへ出す。
 void yweb_draw_style_box(CanvasItem *p_item, const Ref<StyleBox> &p_style, const Rect2 &p_rect) {
 	const Ref<StyleBoxFlat> flat = p_style;
-	if (flat.is_null()) return;
-	const CharString uid = draw_uid(p_item, "b");
-	sync_flat_box(uid, draw_basis(p_item), p_rect, draw_order(p_item), flat, p_item->get_modulate() * p_item->get_self_modulate());
+	if (flat.is_valid()) {
+		const CharString uid = draw_uid(p_item, "b");
+		sync_flat_box(uid, draw_basis(p_item), p_rect, draw_order(p_item), flat, p_item->get_modulate() * p_item->get_self_modulate());
+		return;
+	}
+	const Ref<StyleBoxLine> line = p_style;
+	if (line.is_null()) return;
+	Rect2 rect = p_rect;
+	if (line->is_vertical()) {
+		rect.position.y -= line->get_grow_begin();
+		rect.size.y += line->get_grow_begin() + line->get_grow_end();
+		rect.size.x = line->get_thickness();
+	} else {
+		rect.position.x -= line->get_grow_begin();
+		rect.size.x += line->get_grow_begin() + line->get_grow_end();
+		rect.size.y = line->get_thickness();
+	}
+	yweb_draw_rect(p_item, rect, line->get_color(), true, 0);
+}
+
+// PopupMenuなど標準Controlの内部描画をCanvasItem共通変換へ渡す。
+void yweb_dom_draw_style(Control *p_control, const Ref<StyleBox> &p_style, const Rect2 &p_rect) {
+	yweb_draw_style_box(p_control, p_style, p_rect);
+}
+
+// 標準Controlの内部画像をCanvasItem共通変換へ渡す。
+void yweb_dom_draw_texture(Control *p_control, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, const Color &p_modulate) {
+	yweb_draw_texture(p_control, p_texture, p_rect, p_modulate);
 }
 #endif
 
@@ -2366,7 +2405,7 @@ static void sync_window_text(Window *p_window, const String &p_suffix, const Str
 			0, 0);
 }
 
-// CanvasItemを持たないWindowの枠、題名、PopupMenu項目を平坦DOMへ置く。
+// CanvasItemを持たないWindowの枠と題名を平坦DOMへ置く。
 static void sync_window(Window *p_window, int p_order) {
 	if (!p_window->is_visible() || !p_window->get_parent()) return;
 	const Vector2 at = p_window->get_position();
@@ -2395,29 +2434,6 @@ static void sync_window(Window *p_window, int p_order) {
 			const float y = at.y - p_window->get_theme_constant(SNAME("close_v_offset"), SNAME("Window"));
 			yweb_image_sync(image_uid.get_data(), image.get_data(), 1, 0, 0, 1, x, y, close->get_width(), close->get_height(), p_order + 2, 1, 1, 1, 1);
 		}
-	}
-
-	PopupMenu *menu = Object::cast_to<PopupMenu>(p_window);
-	if (!menu) return;
-	Ref<StyleBoxFlat> panel = menu->get_theme_stylebox(SNAME("panel"));
-	if (panel.is_valid()) {
-		const CharString uid = (String::num_uint64((uint64_t)object) + "-popup").utf8();
-		sync_flat_box(uid, Transform2D(), Rect2(at, size), p_order, panel);
-	}
-}
-
-// PopupMenuの項目文字を内蔵Panelより後へ置き、Godotと同じ前面表示を実現する。
-static void sync_popup_items(PopupMenu *p_menu, int p_order) {
-	if (!p_menu->is_visible()) return;
-	const Vector2 at = p_menu->get_position();
-	const Size2 size = p_menu->get_size();
-	const Ref<Font> font = p_menu->get_theme_font(SNAME("font"));
-	const float font_size = p_menu->get_theme_font_size(SNAME("font_size"));
-	const float item_height = MAX(24.0f, font.is_valid() ? font->get_height(font_size) + 8.0f : font_size + 8.0f);
-	for (int index = 0; index < p_menu->get_item_count(); index++) {
-		if (p_menu->is_item_separator(index)) continue;
-		const StringName color = p_menu->is_item_disabled(index) ? SNAME("font_disabled_color") : SNAME("font_color");
-		sync_window_text(p_menu, "-popup-item" + itos(index), p_menu->get_item_text(index), Rect2(at + Vector2(10, 4 + index * item_height), Size2(MAX(0.0f, size.x - 20), item_height)), SNAME("font"), SNAME("font_size"), color, p_order);
 	}
 }
 
@@ -2460,6 +2476,9 @@ static void sync_scroll_members(CanvasItem *p_item) {
 }
 
 static void sync_boxes(Node *p_node, int &r_order) {
+	// 閉じたWindowの内蔵ControlをDOMへ残さず、表示状態をGodotへ一致させる。
+	Window *branch_window = Object::cast_to<Window>(p_node);
+	if (branch_window && !branch_window->is_visible()) return;
 	// 見えない枝は中身ごと出さない。走る量も減る。
 	CanvasItem *visible = Object::cast_to<CanvasItem>(p_node);
 	if (visible != nullptr && !visible->is_visible_in_tree()) {
@@ -2476,14 +2495,16 @@ static void sync_boxes(Node *p_node, int &r_order) {
 		sync_clip(item);
 		const CharString prefix = (String::num_uint64((uint64_t)item->get_instance_id()) + "-d").utf8();
 		Control *control = Object::cast_to<Control>(item);
-		if (control && owns_control_draw(control)) {
-			item->yweb_dom_custom_redraw();
-			yweb_draw_touch(prefix.get_data());
-		}
-		else {
+		if (control && control->is_class(SNAME("PopupMenuItems")) && !dom_drawn.has(item->get_instance_id())) {
+			item->queue_redraw();
 			item->yweb_dom_redraw();
-			yweb_draw_touch(prefix.get_data());
+			dom_drawn.insert(item->get_instance_id());
+		} else if (control && owns_control_draw(control)) {
+			item->yweb_dom_custom_redraw();
+		} else {
+			item->yweb_dom_redraw();
 		}
+		yweb_draw_touch(prefix.get_data());
 		sync_image_node(item, order + 1);
 		sync_shape(item, order + 1);
 		if (ColorPicker *picker = Object::cast_to<ColorPicker>(item)) sync_color_picker(picker, picker, order + 1);
@@ -2514,9 +2535,25 @@ static void sync_boxes(Node *p_node, int &r_order) {
 	for (int index = 0; index < p_node->get_child_count(true); index++) {
 		sync_boxes(p_node->get_child(index, true), r_order);
 	}
-	if (PopupMenu *menu = Object::cast_to<PopupMenu>(p_node)) sync_popup_items(menu, r_order++ * 2);
 }
 #endif
+
+// PopupMenuの文字位置から実項目の中点境界を作り、文字を保ったまま行全体を操作域にする。
+static void sync_popup_item(Control *p_control, const Vector<TextState> &p_items, int p_index, const CharString &p_uid) {
+	TextState state = p_items[p_index];
+	state.flags |= TEXT_MOUSE | TEXT_POPUP;
+	sync_text(p_control, state, p_uid);
+	const float center = state.rect.get_center().y;
+	const float before = p_index > 0 ? p_items[p_index - 1].rect.get_center().y : center - (p_items.size() > 1 ? p_items[1].rect.get_center().y - center : state.rect.size.y);
+	const float after = p_index + 1 < p_items.size() ? p_items[p_index + 1].rect.get_center().y : center + (p_index > 0 ? center - p_items[p_index - 1].rect.get_center().y : state.rect.size.y);
+	const float top = MAX(0.0f, (before + center) * 0.5f);
+	const float bottom = MIN(p_control->get_size().y, (center + after) * 0.5f);
+	Transform2D action = canvas_transform(p_control);
+	action[2] = action.xform(Vector2(0, top));
+	yweb_action_sync(p_uid.get_data(), action[0].x, action[0].y, action[1].x, action[1].y, action[2].x, action[2].y,
+			p_control->get_size().x, bottom - top, state.rect.position.x, state.rect.position.y - top,
+			MAX(0.0f, p_control->get_size().x - state.rect.get_end().x), MAX(0.0f, bottom - state.rect.get_end().y));
+}
 
 // 登録済み文字を毎frame同期し、物理親、回転、入力へ追従する。
 void yweb_text_sync_process() {
@@ -2540,6 +2577,7 @@ void yweb_text_sync_process() {
 		yweb_draw_reset(all.get_data());
 		draw_counts.clear();
 		draw_transforms.clear();
+		dom_drawn.clear();
 		node_orders.clear();
 		sent_images.clear();
 #ifndef _3D_DISABLED
@@ -2580,7 +2618,8 @@ void yweb_text_sync_process() {
 		if (const Vector<TextState> *items = parts.getptr(object)) {
 			for (int index = 0; index < items->size(); index++) {
 				const CharString uid = (String::num_uint64((uint64_t)object) + "-" + itos(index)).utf8();
-				sync_text(control, (*items)[index], uid);
+				if (control->is_class(SNAME("PopupMenuItems"))) sync_popup_item(control, *items, index, uid);
+				else sync_text(control, (*items)[index], uid);
 			}
 		}
 	}

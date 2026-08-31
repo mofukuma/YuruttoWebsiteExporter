@@ -107,7 +107,9 @@
 +
 --- a/scene/gui/base_button.cpp
 +++ b/scene/gui/base_button.cpp
-@@ -136,0 +137,18 @@
+@@ -134,0 +135,17 @@
++}
++
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +// DOMのnative clickを標準アクセシビリティ操作と同じ状態遷移へ渡す。
 +void BaseButton::yweb_click() {
@@ -123,82 +125,7 @@
 +	event->set_action(SNAME("ui_accept"));
 +	event->set_pressed(p_pressed);
 +	gui_input(event);
-+}
-+#endif
-+
---- a/scene/main/viewport.cpp
-+++ b/scene/main/viewport.cpp
-@@ -29,0 +30,4 @@
-+#ifdef YWEB_TEXT_DOM_ENABLED
-+#include "platform/web/yweb_text_sync.h"
-+#endif
-+
-@@ -1855,0 +1860,7 @@
-+#ifdef YWEB_TEXT_DOM_ENABLED
-+	// DOM位置を正本にするButtonは全native hit-testから除外する。
-+	if (c && yweb_text_dom_action_owns(c)) {
-+		return nullptr;
-+	}
-+#endif
-+
-@@ -3445,0 +3457,42 @@
-+#ifdef YWEB_TEXT_DOM_ENABLED
-+// DOMで確定したControlから標準mouse-over階層とsignalを更新する。
-+void Viewport::yweb_update_mouse_over(Control *p_over) {
-+	const ObjectID over_id = p_over ? p_over->get_instance_id() : ObjectID();
-+	if (gui.yweb_mouse_over == over_id) return;
-+	if (gui.mouse_over.is_valid() || !gui.mouse_over_hierarchy.is_empty()) _drop_mouse_over();
-+	gui.yweb_mouse_over = over_id;
-+	if (!p_over) {
-+		return;
-+	}
-+	LocalVector<ObjectID> ancestors;
-+	CanvasItem *ancestor = p_over;
-+	while (ancestor) {
-+		Control *control = Object::cast_to<Control>(ancestor);
-+		if (control) {
-+			const Control::MouseFilter filter = control->get_mouse_filter_with_override();
-+			if (filter != Control::MOUSE_FILTER_IGNORE) ancestors.push_back(control->get_instance_id());
-+			if (filter == Control::MOUSE_FILTER_STOP) break;
-+		}
-+		if (ancestor->is_set_as_top_level()) break;
-+		ancestor = ancestor->get_parent_item();
-+	}
-+	if (ancestors.is_empty()) {
-+		gui.yweb_mouse_over = ObjectID();
-+		return;
-+	}
-+	gui.mouse_over = over_id;
-+	gui.mouse_over_hierarchy.reserve(ancestors.size());
-+	get_section_root_viewport()->gui.target_control = p_over;
-+	gui.sending_mouse_enter_exit_notifications = true;
-+	for (int i = ancestors.size() - 1; i >= 0; i--) {
-+		Control *control = ObjectDB::get_instance<Control>(ancestors[i]);
-+		if (!control) continue;
-+		gui.mouse_over_hierarchy.push_back(ancestors[i]);
-+		control->notification(Control::NOTIFICATION_MOUSE_ENTER);
-+		control->emit_signal(SceneStringName(mouse_entered));
-+	}
-+	p_over->notification(Control::NOTIFICATION_MOUSE_ENTER_SELF);
-+	gui.sending_mouse_enter_exit_notifications = false;
-+}
-+#endif
-+
-@@ -3451,0 +3505,4 @@
-+#ifdef YWEB_TEXT_DOM_ENABLED
-+	gui.yweb_mouse_over = ObjectID();
-+#endif
-+
---- a/scene/main/viewport.h
-+++ b/scene/main/viewport.h
-@@ -386,0 +387,3 @@
-+#ifdef YWEB_TEXT_DOM_ENABLED
-+		ObjectID yweb_mouse_over;
-+#endif
-@@ -638,0 +642,4 @@
-+#ifdef YWEB_TEXT_DOM_ENABLED
-+	// DOMで確定したControlを標準mouse-over階層へ反映する。
-+	void yweb_update_mouse_over(Control *p_over);
+@@ -135,0 +153 @@
 +#endif
 --- a/scene/gui/base_button.h
 +++ b/scene/gui/base_button.h
@@ -242,6 +169,92 @@
 +				yweb_text_sync_control(this, xl_text, Rect2(text_offset, Size2(width, text_buf->get_size().height)), 2, flags, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_TOP, color, theme_cache.font_size, 0, font_outline_color, outline_size, Color(), Vector2(), underline_offset, underline_thickness, get_uri());
 +				break;
 +			}
++#endif
+--- a/scene/gui/popup_menu.cpp
++++ b/scene/gui/popup_menu.cpp
+@@ -32,0 +33,4 @@
++
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++#include "platform/web/yweb_text_sync.h"
++#endif
+@@ -884,0 +889,19 @@
++	// 項目の実描画値をCanvasとDOMへ同じ入口から渡す。
++	auto draw_style = [&](const Ref<StyleBox> &p_style, const Rect2 &p_rect) {
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++		yweb_dom_draw_style(control, p_style, p_rect);
++#endif
++		p_style->draw(ci, p_rect);
++	};
++	auto draw_texture = [&](const Ref<Texture2D> &p_texture, const Point2 &p_position, const Color &p_color) {
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++		yweb_dom_draw_texture(control, p_texture, Rect2(p_position, p_texture->get_size()), p_color);
++#endif
++		p_texture->draw(ci, p_position, p_color);
++	};
++	auto draw_texture_rect = [&](const Ref<Texture2D> &p_texture, const Rect2 &p_rect, const Color &p_color) {
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++		yweb_dom_draw_texture(control, p_texture, p_rect, p_color);
++#endif
++		p_texture->draw_rect(ci, p_rect, false, p_color);
++	};
+@@ -945 +968 @@
+-			theme_cache.hover_style->draw(ci, Rect2(item_ofs + Point2(0, -theme_cache.v_separation / 2), Size2(display_width, h + theme_cache.v_separation)));
++			draw_style(theme_cache.hover_style, Rect2(item_ofs + Point2(0, -theme_cache.v_separation / 2), Size2(display_width, h + theme_cache.v_separation)));
+@@ -965 +988 @@
+-					theme_cache.labeled_separator_left->draw(ci, Rect2(item_ofs + Point2(0, sep_ofs), Size2(MAX(0, content_left - item_ofs.x), sep_h)));
++					draw_style(theme_cache.labeled_separator_left, Rect2(item_ofs + Point2(0, sep_ofs), Size2(MAX(0, content_left - item_ofs.x), sep_h)));
+@@ -970 +993 @@
+-					theme_cache.labeled_separator_right->draw(ci, Rect2(Point2(content_right, item_ofs.y + sep_ofs), Size2(MAX(0, display_width - content_right), sep_h)));
++					draw_style(theme_cache.labeled_separator_right, Rect2(Point2(content_right, item_ofs.y + sep_ofs), Size2(MAX(0, display_width - content_right), sep_h)));
+@@ -975 +998 @@
+-				theme_cache.separator_style->draw(ci, Rect2(item_ofs + Point2(0, sep_ofs), Size2(display_width, sep_h)));
++				draw_style(theme_cache.separator_style, Rect2(item_ofs + Point2(0, sep_ofs), Size2(display_width, sep_h)));
+@@ -989 +1012 @@
+-			Texture2D *icon = (items[i].checked ? check[items[i].checkable_type - 1 + disabled] : uncheck[items[i].checkable_type - 1 + disabled]).ptr();
++			Ref<Texture2D> icon = items[i].checked ? check[items[i].checkable_type - 1 + disabled] : uncheck[items[i].checkable_type - 1 + disabled];
+@@ -991 +1014 @@
+-				icon->draw(ci, Size2(control->get_size().width - item_ofs.x - icon->get_width(), item_ofs.y) + Point2(0, Math::floor((h - icon->get_height()) / 2.0)), icon_color);
++				draw_texture(icon, Size2(control->get_size().width - item_ofs.x - icon->get_width(), item_ofs.y) + Point2(0, Math::floor((h - icon->get_height()) / 2.0)), icon_color);
+@@ -993 +1016 @@
+-				icon->draw(ci, item_ofs + Point2(0, Math::floor((h - icon->get_height()) / 2.0)), icon_color);
++				draw_texture(icon, item_ofs + Point2(0, Math::floor((h - icon->get_height()) / 2.0)), icon_color);
+@@ -1022 +1045 @@
+-			items[i].icon->draw_rect(ci, Rect2(icon_pos + icon_offset, icon_size), false, icon_color);
++			draw_texture_rect(items[i].icon, Rect2(icon_pos + icon_offset, icon_size), icon_color);
+@@ -1028 +1051 @@
+-				submenu->draw(ci, Point2(theme_cache.item_end_padding, item_ofs.y + Math::floor(h - submenu->get_height()) / 2), icon_color);
++				draw_texture(submenu, Point2(theme_cache.item_end_padding, item_ofs.y + Math::floor(h - submenu->get_height()) / 2), icon_color);
+@@ -1030 +1053 @@
+-				submenu->draw(ci, Point2(display_width - submenu->get_width() - theme_cache.item_end_padding, item_ofs.y + Math::floor(h - submenu->get_height()) / 2), icon_color);
++				draw_texture(submenu, Point2(display_width - submenu->get_width() - theme_cache.item_end_padding, item_ofs.y + Math::floor(h - submenu->get_height()) / 2), icon_color);
+@@ -1091,0 +1115,19 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++// DOM項目のhoverを標準Theme描画とsignalへ反映する。
++void PopupMenu::yweb_hover(int p_index) {
++	if (p_index < 0 || p_index >= items.size() || items[p_index].separator || items[p_index].disabled || !items[p_index].visible) p_index = -1;
++	if (mouse_over == p_index) return;
++	prev_mouse_over = mouse_over;
++	mouse_over = p_index;
++	if (p_index >= 0) emit_signal(SNAME("id_focused"), items[p_index].id);
++	control->queue_redraw();
++}
++
++// DOM項目の選択をsubmenu展開または標準activateへ渡す。
++void PopupMenu::yweb_activate(int p_index) {
++	if (p_index < 0 || p_index >= items.size() || items[p_index].separator || items[p_index].disabled || !items[p_index].visible) return;
++	if (items[p_index].submenu) _activate_submenu(p_index);
++	else activate_item(p_index);
++}
++#endif
++
+--- a/scene/gui/popup_menu.h
++++ b/scene/gui/popup_menu.h
+@@ -454,0 +455,6 @@
++
++#ifdef YWEB_TEXT_DOM_ENABLED
++	// DOM項目のhoverと選択を標準PopupMenu処理へ戻す。
++	void yweb_hover(int p_index);
++	void yweb_activate(int p_index);
 +#endif
 --- a/scene/gui/line_edit.cpp
 +++ b/scene/gui/line_edit.cpp
@@ -343,6 +356,81 @@
 +			yweb_text_capture_canvas(this, content_ci);
 +			yweb_text_capture_canvas(this, header_ci);
 +#endif
+--- a/scene/main/viewport.h
++++ b/scene/main/viewport.h
+@@ -386,0 +387,3 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++		ObjectID yweb_mouse_over;
++#endif
+@@ -638,0 +642,4 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	// DOMで確定したControlを標準mouse-over階層へ反映する。
++	void yweb_update_mouse_over(Control *p_over);
++#endif
+--- a/scene/main/viewport.cpp
++++ b/scene/main/viewport.cpp
+@@ -29,0 +30,3 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++#include "platform/web/yweb_text_sync.h"
++#endif
+@@ -30,0 +34 @@
++
+@@ -1855,0 +1860,7 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	// DOM位置を正本にするButtonは全native hit-testから除外する。
++	if (c && yweb_text_dom_action_owns(c)) {
++		return nullptr;
++	}
++#endif
++
+@@ -3445,0 +3457,42 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++// DOMで確定したControlから標準mouse-over階層とsignalを更新する。
++void Viewport::yweb_update_mouse_over(Control *p_over) {
++	const ObjectID over_id = p_over ? p_over->get_instance_id() : ObjectID();
++	if (gui.yweb_mouse_over == over_id) return;
++	if (gui.mouse_over.is_valid() || !gui.mouse_over_hierarchy.is_empty()) _drop_mouse_over();
++	gui.yweb_mouse_over = over_id;
++	if (!p_over) {
++		return;
++	}
++	LocalVector<ObjectID> ancestors;
++	CanvasItem *ancestor = p_over;
++	while (ancestor) {
++		Control *control = Object::cast_to<Control>(ancestor);
++		if (control) {
++			const Control::MouseFilter filter = control->get_mouse_filter_with_override();
++			if (filter != Control::MOUSE_FILTER_IGNORE) ancestors.push_back(control->get_instance_id());
++			if (filter == Control::MOUSE_FILTER_STOP) break;
++		}
++		if (ancestor->is_set_as_top_level()) break;
++		ancestor = ancestor->get_parent_item();
++	}
++	if (ancestors.is_empty()) {
++		gui.yweb_mouse_over = ObjectID();
++		return;
++	}
++	gui.mouse_over = over_id;
++	gui.mouse_over_hierarchy.reserve(ancestors.size());
++	get_section_root_viewport()->gui.target_control = p_over;
++	gui.sending_mouse_enter_exit_notifications = true;
++	for (int i = ancestors.size() - 1; i >= 0; i--) {
++		Control *control = ObjectDB::get_instance<Control>(ancestors[i]);
++		if (!control) continue;
++		gui.mouse_over_hierarchy.push_back(ancestors[i]);
++		control->notification(Control::NOTIFICATION_MOUSE_ENTER);
++		control->emit_signal(SceneStringName(mouse_entered));
++	}
++	p_over->notification(Control::NOTIFICATION_MOUSE_ENTER_SELF);
++	gui.sending_mouse_enter_exit_notifications = false;
++}
++#endif
++
+@@ -3451,0 +3505,4 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	gui.yweb_mouse_over = ObjectID();
++#endif
++
 --- a/scene/resources/text_line.h
 +++ b/scene/resources/text_line.h
 @@ -53,0 +54,6 @@

@@ -23,11 +23,15 @@ scene/gui/base_button.cpp
 scene/gui/base_button.h
 scene/gui/button.cpp
 scene/gui/link_button.cpp
+scene/gui/popup_menu.cpp
+scene/gui/popup_menu.h
 scene/gui/line_edit.cpp
 scene/gui/line_edit.h
 scene/gui/text_edit.cpp
 scene/gui/text_edit.h
 scene/gui/tree.cpp
+scene/main/viewport.h
+scene/main/viewport.cpp
 scene/resources/text_line.h
 scene/resources/text_line.cpp
 scene/resources/multimesh.h

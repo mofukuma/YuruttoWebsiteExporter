@@ -94,6 +94,7 @@ for (const name of comparedScreens) {
 	await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 	const browser = await chromium.launch({ executablePath: browserPath, headless: true, args: ['--use-angle=swiftshader'] });
 	const measured = {};
+	const regions = {}; // 複合画面内で独立した部品の合格値を残す領域。
 	const ui = []; // Browser操作を完走したlevel。
 	try {
 		for (const [index, name] of screens.entries()) {
@@ -125,7 +126,7 @@ for (const name of comparedScreens) {
 			});
 			await page.waitForTimeout(settle[name] ? 2500 : 400);
 			const shot = path.join(work, `browser-${name}.png`);
-			const shotBeforeInteraction = name === 'themes' || name === 'scroll_layout' || name === 'container_overflow' || name === 'input_3d' || name.startsWith('code_edit'); // 操作前の初期画面をGodot基準と比べる。
+			const shotBeforeInteraction = name === 'themes' || name === 'windows_media' || name === 'scroll_layout' || name === 'container_overflow' || name === 'input_3d' || name.startsWith('code_edit'); // 操作前の初期画面をGodot基準と比べる。
 			if (shotBeforeInteraction) await page.screenshot({ path: shot });
 			if (name === 'draw_all') {
 				const dom = await page.evaluate(() => ({
@@ -344,21 +345,60 @@ for (const name of comparedScreens) {
 			if (name === 'windows_media') {
 				// Window装飾が内容矩形で途切れず、Themeの外側余白まで覆うことを確認する。
 				const text = await page.locator('[data-yweb-text]').allTextContents();
-				const expected = ['AcceptDialog', 'ConfirmationDialog', 'FileDialog', 'PopupMenu', 'PopupPanel', 'SUBVIEWPORT', 'VideoStreamPlayer'];
+				const expected = ['AcceptDialog', 'ConfirmationDialog', 'FileDialog', 'PopupMenu', 'Disabled Item', 'OPTIONS', 'Checked Item', 'Icon Item', 'Submenu', 'PopupPanel', 'SUBVIEWPORT', 'VideoStreamPlayer'];
 				assert.ok(expected.every((type) => text.includes(type)), 'Window、Viewport、Videoの型名をDOMへ置けていない');
+				assert.ok(!text.includes('HIDDEN MENU ITEM') && !text.includes('HIDDEN PANEL ITEM'), '閉じたPopupの内蔵ControlがDOMへ残っている');
 				const frames = await page.evaluate(() => {
 					const box = (title) => {
 						const text = [...document.querySelectorAll('[data-yweb-text]')].find((element) => element.textContent === title && element.id.endsWith('-window-title'));
 						return text ? document.getElementById(text.id.replace(/-window-title$/, '-window'))?.getBoundingClientRect().toJSON() : null;
 					};
-					return { accept: box('Accept'), confirm: box('Confirm'), files: box('Files'), menu: document.querySelector('[data-yweb-box$="-popup"]')?.getBoundingClientRect().toJSON() };
+					const at = (x, y) => [...document.querySelectorAll('[data-yweb-box]')].find((element) => {
+						const rect = element.getBoundingClientRect();
+						return rect.x === x && rect.y === y;
+					})?.getBoundingClientRect().toJSON();
+					return { accept: box('Accept'), confirm: box('Confirm'), files: box('Files'), menu: at(544, 52), popup: at(544, 284) };
 				});
 				assert.deepEqual(Object.fromEntries(Object.entries(frames).map(([key, value]) => [key, value && [value.x, value.y, value.width, value.height]])), {
 					accept: [10, 198, 246, 163],
 					confirm: [262, 198, 266, 163],
 					files: [10, 338, 540, 248],
-					menu: [540, 48, 220, 150],
+					menu: [544, 52, 212, 182],
+					popup: [544, 284, 212, 142],
 				}, 'WindowのTheme枠がGodotの描画範囲と一致しない');
+				const popupTheme = await page.locator('[data-yweb-box]').evaluateAll((elements) => {
+					const panel = elements.find((element) => {
+						const rect = element.getBoundingClientRect();
+						return rect.x === 544 && rect.y === 284;
+					});
+					if (!panel) return null;
+					const style = getComputedStyle(panel);
+					return { background: style.backgroundColor, border: style.borderColor, radius: style.borderRadius };
+				});
+				assert.deepEqual(popupTheme, { background: 'rgba(41, 50, 65, 0.8)', border: 'rgb(251, 113, 133)', radius: '7px' }, 'PopupPanelのTheme背景、枠色、角丸をDOMへ反映できていない');
+				const menuRows = await page.locator('[data-yweb-text]').evaluateAll((elements) => elements.filter((element) => ['PopupMenu', 'Disabled Item', 'OPTIONS', 'Checked Item', 'Icon Item', 'Submenu'].includes(element.textContent)).map((element) => {
+					const rect = element.getBoundingClientRect();
+					return { text: element.textContent, x: rect.x, y: rect.y, color: getComputedStyle(element).color };
+				}));
+				assert.deepEqual(menuRows.map(({ text }) => text), ['PopupMenu', 'Disabled Item', 'OPTIONS', 'Checked Item', 'Icon Item', 'Submenu'], 'PopupMenuの項目順をGodotの描画順から取得できていない');
+				assert.ok(menuRows.every(({ x, y }) => x >= 540 && x < 760 && y >= 48 && y < 238), 'PopupMenu項目を実際の項目領域へ置けていない');
+				assert.notEqual(menuRows[0].color, menuRows[1].color, 'PopupMenuの無効色をThemeから取得できていない');
+				const menuDecorations = await page.evaluate(() => ({
+					images: [...document.querySelectorAll('[data-yweb-image]')].map((element) => element.getBoundingClientRect()).filter((rect) => rect.x >= 540 && rect.x < 760 && rect.y >= 48 && rect.y < 238).map((rect) => [rect.width, rect.height]),
+					lines: [...document.querySelectorAll('[data-yweb-box]')].map((element) => element.getBoundingClientRect()).filter((rect) => rect.x >= 540 && rect.x < 760 && rect.y >= 100 && rect.y <= 112 && rect.height === 1).map((rect) => rect.width),
+				}));
+				assert.deepEqual(menuDecorations.images, [[16, 16], [14, 14], [8, 16]], 'PopupMenuのcheck、項目画像、submenu矢印を実描画から取得できていない');
+				assert.deepEqual(menuDecorations.lines, [64, 64], 'PopupMenuの見出し区切り線を実描画から取得できていない');
+				const menuItem = (text) => page.locator('[data-yweb-text]').filter({ hasText: new RegExp(`^${text}$`) });
+				await menuItem('PopupMenu').hover();
+				await page.waitForFunction(() => [...document.querySelectorAll('[data-yweb-box]')].some((element) => {
+					const rect = element.getBoundingClientRect();
+					return rect.x >= 540 && rect.x < 760 && rect.y < 80 && rect.height >= 20;
+				}));
+				await menuItem('Disabled Item').click();
+				assert.equal(await page.locator('[data-yweb-text]').filter({ hasText: /^MENU STATUS / }).textContent(), 'MENU STATUS idle', 'PopupMenuの無効項目を選択している');
+				await menuItem('Icon Item').click();
+				await page.locator('[data-yweb-text]').filter({ hasText: /^MENU STATUS 4$/ }).waitFor();
 				assert.equal(await page.locator('[data-yweb-image$="-video"]').count(), 1, 'Video frameを画像DOMへ置けていない');
 				const sub = await page.locator('#yweb-text-root').getByText('SUBVIEWPORT', { exact: true }).boundingBox();
 				assert.ok(sub && sub.x >= 18 && sub.x + sub.width <= 268 && sub.y >= 48 && sub.y + sub.height <= 198, 'SubViewportの最終座標または切り抜きがContainerと合っていない');
@@ -742,6 +782,21 @@ for (const name of comparedScreens) {
 			const matched = /\(([0-9.eE+-]+)\)/.exec(measure.stderr || '');
 			assert.ok(matched, `RMSEを測れない: ${name} ${measure.stderr}`);
 			measured[name] = Number((Number(matched[1]) * 255).toFixed(4));
+
+			// Popup系は他のWindow差分から切り離し、各部品が上限を満たすことを保証する。
+			if (name === 'windows_media') {
+				for (const [part, x, y, width, height] of [['PopupMenu', 544, 52, 212, 182], ['PopupPanel', 544, 284, 212, 142]]) {
+					const referenceCrop = path.join(work, `flat-godot-${part}.png`);
+					const comparedCrop = path.join(work, `flat-browser-${part}.png`);
+					child.execFileSync('magick', [reference, '-crop', `${width}x${height}+${x}+${y}`, '+repage', referenceCrop]);
+					child.execFileSync('magick', [compared, '-crop', `${width}x${height}+${x}+${y}`, '+repage', comparedCrop]);
+					const partMeasure = child.spawnSync('magick', ['compare', '-metric', 'RMSE', referenceCrop, comparedCrop, path.join(work, `diff-${part}.png`)], { encoding: 'utf8' });
+					const partMatched = /\(([0-9.eE+-]+)\)/.exec(partMeasure.stderr || '');
+					assert.ok(partMatched, `RMSEを測れない: ${part} ${partMeasure.stderr}`);
+					regions[part] = Number((Number(partMatched[1]) * 255).toFixed(4));
+					assert.ok(regions[part] < limit, `${part}の差が大きい: ${regions[part]}`);
+				}
+			}
 		}
 	} finally {
 		await browser.close();
@@ -752,8 +807,8 @@ for (const name of comparedScreens) {
 	const over = Object.entries(measured).filter(([, value]) => value >= limit);
 	if (screens.includes('canvas_inputs')) assert.ok(ui.includes('dom'), 'DOM onlyのBrowser UI操作を完走していない');
 	if (screens.includes('hover_scroll')) assert.ok(ui.includes('hover'), 'DOM onlyのhover操作を完走していない');
-	fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ unit: 'RGB 0..255', measured, limit, ui }, null, 2)}\n`);
-	console.log(JSON.stringify({ structural: true, ui, rmseOk: over.length === 0, unit: 'RGB 0..255', measured, limit }));
+	fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ unit: 'RGB 0..255', measured, regions, limit, ui }, null, 2)}\n`);
+	console.log(JSON.stringify({ structural: true, ui, rmseOk: over.length === 0, unit: 'RGB 0..255', measured, regions, limit }));
 	if (!structureOnly) assert.deepEqual(over, [], `Godot画面との差が大きい: ${over.map(([name, value]) => `${name} ${value}`).join(', ')}`);
 })().catch((error) => {
 	console.error(error);
