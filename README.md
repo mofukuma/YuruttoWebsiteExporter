@@ -21,7 +21,7 @@ Then turn on `YuruttoWebsiteExporter` in `Project > Project Settings > Plugins`.
 
 Pick `Project > Export > Add > Yurutto Website`, choose the folder you want to export into, and your site is built.
 
-Publish it on an HTTPS host that can apply the generated `_headers` file. The included server reproduces those headers for local checks.
+Publish it on an HTTPS host that can apply the generated `_headers` file.
 
 ## What lands in the folder
 
@@ -125,7 +125,7 @@ sh build/check_template.sh dom
 
 Use `3d` in place of `dom` to build and test the Canvas/WebGL setting. `sh build/build_distribution.sh dom` does the same targeted build in the fixed Docker environment and keeps its result under `tmp/`. Run it without a level when preparing both release templates.
 
-The browser tests need Chromium. Install it with this.
+The browser tests use Chromium, Firefox, and WebKit. Install them with this.
 
 ```sh
 mkdir -p tmp/playwright
@@ -163,7 +163,7 @@ Godotで作った作品を、そのままWebサイトにするアドオン。
 
 `プロジェクト > エクスポート > 追加 > Yurutto Website`を選び、書き出ししたいフォルダを選ぼう。するとサイトのデータが完成するよ。
 
-生成した`_headers`を適用できるHTTPS配信先へ公開しよう。同梱serverでは、同じheaderを手元で確認できるよ。
+生成した`_headers`を適用できるHTTPS配信先へ公開しよう。
 
 ## フォルダの中身
 
@@ -267,7 +267,7 @@ sh build/check_template.sh dom
 
 CanvasとWebGLを使う構成なら`dom`を`3d`へ変えよう。固定Docker環境でDOM用を検証するときは`sh build/build_distribution.sh dom`。結果は`tmp/`に残るよ。二構成の配布物を揃えるときは、段を付けずに実行しよう。
 
-ブラウザを見るテストにはChromiumが要る。入れるのはこれ。
+ブラウザを見るテストにはChromium、Firefox、WebKitが要る。入れるのはこれ。
 
 ```sh
 mkdir -p tmp/playwright

@@ -1,7 +1,7 @@
 # YuruttoWebsiteExporter
 
 Godotで作った作品を、そのままWebサイトにするアドオンだよ。
-絵とかはGodotのまま、文字は本物のHTMLで出すから、検索にも出るしコピーも読み上げもできる。
+DOM onlyでは対応している絵と文字をHTMLとCSSで表示するよ。CanvasやWebGLが必要なら3Dを選べる。文字と入力欄はどちらも本物のHTMLだから、検索、コピー、読み上げに使えるよ。
 
 ## 使ってみよう
 
