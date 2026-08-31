@@ -1,4 +1,4 @@
-// サブディレクトリの物理直リンク、Browser戻り、Godot scene変更を静的hostで検査する。
+// サブディレクトリの物理直リンク、Browser URL変更、Godot scene変更を静的hostで検査する。
 // 重い公開全体検査からURL遷移を分け、再読込なしの双方向同期を短時間で確かめる設計。
 
 'use strict';
@@ -58,9 +58,8 @@ async function main() {
 		assert.equal(await page.evaluate(() => window.ywebPageMarker), marker, 'scene遷移で再読込');
 		assert.deepEqual(failed, []);
 		assert.deepEqual(errors, []);
-		// 目視用画像と機械判定結果を作業領域へ残す。
+		// 目視用画像を作業領域へ残す。
 		await page.screenshot({ path: path.join(work, 'physical-scene.png') });
-		fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ root: '/sub/', direct: 'About', browserToGodot: 'Main', godotToBrowser: 'About', reloads: 1 }, null, 2)}\n`);
 	} finally {
 		await browser.close();
 		await new Promise((resolve) => server.close(resolve));
