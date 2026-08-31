@@ -803,6 +803,14 @@ const YWebText = {
 			if (animation) YWebText.elementAnimations.set(uid, animation);
 			else YWebText.elementAnimations.delete(uid);
 		},
+		// 標準Controlの直接描画面を、最新の文字順の直後ろへ揃える。
+		placeDrawBehindText: function (uid, z) {
+			const node = uid.split('-', 1)[0];
+			for (const id of YWebText.drawOwners.get(`${node}-d`) || []) {
+				const element = YWebText.elements.get(id);
+				if (element) element.style.zIndex = String(z - 1);
+			}
+		},
 		// 回収した描画DOM IDを所有者の集合から外す。
 		forgetDraw: function (uid) {
 			const node = uid.split('-', 1)[0];
@@ -1030,13 +1038,13 @@ const YWebText = {
 		// PopupMenuの各実項目をhoverと選択へ結び、座標推定をBrowserへ持たせない。
 		bindPopup: function (element) {
 			const [owner, item] = element.dataset.ywebText.split('-');
-			const index = Number(item);
-			element.addEventListener('pointerenter', () => YWebText.send(element, 12, index, index, owner));
-			element.addEventListener('pointerleave', () => YWebText.send(element, 13, index, index, owner));
+			const index = () => Number(element.dataset.ywebPopupIndex ?? item);
+			element.addEventListener('pointerenter', () => YWebText.send(element, 12, index(), index(), owner));
+			element.addEventListener('pointerleave', () => YWebText.send(element, 13, index(), index(), owner));
 			element.addEventListener('click', (event) => {
 				event.preventDefault();
 				event.stopPropagation();
-				YWebText.send(element, 14, index, index, owner);
+				YWebText.send(element, 14, index(), index(), owner);
 			});
 		},
 		// Control種別に合う意味要素を既定装飾なしで作る。
@@ -1654,6 +1662,7 @@ const YWebText = {
 			YWebText.codeScroll(form);
 		}
 		const appearance = [width, height, flags, z, horizontal, vertical, font, red, green, blue, alpha, fontSize, lineSpacing, outlineRed, outlineGreen, outlineBlue, outlineAlpha, outlineSize, shadowRed, shadowGreen, shadowBlue, shadowAlpha, shadowX, shadowY, underlineOffset, underlineThickness, placeholderRed, placeholderGreen, placeholderBlue, placeholderAlpha, fontAscent, glyphTop, glyphBottom].join(',');
+		YWebText.placeDrawBehindText(uid, z);
 		if (element.dataset.ywebAppearance === appearance && !textChanged) return;
 		element.dataset.ywebAppearance = appearance;
 		element.dataset.ywebFontAscent = String(fontAscent);
@@ -1707,6 +1716,12 @@ const YWebText = {
 		element.style.padding = `${top}px ${right}px ${bottom}px ${left}px`;
 		YWebText.place(element);
 		YWebText.clip(element, uid, ...YWebText.scrollMatrix(uid, transform).split(',').map(Number));
+	},
+	yweb_popup_item_sync__sig: 'vpi',
+	// 文字DOMの一意番号とは別に、Godot PopupMenuの実項目番号を保持する。
+	yweb_popup_item_sync: function (pUid, index) {
+		const element = YWebText.elements.get(GodotRuntime.parseString(pUid));
+		if (element) element.dataset.ywebPopupIndex = String(index);
 	},
 	yweb_code_sync__sig: 'vpp',
 	// CodeEditの構文色と行補助を、本文入力とは独立した背面DOMへ同期する。

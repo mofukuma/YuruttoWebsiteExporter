@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "scenes": {
+    "Main": {
+      "scene": "res://main.tscn",
+      "uri": "/",
+      "title": "DOM Transform Controls",
+      "summary": "Control transformation and browser input verification"
+    }
+  }
+}

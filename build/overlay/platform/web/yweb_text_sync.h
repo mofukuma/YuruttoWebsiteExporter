@@ -29,7 +29,7 @@ void yweb_text_sync_control(Control *p_control, const String &p_text, const Rect
 void yweb_text_sync_queue(ObjectID p_object);
 void yweb_text_sync_process();
 // 標準Control内部の描画命令を、確定済みの局所座標からDOMへ移す。
-void yweb_dom_draw_style(Control *p_control, const Ref<StyleBox> &p_style, const Rect2 &p_rect);
+void yweb_dom_draw_style(RID p_canvas, const Ref<StyleBox> &p_style, const Rect2 &p_rect);
 void yweb_dom_draw_texture(Control *p_control, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, const Color &p_modulate);
 
 #endif

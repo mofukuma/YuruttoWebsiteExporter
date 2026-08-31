@@ -1,0 +1,22 @@
+; DOM Control変形試験を800x600の固定画面で起動する。
+; 描画、入力、切り抜きの座標条件をBrowserと共有する構成。
+
+config_version=5
+
+[application]
+
+config/name="DOM Transform Controls"
+run/main_scene="res://main.tscn"
+
+[display]
+
+window/size/viewport_width=800
+window/size/viewport_height=600
+window/size/window_width_override=800
+window/size/window_height_override=600
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

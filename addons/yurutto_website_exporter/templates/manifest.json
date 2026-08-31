@@ -21,25 +21,25 @@
     "distributionLockSha256": "eb86968d88b2a112561b01828c8a9606e32888f2a326e6d5194928b9a72b6724",
     "templateOptionsSha256": "109ee6b27a0f63ac8cfb1f9d97481ebeec9a3e1824277162d92ed47c1bc06f78",
     "levelsOptionsSha256": "37d79a102e35b450a4c9dbe9870672b1c89258e82cec79d0bfe4b37d04be417e",
-    "patchSha256": "24ba53b96fcc8d79fd2cc142dc02aae277b35187adfa1f79126f60c42f4a36e2",
-    "overlaySha256": "fa1053aea2c9594395d72bfcfd9544d0cb22902cb3006d9c8fca4790ce2bcbb5",
+    "patchSha256": "991a7532a5ddfdb906b93fb63906265b204ef1ddd8ff3ea4b96816afcf61284b",
+    "overlaySha256": "d2741dddc814d37ea6ac596a353c3a6d62ae8c368651d6ce61a23d4724d3b812",
     "buildSha256": "2361414610cc91e7fa3bde242e241627d0879a1e52f7c9987cbc54a15a78c8d7"
   },
   "templates": {
     "dom": {
       "file": "yweb-dom.zip",
-      "bytes": 16214063,
-      "sha256": "c00a3e06cfcb75382b8ed1b2c47981bbd3e7956f0b870678f1e74a4d0e8a28f8",
+      "bytes": 16198122,
+      "sha256": "7cb539a1e96647ac7eb1a758612e0c691009e227f174b5c216a56d440c75f5a8",
       "entries": [
         {
           "file": "godot.js",
-          "bytes": 275711,
-          "sha256": "79fb96936f3b29d31591fd5055afae7c5f9c0ae224c51c0f29920059f3762c62"
+          "bytes": 276198,
+          "sha256": "423cfa5b4dd1feb4350d80a241a1042e1642eb769748ebb1f731b4b91049f8a7"
         },
         {
           "file": "godot.wasm",
-          "bytes": 28438932,
-          "sha256": "f8fa04100e7a46d815032997738acc4d5403419d278ef6d6eb83d6cd56b600ce"
+          "bytes": 28441350,
+          "sha256": "d5e28de02926e3f116e1b6e9d1c127b2dfbc5c11dc0db3a1e69add1343cc0ec9"
         },
         {
           "file": "godot.audio.worklet.js",
@@ -63,13 +63,13 @@
         },
         {
           "file": "godot.js.br",
-          "bytes": 65319,
-          "sha256": "d146c422161e909679d9efbaa4a8c1cac88423a31b81b3d1ac462afa823af526"
+          "bytes": 65420,
+          "sha256": "212e8c4992f34bbba52b4c8f9d0ad8f391b3228f51eeabd125600e319b602d87"
         },
         {
           "file": "godot.wasm.br",
-          "bytes": 7191792,
-          "sha256": "439060cac7c90216a6fbb846d0e764e550314e9fa469353301cb08625d7e55d8"
+          "bytes": 7172324,
+          "sha256": "6818c79c1eab26fe914622bcdf061b4decc44b02aac255067cb2e6f66f9affb2"
         },
         {
           "file": "godot.audio.worklet.js.br",
@@ -82,8 +82,8 @@
           "sha256": "b5d408054750e15fa4cf460dcb0544158da8f616160ce2e59a3ba60fb0b2e1d4"
         }
       ],
-      "compileKey": "59acdec3f053c46e875e911431d5882858aee8052d7701bd1663fff03c1af9cc",
-      "artifactKey": "d692bb9392dc3f2b57096249ecc815cb3f7a6b1b4fef12126b5255d362dd9de1",
+      "compileKey": "9b3d2d76d708b0464a3283334201fdae8ce1e79c975aa60201c6b501554fb485",
+      "artifactKey": "deaeb69a79ec6e2b1bec777368af0c9facb61306e1c22c2af5fa7bbe064eee01",
       "features": {
         "domText": true,
         "threads": false,
@@ -139,37 +139,37 @@
           },
           {
             "file": "godot.js",
-            "originalBytes": 275711,
-            "brotliBytes": 65319,
+            "originalBytes": 276198,
+            "brotliBytes": 65420,
             "ratio": 0.2369,
-            "sha256": "79fb96936f3b29d31591fd5055afae7c5f9c0ae224c51c0f29920059f3762c62",
-            "brotliSha256": "d146c422161e909679d9efbaa4a8c1cac88423a31b81b3d1ac462afa823af526"
+            "sha256": "423cfa5b4dd1feb4350d80a241a1042e1642eb769748ebb1f731b4b91049f8a7",
+            "brotliSha256": "212e8c4992f34bbba52b4c8f9d0ad8f391b3228f51eeabd125600e319b602d87"
           },
           {
             "file": "godot.wasm",
-            "originalBytes": 28438932,
-            "brotliBytes": 7191792,
-            "ratio": 0.2529,
-            "sha256": "f8fa04100e7a46d815032997738acc4d5403419d278ef6d6eb83d6cd56b600ce",
-            "brotliSha256": "439060cac7c90216a6fbb846d0e764e550314e9fa469353301cb08625d7e55d8"
+            "originalBytes": 28441350,
+            "brotliBytes": 7172324,
+            "ratio": 0.2522,
+            "sha256": "d5e28de02926e3f116e1b6e9d1c127b2dfbc5c11dc0db3a1e69add1343cc0ec9",
+            "brotliSha256": "6818c79c1eab26fe914622bcdf061b4decc44b02aac255067cb2e6f66f9affb2"
           }
         ]
       }
     },
     "3d": {
       "file": "yweb-3d.zip",
-      "bytes": 17011980,
-      "sha256": "d78c0094e057ffce123da73e2c9f36a459227c20731c24078b8b453cc5920920",
+      "bytes": 16990843,
+      "sha256": "c6caa2445136c248ddcf42ed5a8df343299d97663f9fb423166cffebae413594",
       "entries": [
         {
           "file": "godot.js",
-          "bytes": 300535,
-          "sha256": "5a76e68e6aa542f134f31a6b53f06a523aa32d48c8ab2822df36ae0d3f20da2b"
+          "bytes": 301022,
+          "sha256": "babe1862ba0c722857115c0ba2457d835d7f0c60605e269f59c662f2e9c0577d"
         },
         {
           "file": "godot.wasm",
-          "bytes": 29641915,
-          "sha256": "5587b18a3d46f92c2c912bc266ed816a577713dd19478d74dd1204bf3078c8f3"
+          "bytes": 29643493,
+          "sha256": "7517ed5b8d76a3c90d8cb2a8e5c88f25fbc341f3068767de52dd83d58b1f3035"
         },
         {
           "file": "godot.audio.worklet.js",
@@ -193,13 +193,13 @@
         },
         {
           "file": "godot.js.br",
-          "bytes": 71397,
-          "sha256": "5e9f22799af52d13e6349f406260dbe3d092df1bd68fd22a4e08fe9808f4707f"
+          "bytes": 71495,
+          "sha256": "d985d69e99bdb53f9bbe2b83f467ffff4344ce64e10a250db153dd51754b146f"
         },
         {
           "file": "godot.wasm.br",
-          "bytes": 7542456,
-          "sha256": "aa7ba3d9d8bd1ef9df65c8d0e7947d9d1ecdb3a0b71b58e7f40e9f4b591d2f54"
+          "bytes": 7518234,
+          "sha256": "393960d8f6d4531238a4744fa65e774610a1485b7ac4b38beeba5a87fd6b24e0"
         },
         {
           "file": "godot.audio.worklet.js.br",
@@ -212,8 +212,8 @@
           "sha256": "b5d408054750e15fa4cf460dcb0544158da8f616160ce2e59a3ba60fb0b2e1d4"
         }
       ],
-      "compileKey": "c3e879f5e4b4b8350777c05bef652915d8582910e0d877dc7d7f963fac15d963",
-      "artifactKey": "e7862172ecf05ae53f81dea2a6c2976118f4e341008ae23774bc04c0a8f506bc",
+      "compileKey": "022a94ed6ac23716787ec44bd5226863d8bf192dd1be0b2c4167cfbbaf42dcfe",
+      "artifactKey": "fab653a4de41a589d1751e9b44ba141aa05e700dcb50a026eb616f5546bd7064",
       "features": {
         "domText": true,
         "threads": false,
@@ -269,19 +269,19 @@
           },
           {
             "file": "godot.js",
-            "originalBytes": 300535,
-            "brotliBytes": 71397,
-            "ratio": 0.2376,
-            "sha256": "5a76e68e6aa542f134f31a6b53f06a523aa32d48c8ab2822df36ae0d3f20da2b",
-            "brotliSha256": "5e9f22799af52d13e6349f406260dbe3d092df1bd68fd22a4e08fe9808f4707f"
+            "originalBytes": 301022,
+            "brotliBytes": 71495,
+            "ratio": 0.2375,
+            "sha256": "babe1862ba0c722857115c0ba2457d835d7f0c60605e269f59c662f2e9c0577d",
+            "brotliSha256": "d985d69e99bdb53f9bbe2b83f467ffff4344ce64e10a250db153dd51754b146f"
           },
           {
             "file": "godot.wasm",
-            "originalBytes": 29641915,
-            "brotliBytes": 7542456,
-            "ratio": 0.2545,
-            "sha256": "5587b18a3d46f92c2c912bc266ed816a577713dd19478d74dd1204bf3078c8f3",
-            "brotliSha256": "aa7ba3d9d8bd1ef9df65c8d0e7947d9d1ecdb3a0b71b58e7f40e9f4b591d2f54"
+            "originalBytes": 29643493,
+            "brotliBytes": 7518234,
+            "ratio": 0.2536,
+            "sha256": "7517ed5b8d76a3c90d8cb2a8e5c88f25fbc341f3068767de52dd83d58b1f3035",
+            "brotliSha256": "393960d8f6d4531238a4744fa65e774610a1485b7ac4b38beeba5a87fd6b24e0"
           }
         ]
       }

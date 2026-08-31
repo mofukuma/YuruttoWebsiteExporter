@@ -170,19 +170,60 @@
 +				break;
 +			}
 +#endif
+--- a/scene/gui/menu_bar.cpp
++++ b/scene/gui/menu_bar.cpp
+@@ -38,0 +39,4 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++#include "platform/web/yweb_text_sync.h"
++#endif
++
+@@ -157,0 +162,10 @@
++	queue_redraw();
++}
++
++#ifdef YWEB_TEXT_DOM_ENABLED
++// DOM項目のhoverを標準Theme状態へ反映する。
++void MenuBar::yweb_hover(int p_index) {
++	if (p_index < 0 || p_index >= menu_cache.size() || menu_cache[p_index].hidden || menu_cache[p_index].disabled) p_index = -1;
++	if (focused_menu == p_index) return;
++	focused_menu = p_index;
++	if (p_index >= 0) selected_menu = p_index;
+@@ -158,0 +173,13 @@
++}
++
++// DOM項目の選択を標準Popup表示へ渡す。
++void MenuBar::yweb_activate(int p_index) {
++	if (p_index < 0 || p_index >= menu_cache.size() || menu_cache[p_index].hidden || menu_cache[p_index].disabled) return;
++	selected_menu = p_index;
++	focused_menu = p_index;
++	_open_popup(p_index, true);
++}
++
++// DOM操作域へ使う標準描画矩形を返す。
++Rect2 MenuBar::yweb_item_rect(int p_index) const {
++	return _get_menu_item_rect(p_index);
+@@ -159,0 +187 @@
++#endif
+--- a/scene/gui/menu_bar.h
++++ b/scene/gui/menu_bar.h
+@@ -191,0 +192,7 @@
++#ifdef YWEB_TEXT_DOM_ENABLED
++	// DOM項目を標準Menu状態とPopup表示へ結ぶ。
++	void yweb_hover(int p_index);
++	void yweb_activate(int p_index);
++	Rect2 yweb_item_rect(int p_index) const;
++#endif
++
 --- a/scene/gui/popup_menu.cpp
 +++ b/scene/gui/popup_menu.cpp
-@@ -32,0 +33,4 @@
-+
+@@ -33,0 +34,4 @@
 +#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
 +#include "platform/web/yweb_text_sync.h"
 +#endif
-@@ -884,0 +889,19 @@
-+	// 項目の実描画値をCanvasとDOMへ同じ入口から渡す。
++
+@@ -884,0 +889,16 @@
++	// 項目画像の実描画値をCanvasとDOMへ同じ入口から渡す。
 +	auto draw_style = [&](const Ref<StyleBox> &p_style, const Rect2 &p_rect) {
-+#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
-+		yweb_dom_draw_style(control, p_style, p_rect);
-+#endif
 +		p_style->draw(ci, p_rect);
 +	};
 +	auto draw_texture = [&](const Ref<Texture2D> &p_texture, const Point2 &p_position, const Color &p_color) {
@@ -197,37 +238,37 @@
 +#endif
 +		p_texture->draw_rect(ci, p_rect, false, p_color);
 +	};
-@@ -945 +968 @@
+@@ -945 +965 @@
 -			theme_cache.hover_style->draw(ci, Rect2(item_ofs + Point2(0, -theme_cache.v_separation / 2), Size2(display_width, h + theme_cache.v_separation)));
 +			draw_style(theme_cache.hover_style, Rect2(item_ofs + Point2(0, -theme_cache.v_separation / 2), Size2(display_width, h + theme_cache.v_separation)));
-@@ -965 +988 @@
+@@ -965 +985 @@
 -					theme_cache.labeled_separator_left->draw(ci, Rect2(item_ofs + Point2(0, sep_ofs), Size2(MAX(0, content_left - item_ofs.x), sep_h)));
 +					draw_style(theme_cache.labeled_separator_left, Rect2(item_ofs + Point2(0, sep_ofs), Size2(MAX(0, content_left - item_ofs.x), sep_h)));
-@@ -970 +993 @@
+@@ -970 +990 @@
 -					theme_cache.labeled_separator_right->draw(ci, Rect2(Point2(content_right, item_ofs.y + sep_ofs), Size2(MAX(0, display_width - content_right), sep_h)));
 +					draw_style(theme_cache.labeled_separator_right, Rect2(Point2(content_right, item_ofs.y + sep_ofs), Size2(MAX(0, display_width - content_right), sep_h)));
-@@ -975 +998 @@
+@@ -975 +995 @@
 -				theme_cache.separator_style->draw(ci, Rect2(item_ofs + Point2(0, sep_ofs), Size2(display_width, sep_h)));
 +				draw_style(theme_cache.separator_style, Rect2(item_ofs + Point2(0, sep_ofs), Size2(display_width, sep_h)));
-@@ -989 +1012 @@
+@@ -989 +1009 @@
 -			Texture2D *icon = (items[i].checked ? check[items[i].checkable_type - 1 + disabled] : uncheck[items[i].checkable_type - 1 + disabled]).ptr();
 +			Ref<Texture2D> icon = items[i].checked ? check[items[i].checkable_type - 1 + disabled] : uncheck[items[i].checkable_type - 1 + disabled];
-@@ -991 +1014 @@
+@@ -991 +1011 @@
 -				icon->draw(ci, Size2(control->get_size().width - item_ofs.x - icon->get_width(), item_ofs.y) + Point2(0, Math::floor((h - icon->get_height()) / 2.0)), icon_color);
 +				draw_texture(icon, Size2(control->get_size().width - item_ofs.x - icon->get_width(), item_ofs.y) + Point2(0, Math::floor((h - icon->get_height()) / 2.0)), icon_color);
-@@ -993 +1016 @@
+@@ -993 +1013 @@
 -				icon->draw(ci, item_ofs + Point2(0, Math::floor((h - icon->get_height()) / 2.0)), icon_color);
 +				draw_texture(icon, item_ofs + Point2(0, Math::floor((h - icon->get_height()) / 2.0)), icon_color);
-@@ -1022 +1045 @@
+@@ -1022 +1042 @@
 -			items[i].icon->draw_rect(ci, Rect2(icon_pos + icon_offset, icon_size), false, icon_color);
 +			draw_texture_rect(items[i].icon, Rect2(icon_pos + icon_offset, icon_size), icon_color);
-@@ -1028 +1051 @@
+@@ -1028 +1048 @@
 -				submenu->draw(ci, Point2(theme_cache.item_end_padding, item_ofs.y + Math::floor(h - submenu->get_height()) / 2), icon_color);
 +				draw_texture(submenu, Point2(theme_cache.item_end_padding, item_ofs.y + Math::floor(h - submenu->get_height()) / 2), icon_color);
-@@ -1030 +1053 @@
+@@ -1030 +1050 @@
 -				submenu->draw(ci, Point2(display_width - submenu->get_width() - theme_cache.item_end_padding, item_ofs.y + Math::floor(h - submenu->get_height()) / 2), icon_color);
 +				draw_texture(submenu, Point2(display_width - submenu->get_width() - theme_cache.item_end_padding, item_ofs.y + Math::floor(h - submenu->get_height()) / 2), icon_color);
-@@ -1091,0 +1115,19 @@
+@@ -1091,0 +1112,35 @@
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +// DOM項目のhoverを標準Theme描画とsignalへ反映する。
 +void PopupMenu::yweb_hover(int p_index) {
@@ -245,16 +286,34 @@
 +	if (items[p_index].submenu) _activate_submenu(p_index);
 +	else activate_item(p_index);
 +}
++
++// 描画済み文字の縦位置から、非表示や空区切りを含む実項目番号を返す。
++int PopupMenu::yweb_item_at(float p_y) const {
++	for (int index = 0; index < items.size(); index++) {
++		if (!items[index].visible) continue;
++		if (p_y >= items[index]._ofs_cache && p_y < items[index]._ofs_cache + items[index]._height_cache) return index;
++	}
++	return -1;
++}
++
++// Browser操作域へ使う、項目間余白を含む標準行矩形を返す。
++Rect2 PopupMenu::yweb_item_rect(int p_index) const {
++	ERR_FAIL_INDEX_V(p_index, items.size(), Rect2());
++	const float separation = theme_cache.v_separation;
++	return Rect2(0, items[p_index]._ofs_cache - separation * 0.5f, control->get_size().x, items[p_index]._height_cache + separation);
++}
 +#endif
 +
 --- a/scene/gui/popup_menu.h
 +++ b/scene/gui/popup_menu.h
-@@ -454,0 +455,6 @@
+@@ -454,0 +455,8 @@
 +
 +#ifdef YWEB_TEXT_DOM_ENABLED
 +	// DOM項目のhoverと選択を標準PopupMenu処理へ戻す。
 +	void yweb_hover(int p_index);
 +	void yweb_activate(int p_index);
++	int yweb_item_at(float p_y) const;
++	Rect2 yweb_item_rect(int p_index) const;
 +#endif
 --- a/scene/gui/line_edit.cpp
 +++ b/scene/gui/line_edit.cpp
@@ -484,6 +543,58 @@
 +	yweb_text = p_text;
 +	yweb_font = p_font;
 +	yweb_font_size = p_font_size;
++#endif
+--- a/scene/resources/style_box.cpp
++++ b/scene/resources/style_box.cpp
+@@ -35,0 +36,4 @@
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++#include "platform/web/yweb_text_sync.h"
++#endif
++
+@@ -93,0 +98,5 @@
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++	// 標準Controlが直接描くStyleBoxもDOM描画の共通入口へ渡す。
++	Ref<StyleBox> style(const_cast<StyleBox *>(this));
++	yweb_dom_draw_style(p_canvas_item, style, p_rect);
++#endif
+--- a/scene/resources/style_box_flat.cpp
++++ b/scene/resources/style_box_flat.cpp
+@@ -36,0 +37,4 @@
++
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++#include "platform/web/yweb_text_sync.h"
++#endif
+@@ -459,0 +464,5 @@
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++	// 標準Controlが直接描く平面ThemeをDOMへ渡す。
++	Ref<StyleBox> style(const_cast<StyleBoxFlat *>(this));
++	yweb_dom_draw_style(p_canvas_item, style, p_rect);
++#endif
+--- a/scene/resources/style_box_line.cpp
++++ b/scene/resources/style_box_line.cpp
+@@ -35,0 +36,4 @@
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++#include "platform/web/yweb_text_sync.h"
++#endif
++
+@@ -95,0 +100,5 @@
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++	// 標準Controlが直接描く線ThemeをDOMへ渡す。
++	Ref<StyleBox> style(const_cast<StyleBoxLine *>(this));
++	yweb_dom_draw_style(p_canvas_item, style, p_rect);
++#endif
+--- a/scene/resources/style_box_texture.cpp
++++ b/scene/resources/style_box_texture.cpp
+@@ -35,0 +36,4 @@
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++#include "platform/web/yweb_text_sync.h"
++#endif
++
+@@ -166,0 +171,5 @@
++#if defined(YWEB_TEXT_DOM_ENABLED) && !defined(GLES3_ENABLED)
++	// 標準Controlが直接描く九分割画像ThemeをDOMへ渡す。
++	Ref<StyleBox> style(const_cast<StyleBoxTexture *>(this));
++	yweb_dom_draw_style(p_canvas_item, style, p_rect);
 +#endif
 --- a/scene/resources/multimesh.h
 +++ b/scene/resources/multimesh.h

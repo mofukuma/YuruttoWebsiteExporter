@@ -22,7 +22,8 @@
 | TextureRect | stretch、keep aspect、tile、flip |
 | NinePatchRect | patch margin、tile、軸stretch mode |
 | TextureProgressBar | 縦、逆向き、放射fill、nine-patch |
-| ItemList / Tree / TabBar / MenuBar | cellごとの背景、icon、選択・hover状態 |
+| ItemList / Tree | cellごとの背景、icon、選択・hover状態 |
+| TabBar / MenuBar | iconと閉じるbutton。背景、選択・hover状態は共通StyleBox経路で確認済み |
 | ColorPicker系 | checker、cursor、preset、内部button icon |
 | GraphEdit系 | 接続線、port、grid、選択状態 |
 

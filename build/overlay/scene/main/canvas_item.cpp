@@ -65,7 +65,6 @@ void yweb_draw_ellipse(CanvasItem *p_item, const Point2 &p_pos, real_t p_major, 
 void yweb_draw_polygon(CanvasItem *p_item, const Vector<Point2> &p_points, const Vector<Color> &p_colors);
 void yweb_draw_texture(CanvasItem *p_item, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, const Color &p_modulate);
 void yweb_draw_texture_region(CanvasItem *p_item, const Ref<Texture2D> &p_texture, const Rect2 &p_rect, const Rect2 &p_src_rect, const Color &p_modulate);
-void yweb_draw_style_box(CanvasItem *p_item, const Ref<StyleBox> &p_style, const Rect2 &p_rect);
 void yweb_draw_transform(CanvasItem *p_item, const Transform2D &p_transform);
 void yweb_draw_mesh(CanvasItem *p_item, const Ref<Mesh> &p_mesh, const Transform2D &p_transform, const Color &p_modulate);
 void yweb_draw_multimesh(CanvasItem *p_item, const Ref<MultiMesh> &p_multimesh);
@@ -1103,7 +1102,6 @@ void CanvasItem::draw_style_box(RequiredParam<StyleBox> rp_style_box, const Rect
 
 	EXTRACT_PARAM_OR_FAIL(p_style_box, rp_style_box);
 
-	YWEB_DRAW(yweb_draw_style_box(this, p_style_box, p_rect));
 	p_style_box->draw(canvas_item, p_rect);
 }
 

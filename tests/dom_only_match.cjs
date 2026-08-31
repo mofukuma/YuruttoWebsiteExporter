@@ -415,7 +415,9 @@ for (const name of comparedScreens) {
 					const rect = element.getBoundingClientRect();
 					return rect.x >= 540 && rect.x < 760 && rect.y < 80 && rect.height >= 20;
 				}));
-				await menuItem('Disabled Item').click();
+				const disabledMenu = menuItem('Disabled Item');
+				assert.ok(await disabledMenu.isDisabled(), 'PopupMenuの無効項目がBrowserで有効になっている');
+				await disabledMenu.dispatchEvent('click');
 				assert.equal(await page.locator('[data-yweb-text]').filter({ hasText: /^MENU STATUS / }).textContent(), 'MENU STATUS idle', 'PopupMenuの無効項目を選択している');
 				await menuItem('Icon Item').click();
 				await page.locator('[data-yweb-text]').filter({ hasText: /^MENU STATUS 4$/ }).waitFor();

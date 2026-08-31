@@ -23,6 +23,8 @@ scene/gui/base_button.cpp
 scene/gui/base_button.h
 scene/gui/button.cpp
 scene/gui/link_button.cpp
+scene/gui/menu_bar.cpp
+scene/gui/menu_bar.h
 scene/gui/popup_menu.cpp
 scene/gui/popup_menu.h
 scene/gui/line_edit.cpp
@@ -34,6 +36,10 @@ scene/main/viewport.h
 scene/main/viewport.cpp
 scene/resources/text_line.h
 scene/resources/text_line.cpp
+scene/resources/style_box.cpp
+scene/resources/style_box_flat.cpp
+scene/resources/style_box_line.cpp
+scene/resources/style_box_texture.cpp
 scene/resources/multimesh.h
 scene/resources/multimesh.cpp
 scene/2d/cpu_particles_2d.h

@@ -43,6 +43,7 @@
 #include "scene/gui/color_rect.h"
 #include "scene/gui/progress_bar.h"
 #include "scene/gui/rich_text_label.h"
+#include "scene/gui/menu_bar.h"
 #include "scene/gui/option_button.h"
 #include "scene/gui/popup_menu.h"
 #include "scene/gui/scroll_bar.h"
@@ -59,6 +60,7 @@
 #include "scene/resources/style_box.h"
 #include "scene/resources/style_box_flat.h"
 #include "scene/resources/style_box_line.h"
+#include "scene/resources/style_box_texture.h"
 #include "scene/resources/atlas_texture.h"
 #include "scene/resources/sprite_frames.h"
 #include "scene/resources/texture.h"
@@ -94,6 +96,7 @@ void yweb_text_begin();
 void yweb_text_sync(const char *p_uid, const char *p_text, const char *p_aux, const char *p_font, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, int p_flags, int p_z, int p_horizontal, int p_vertical, int p_kind, int p_max_length, int p_selection_start, int p_selection_end, float p_red, float p_green, float p_blue, float p_alpha, float p_font_size, float p_line_spacing, float p_outline_red, float p_outline_green, float p_outline_blue, float p_outline_alpha, float p_outline_size, float p_shadow_red, float p_shadow_green, float p_shadow_blue, float p_shadow_alpha, float p_shadow_x, float p_shadow_y, float p_underline_offset, float p_underline_thickness, float p_placeholder_red, float p_placeholder_green, float p_placeholder_blue, float p_placeholder_alpha, float p_font_ascent, float p_glyph_top, float p_glyph_bottom, float p_scroll_x, float p_scroll_y);
 // Button全体の操作範囲と内側文字の余白をBrowserへ渡す。
 void yweb_action_sync(const char *p_uid, float p_xx, float p_xy, float p_yx, float p_yy, float p_x, float p_y, float p_width, float p_height, float p_left, float p_top, float p_right, float p_bottom);
+void yweb_popup_item_sync(const char *p_uid, int p_index);
 void yweb_code_sync(const char *p_uid, const char *p_state);
 void yweb_text_remove(const char *p_uid);
 void yweb_clip_sync(const char *p_uid, const char *p_owner, float p_left, float p_top, float p_right, float p_bottom, int p_enabled);
@@ -923,10 +926,11 @@ static void remove_canvases(ObjectID p_owner) {
 
 // 複数文字項目を持つ標準Controlの一回の再描画を開始する。
 void yweb_text_parts_begin(Control *p_control) {
-	if (!capture_control(p_control) || !text_requested(p_control)) return;
+	if (!p_control) return;
 	const ObjectID object = p_control->get_instance_id();
-	parts[object].clear();
 	register_canvas(object, p_control->get_canvas_item());
+	if (!capture_control(p_control) || !text_requested(p_control)) return;
+	parts[object].clear();
 	tracked.insert(object);
 }
 
@@ -992,7 +996,14 @@ static void text_event(const char *p_uid, int p_kind, const char *p_text, int p_
 	Control *control = Object::cast_to<Control>(ObjectDB::get_instance(object));
 	if (!control || !control->is_inside_tree() || !yweb_text_dom_owns(control)) return;
 	const String incoming = String::utf8(p_text);
-	if (p_kind >= 12 && p_kind <= 14 && control->is_class(SNAME("PopupMenuItems"))) {
+	if (p_kind >= 12 && p_kind <= 14 && (control->is_class(SNAME("PopupMenuItems")) || Object::cast_to<MenuBar>(control))) {
+		if (MenuBar *bar = Object::cast_to<MenuBar>(control)) {
+			if (p_kind == 12) bar->yweb_hover(p_start);
+			else if (p_kind == 13) bar->yweb_hover(-1);
+			else bar->yweb_activate(p_start);
+			dirty.insert(object);
+			return;
+		}
 		Node *owner = control;
 		while (owner && !Object::cast_to<PopupMenu>(owner)) owner = owner->get_parent();
 		PopupMenu *menu = Object::cast_to<PopupMenu>(owner);
@@ -2362,27 +2373,48 @@ void yweb_draw_style_box(CanvasItem *p_item, const Ref<StyleBox> &p_style, const
 	const Ref<StyleBoxFlat> flat = p_style;
 	if (flat.is_valid()) {
 		const CharString uid = draw_uid(p_item, "b");
-		sync_flat_box(uid, draw_basis(p_item), p_rect, draw_order(p_item), flat, p_item->get_modulate() * p_item->get_self_modulate());
+		// 標準文字より一段後ろへ置き、同じControlの面で文字を隠さない。
+		sync_flat_box(uid, draw_basis(p_item), p_rect, draw_order(p_item) - 1, flat, p_item->get_modulate() * p_item->get_self_modulate());
 		return;
 	}
 	const Ref<StyleBoxLine> line = p_style;
-	if (line.is_null()) return;
-	Rect2 rect = p_rect;
-	if (line->is_vertical()) {
-		rect.position.y -= line->get_grow_begin();
-		rect.size.y += line->get_grow_begin() + line->get_grow_end();
-		rect.size.x = line->get_thickness();
-	} else {
-		rect.position.x -= line->get_grow_begin();
-		rect.size.x += line->get_grow_begin() + line->get_grow_end();
-		rect.size.y = line->get_thickness();
+	if (line.is_valid()) {
+		Rect2 rect = p_rect;
+		if (line->is_vertical()) {
+			rect.position.y -= line->get_grow_begin();
+			rect.size.y += line->get_grow_begin() + line->get_grow_end();
+			rect.size.x = line->get_thickness();
+		} else {
+			rect.position.x -= line->get_grow_begin();
+			rect.size.x += line->get_grow_begin() + line->get_grow_end();
+			rect.size.y = line->get_thickness();
+		}
+		yweb_draw_rect(p_item, rect, line->get_color(), true, 0);
+		return;
 	}
-	yweb_draw_rect(p_item, rect, line->get_color(), true, 0);
+	const Ref<StyleBoxTexture> texture = p_style;
+	if (texture.is_null() || texture->get_texture().is_null()) return;
+	const Ref<Texture2D> image = texture->get_texture();
+	const String key = image_key(image);
+	if (key.is_empty()) return;
+	const Rect2 rect = texture->get_draw_rect(p_rect);
+	Transform2D transform = draw_basis(p_item);
+	transform[2] = transform.xform(rect.position);
+	const Color color = p_item->get_modulate() * p_item->get_self_modulate() * texture->get_modulate();
+	const CharString uid = draw_uid(p_item, "n");
+	const CharString key_utf8 = key.utf8();
+	yweb_nine_patch_sync(uid.get_data(), key_utf8.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
+			rect.size.x, rect.size.y, texture->get_texture_margin(SIDE_LEFT), texture->get_texture_margin(SIDE_TOP), texture->get_texture_margin(SIDE_RIGHT), texture->get_texture_margin(SIDE_BOTTOM),
+			draw_order(p_item) - 1, texture->get_h_axis_stretch_mode(), texture->get_v_axis_stretch_mode(), texture->is_draw_center_enabled() ? 1 : 0,
+			color.r, color.g, color.b, color.a);
 }
 
-// PopupMenuなど標準Controlの内部描画をCanvasItem共通変換へ渡す。
-void yweb_dom_draw_style(Control *p_control, const Ref<StyleBox> &p_style, const Rect2 &p_rect) {
-	yweb_draw_style_box(p_control, p_style, p_rect);
+// 標準Controlが直接描くStyleBoxを所有CanvasItemへ結び直す。
+void yweb_dom_draw_style(RID p_canvas, const Ref<StyleBox> &p_style, const Rect2 &p_rect) {
+	CanvasItem *item = nullptr;
+	if (const ObjectID *owner = canvas_owners.getptr(p_canvas)) item = Object::cast_to<CanvasItem>(ObjectDB::get_instance(*owner));
+	if (!item) item = CanvasItem::get_current_item_drawn();
+	if (item) yweb_draw_style_box(item, p_style, p_rect);
 }
 
 // 標準Controlの内部画像をCanvasItem共通変換へ渡す。
@@ -2501,7 +2533,8 @@ static void sync_boxes(Node *p_node, int &r_order) {
 		sync_clip(item);
 		const CharString prefix = (String::num_uint64((uint64_t)item->get_instance_id()) + "-d").utf8();
 		Control *control = Object::cast_to<Control>(item);
-		if (control && control->is_class(SNAME("PopupMenuItems")) && !dom_drawn.has(item->get_instance_id())) {
+		// DOM接続前に済んだ標準描画を初回に一度再送し、直接StyleBoxも取りこぼさない。
+		if (control && !owns_control_draw(control) && !dom_drawn.has(item->get_instance_id())) {
 			item->queue_redraw();
 			item->yweb_dom_redraw();
 			dom_drawn.insert(item->get_instance_id());
@@ -2544,21 +2577,60 @@ static void sync_boxes(Node *p_node, int &r_order) {
 }
 #endif
 
-// PopupMenuの文字位置から実項目の中点境界を作り、文字を保ったまま行全体を操作域にする。
+// PopupMenuの文字位置をGodot実項目へ戻し、文字を保ったまま標準行全体を操作域にする。
 static void sync_popup_item(Control *p_control, const Vector<TextState> &p_items, int p_index, const CharString &p_uid) {
 	TextState state = p_items[p_index];
-	state.flags |= TEXT_MOUSE | TEXT_POPUP;
+	Node *owner = p_control;
+	while (owner && !Object::cast_to<PopupMenu>(owner)) owner = owner->get_parent();
+	PopupMenu *menu = Object::cast_to<PopupMenu>(owner);
+	const int item = menu ? menu->yweb_item_at(state.rect.get_center().y) : -1;
+	for (int before = 0; item >= 0 && before < p_index; before++) {
+		if (menu->yweb_item_at(p_items[before].rect.get_center().y) != item) continue;
+		sync_text(p_control, state, p_uid);
+		return;
+	}
+	if (item < 0) {
+		sync_text(p_control, state, p_uid);
+		return;
+	}
+	state.kind = TEXT_BUTTON;
+	state.flags |= TEXT_MOUSE | TEXT_POPUP | TEXT_KEYBOARD_FOCUS;
+	if (menu->is_item_disabled(item) || menu->is_item_separator(item)) state.flags |= TEXT_DISABLED;
 	sync_text(p_control, state, p_uid);
-	const float center = state.rect.get_center().y;
-	const float before = p_index > 0 ? p_items[p_index - 1].rect.get_center().y : center - (p_items.size() > 1 ? p_items[1].rect.get_center().y - center : state.rect.size.y);
-	const float after = p_index + 1 < p_items.size() ? p_items[p_index + 1].rect.get_center().y : center + (p_index > 0 ? center - p_items[p_index - 1].rect.get_center().y : state.rect.size.y);
-	const float top = MAX(0.0f, (before + center) * 0.5f);
-	const float bottom = MIN(p_control->get_size().y, (center + after) * 0.5f);
+	yweb_popup_item_sync(p_uid.get_data(), item);
+	const Rect2 row = menu->yweb_item_rect(item);
 	Transform2D action = canvas_transform(p_control);
-	action[2] = action.xform(Vector2(0, top));
+	action[2] = action.xform(row.position);
+	const Rect2 content(state.rect.position - row.position, state.rect.size);
 	yweb_action_sync(p_uid.get_data(), action[0].x, action[0].y, action[1].x, action[1].y, action[2].x, action[2].y,
-			p_control->get_size().x, bottom - top, state.rect.position.x, state.rect.position.y - top,
-			MAX(0.0f, p_control->get_size().x - state.rect.get_end().x), MAX(0.0f, bottom - state.rect.get_end().y));
+			row.size.x, row.size.y, content.position.x, content.position.y,
+			MAX(0.0f, row.size.x - content.get_end().x), MAX(0.0f, row.size.y - content.get_end().y));
+}
+
+// MenuBarの実項目を意味Buttonへし、Godot確定矩形と標準操作へ結ぶ。
+static void sync_menu_item(MenuBar *p_menu, const Vector<TextState> &p_items, int p_part) {
+	int menu_index = -1;
+	for (int index = 0, visible = 0; index < p_menu->get_menu_count(); index++) {
+		if (p_menu->is_menu_hidden(index)) continue;
+		if (visible++ == p_part) {
+			menu_index = index;
+			break;
+		}
+	}
+	if (menu_index < 0) return;
+	const CharString uid = (String::num_uint64((uint64_t)p_menu->get_instance_id()) + "-" + itos(menu_index)).utf8();
+	TextState state = p_items[p_part];
+	state.kind = TEXT_BUTTON;
+	state.flags |= TEXT_MOUSE | TEXT_POPUP | TEXT_KEYBOARD_FOCUS;
+	if (p_menu->is_menu_disabled(menu_index)) state.flags |= TEXT_DISABLED;
+	sync_text(p_menu, state, uid);
+	const Rect2 action_rect = p_menu->yweb_item_rect(menu_index);
+	Transform2D action = canvas_transform(p_menu);
+	action[2] = action.xform(action_rect.position);
+	const Rect2 content(state.rect.position - action_rect.position, state.rect.size);
+	yweb_action_sync(uid.get_data(), action[0].x, action[0].y, action[1].x, action[1].y, action[2].x, action[2].y,
+			action_rect.size.x, action_rect.size.y, content.position.x, content.position.y,
+			MAX(0.0f, action_rect.size.x - content.get_end().x), MAX(0.0f, action_rect.size.y - content.get_end().y));
 }
 
 // 登録済み文字を毎frame同期し、物理親、回転、入力へ追従する。
@@ -2624,7 +2696,8 @@ void yweb_text_sync_process() {
 		if (const Vector<TextState> *items = parts.getptr(object)) {
 			for (int index = 0; index < items->size(); index++) {
 				const CharString uid = (String::num_uint64((uint64_t)object) + "-" + itos(index)).utf8();
-				if (control->is_class(SNAME("PopupMenuItems"))) sync_popup_item(control, *items, index, uid);
+				if (MenuBar *menu = Object::cast_to<MenuBar>(control)) sync_menu_item(menu, *items, index);
+				else if (control->is_class(SNAME("PopupMenuItems"))) sync_popup_item(control, *items, index, uid);
 				else sync_text(control, (*items)[index], uid);
 			}
 		}
