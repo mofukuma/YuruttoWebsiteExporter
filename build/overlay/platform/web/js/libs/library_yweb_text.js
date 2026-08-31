@@ -35,7 +35,9 @@ const YWebText = {
 		glyphFilter: null, // ChromiumとGodotの縁alpha差を揃える共有filter。
 		fontLoads: new Map(), // 書体ごとの読込Promise。scroll時の再要求を避ける。
 		fontRetryMs: 250, // 一時的なWeb font失敗を一度再確認する間隔。
-		glyphRaster: 0.4, // 単一行で両rendererの画素中心を揃える字形高。
+		glyphRaster: 0.4, // CodeEdit行で両rendererの画素中心を揃える字形高。
+		glyphSingleRaster: 0, // 単一行で輪郭高へ余分な画素を加えない補正値。
+		glyphSingleShift: 0.5, // 単一行でBrowserの基線をGodotへ揃える位置。
 		glyphMultiRaster: -0.4, // 複数行で変形後の端pixelを除く字形高。
 		glyphMultiShift: 1, // 複数行でBrowserの画素丸めを戻す位置。
 		glyphOpacity: 0.95, // FreeTypeとChromiumの縁合成量を揃える濃度。
@@ -511,8 +513,9 @@ const YWebText = {
 				glyph.style.transform = 'none';
 				return;
 			}
-			const raster = (multiline ? YWebText.glyphMultiRaster : YWebText.glyphRaster) / devicePixelRatio;
-			let scale = Math.max(0.5, Math.min(2, (bottom - top + raster) / height));
+			const captured = glyph.parentElement?.dataset.ywebKind === 'ControlText' || glyph.parentElement?.dataset.ywebWindow === '1';
+			const raster = (multiline ? YWebText.glyphMultiRaster : captured ? YWebText.glyphRaster : YWebText.glyphSingleRaster) / devicePixelRatio;
+			const scale = Math.max(0.5, Math.min(2, (bottom - top + raster) / height));
 			if (Number.isFinite(baseline)) {
 				glyph.style.transformOrigin = '0 0';
 				const shift = baseline + top - browserTop * scale + YWebText.glyphRaster / devicePixelRatio;
@@ -525,7 +528,7 @@ const YWebText = {
 			glyph.style.filter = 'none';
 			glyph.style.transformOrigin = '0 0';
 			glyph.style.lineHeight = multiline ? `${lineHeight / scale}px` : '';
-			const shift = ascent + top - browserTop * scale - (multiline ? YWebText.glyphMultiShift / devicePixelRatio : 0);
+			const shift = ascent + top - browserTop * scale - (multiline ? YWebText.glyphMultiShift / devicePixelRatio : captured ? 0 : -YWebText.glyphSingleShift / devicePixelRatio);
 			glyph.style.transform = `matrix(1,0,0,${scale},0,${shift})`;
 		},
 		// 通常文字の内側spanへ、共有した字形補正を適用する。
@@ -1611,6 +1614,7 @@ const YWebText = {
 		element.dataset.ywebGlyphBottom = String(glyphBottom);
 		element.dataset.ywebWrap = flags & 8 ? '1' : '0';
 		element.dataset.ywebDecorated = outlineSize > 0 || shadowAlpha > 0 || flags & 16 ? '1' : '0';
+		element.dataset.ywebWindow = flags & 512 ? '1' : '0';
 		element.style.display = flags & 1 ? (form !== element || tag === 'input' || tag === 'textarea' || kind === 5 ? 'block' : 'flex') : 'none';
 		element.style.width = `${width}px`;
 		element.style.height = `${height}px`;

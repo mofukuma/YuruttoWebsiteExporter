@@ -24,7 +24,7 @@ const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const size = { width: 800, height: 600 }; // 両者で揃える画面寸法。
 const limit = 10; // 各画面へ許す8bit RGBのRMSE上限。10は不合格にする。
 const containerTypes = JSON.parse(fs.readFileSync(path.join(repo, 'tests/fixtures/dom_only/container_types.json'), 'utf8')); // ClassDBとfixtureで共有するContainer派生型。
-const allScreens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d', 'animated_sprite', 'mesh_3d', 'themes', 'particles_2d', 'controls_extended', 'nodes_2d_extended', 'windows_media', 'affects_extended', 'scroll_layout', 'container_overflow', 'input_3d', 'code_edit', 'canvas_inputs', 'hover_scroll']; // 比べられる全画面。
+const allScreens = ['main', 'widgets', 'motion', 'physics', 'omochi', 'draw_all', 'plane_3d', 'animated_sprite', 'mesh_3d', 'themes', 'particles_2d', 'controls_extended', 'nodes_2d_extended', 'windows_media', 'font_metrics', 'affects_extended', 'scroll_layout', 'container_overflow', 'input_3d', 'code_edit', 'canvas_inputs', 'hover_scroll']; // 比べられる全画面。
 const selected = (process.env.YWEB_SCREEN || '').split(',').filter(Boolean); // 変更箇所へ絞る画面名。
 const screens = selected.length ? selected : allScreens; // 未指定時は全画面を一括検査する。
 const comparedScreens = screens.filter((name) => !['canvas_inputs', 'hover_scroll', 'affects_extended'].includes(name)); // 画素比較する画面。操作と副作用型のfixtureは構造検査へ専念する。
@@ -95,6 +95,7 @@ for (const name of comparedScreens) {
 	const browser = await chromium.launch({ executablePath: browserPath, headless: true, args: ['--use-angle=swiftshader'] });
 	const measured = {};
 	const regions = {}; // 複合画面内で独立した部品の合格値を残す領域。
+	const fontRows = {}; // フォント寸法ごとの画素範囲とRMSE。
 	const ui = []; // Browser操作を完走したlevel。
 	try {
 		for (const [index, name] of screens.entries()) {
@@ -797,6 +798,24 @@ for (const name of comparedScreens) {
 					assert.ok(regions[part] < limit, `${part}の差が大きい: ${regions[part]}`);
 				}
 			}
+			// 同一フォントの実画素範囲を行単位で測り、縦横のずれを数値へ残す。
+			if (name === 'font_metrics') {
+				for (const [index, size] of [10, 12, 14, 16, 18, 20, 24, 32, 48].entries()) {
+					const rowReference = path.join(work, `flat-godot-font-${size}.png`);
+					const rowCompared = path.join(work, `flat-browser-font-${size}.png`);
+					const crop = `800x64+0+${index * 64}`;
+					child.execFileSync('magick', [reference, '-crop', crop, '+repage', rowReference]);
+					child.execFileSync('magick', [compared, '-crop', crop, '+repage', rowCompared]);
+					const bounds = (file) => child.execFileSync('magick', [file, '-trim', '-format', '%X,%Y,%w,%h', 'info:'], { encoding: 'utf8' }).trim();
+					const rowMeasure = child.spawnSync('magick', ['compare', '-metric', 'RMSE', rowReference, rowCompared, path.join(work, `diff-font-${size}.png`)], { encoding: 'utf8' });
+					const rowMatched = /\(([0-9.eE+-]+)\)/.exec(rowMeasure.stderr || '');
+					assert.ok(rowMatched, `RMSEを測れない: font ${size} ${rowMeasure.stderr}`);
+					fontRows[size] = { godot: bounds(rowReference), browser: bounds(rowCompared), rmse: Number((Number(rowMatched[1]) * 255).toFixed(4)) };
+				}
+				const values = Object.values(fontRows).map(({ godot, browser }) => ({ godot: godot.split(',').map(Number), browser: browser.split(',').map(Number) }));
+				assert.ok(values.every(({ godot, browser }) => Math.abs(godot[0] - browser[0]) <= 1 && Math.abs(godot[1] - browser[1]) <= 1), 'Label字形の左端または上端が1pxを超えてずれている');
+				assert.ok(values.every(({ godot, browser }) => Math.abs(godot[2] - browser[2]) <= 1 && Math.abs(godot[3] - browser[3]) <= 1), 'Label字形の横幅または縦幅が1pxを超えてずれている');
+			}
 		}
 	} finally {
 		await browser.close();
@@ -807,8 +826,8 @@ for (const name of comparedScreens) {
 	const over = Object.entries(measured).filter(([, value]) => value >= limit);
 	if (screens.includes('canvas_inputs')) assert.ok(ui.includes('dom'), 'DOM onlyのBrowser UI操作を完走していない');
 	if (screens.includes('hover_scroll')) assert.ok(ui.includes('hover'), 'DOM onlyのhover操作を完走していない');
-	fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ unit: 'RGB 0..255', measured, regions, limit, ui }, null, 2)}\n`);
-	console.log(JSON.stringify({ structural: true, ui, rmseOk: over.length === 0, unit: 'RGB 0..255', measured, regions, limit }));
+	fs.writeFileSync(path.join(work, 'result.json'), `${JSON.stringify({ unit: 'RGB 0..255', measured, regions, fontRows, limit, ui }, null, 2)}\n`);
+	console.log(JSON.stringify({ structural: true, ui, rmseOk: over.length === 0, unit: 'RGB 0..255', measured, regions, fontRows, limit }));
 	if (!structureOnly) assert.deepEqual(over, [], `Godot画面との差が大きい: ${over.map(([name, value]) => `${name} ${value}`).join(', ')}`);
 })().catch((error) => {
 	console.error(error);

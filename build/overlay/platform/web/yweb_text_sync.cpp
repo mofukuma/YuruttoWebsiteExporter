@@ -135,6 +135,7 @@ enum TextFlag {
 	TEXT_FOCUSED = 64,
 	TEXT_SECRET = 128,
 	TEXT_DISABLED = 256,
+	TEXT_WINDOW = 512, // Window内で確定した文字位置を維持する。
 	TEXT_KEYBOARD_FOCUS = 1024,
 	TEXT_MOUSE = 2048, // BrowserがButton全体のpointer入力を所有する。
 	TEXT_POPUP = 4096, // PopupMenuの実項目をhoverと選択へ結ぶ。
@@ -355,8 +356,6 @@ static GlyphState glyph_state(const String &p_uid, const String &p_text, const R
 			start = found + 1;
 		}
 		TextLine line(sample, p_font, p_size);
-		const Size2 shaped_size = line.get_size();
-		(void)shaped_size;
 		state.ascent = line.get_line_ascent();
 		const int count = TS->shaped_text_get_glyph_count(line.get_rid());
 		const Glyph *glyphs = TS->shaped_text_get_glyphs(line.get_rid());
@@ -460,6 +459,8 @@ static void sync_text(Control *p_control, const TextState &p_state, const CharSt
 	int flags = p_state.flags;
 	flags = p_control->is_visible_in_tree() ? flags | TEXT_VISIBLE : flags & ~TEXT_VISIBLE;
 	flags = p_control->is_layout_rtl() ? flags | TEXT_RTL : flags & ~TEXT_RTL;
+	Window *window = p_control->get_window();
+	if (window && p_control->get_tree() && window != p_control->get_tree()->get_root()) flags |= TEXT_WINDOW;
 	const CharString text = p_text ? *p_text : p_state.text.utf8();
 	const CharString aux = p_state.aux.utf8();
 	Ref<Font> font_resource = control_font(p_control);
