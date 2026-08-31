@@ -30,7 +30,7 @@ function sourceHash() {
 		}
 	};
 	walk(source, new Set(['.godot', 'addons', 'output', 'README.md', 'CREDITS.md', 'serve.sh']));
-	walk(path.join(repo, 'addons/yurutto_website_exporter'), new Set(['yweb-2d.zip', 'yweb-3d.zip']));
+	walk(path.join(repo, 'addons/yurutto_website_exporter'), new Set(['yweb-3d.zip']));
 	for (const name of ['export_minimum.sh', 'install_site_addon.cjs', 'prepare_yweb_preset.cjs']) files.push(path.join(repo, 'build', name));
 	if (process.env.YWEB_TEMPLATE) files.push(path.resolve(process.env.YWEB_TEMPLATE));
 	const hash = crypto.createHash('sha256');
@@ -115,11 +115,12 @@ async function desktop(browser, base) {
 	await page.waitForFunction(() => document.activeElement?.textContent === 'プロジェクトを相談');
 	await text(page, '01 / 03');
 	await page.waitForFunction(() => [...document.querySelectorAll('span')].some((node) => node.textContent === '02 / 03'), null, { timeout: 4500 });
-	const workY = await page.getByText('SELECTED WORKS', { exact: true }).evaluate((node) => node.getBoundingClientRect().y);
+	const works = page.locator('[data-yweb-text]').filter({ hasText: /^SELECTED WORKS$/ });
+	const workY = await works.evaluate((node) => node.getBoundingClientRect().y);
 	await page.mouse.move(720, 450);
 	await page.mouse.wheel(0, 1100);
 	await page.waitForTimeout(120);
-	const movedY = await page.getByText('SELECTED WORKS', { exact: true }).evaluate((node) => node.getBoundingClientRect().y);
+	const movedY = await works.evaluate((node) => node.getBoundingClientRect().y);
 	assert.ok(movedY < workY - 500, `Browser scrollが進まない: ${workY} -> ${movedY}`);
 	const previous = page.getByRole('button', { name: '前へ', exact: true });
 	const next = page.getByRole('button', { name: '次へ', exact: true });

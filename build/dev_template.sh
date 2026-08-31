@@ -7,7 +7,7 @@ set -eu
 repo=$(cd "$(dirname "$0")/.." && pwd) # sourceと成果物を結ぶproject root。
 . "$repo/build/source.lock"
 . "$repo/build/distribution.lock"
-level=${1:-dom} # dom、2d、3dのいずれか。
+level=${1:-dom} # dom、3dのいずれか。
 src=$repo/tmp/dev-source # 開発用に保つGodot source。
 emsdk=$repo/tmp/dev-emsdk # 開発用Emscripten SDK。
 out=$repo/tmp/dev-template/$level # 展開確認先。

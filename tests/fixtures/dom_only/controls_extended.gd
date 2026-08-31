@@ -69,7 +69,7 @@ func item(type: String) -> Control:
 		"RichTextLabel":
 			node = RichTextLabel.new()
 			(node as RichTextLabel).bbcode_enabled = true
-			(node as RichTextLabel).text = "[b]Rich[/b] [color=#22d3ee]Text[/color]"
+			(node as RichTextLabel).text = "[lang=en][b]Rich[/b][/lang] [color=#22d3ee]Text[/color] [ bracket"
 		"ScrollContainer":
 			node = ScrollContainer.new()
 			var content := ColorRect.new()

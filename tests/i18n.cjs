@@ -9,7 +9,7 @@ const path = require('node:path');
 
 const addon = path.resolve(__dirname, '../addons/yurutto_website_exporter'); // 配布addonの正本。
 const table = fs.readFileSync(path.join(addon, 'i18n.gd'), 'utf8'); // 文言表。
-const users = ['platform.gd', 'site_builder.gd', 'production_check.gd', 'web_security.gd', 'project_check.gd', 'ogp_plugin.gd', 'ogp_capture.gd']; // 文言を使うscript。
+const users = ['platform.gd', 'site_builder.gd', 'production_check.gd', 'web_security.gd', 'ogp_plugin.gd', 'ogp_capture.gd']; // 文言を使うscript。
 const japanese = /[ぁ-んァ-ヶ一-龠]/; // 日本語を含むかの判定。
 
 // 文言表からkeyと英日の組を読む。

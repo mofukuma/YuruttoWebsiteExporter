@@ -12,6 +12,7 @@ const { createServer } = require('../build/serve_web.cjs');
 const { install } = require('../build/fetch_webfont.cjs');
 const { decode, meanAbsoluteError } = require('./png.cjs');
 const { browserPath } = require('./browser.cjs');
+const { matchBrowser } = require('./helpers/font_import.cjs');
 
 const repo = path.resolve(__dirname, '..'); // yweb project root。
 const { godot } = require('./godot.cjs'); // 対応版のGodot。
@@ -29,16 +30,6 @@ const SCENES = [
 	{ name: 'nodes', fixture: 'parity_nodes', work: 'parity-nodes', port: 49194, ready: { text: 'LABEL text' } },
 	{ name: 'rotate', fixture: 'rotate_label', work: 'rotate-label', port: 49195, ready: { text: 'Y' } },
 ];
-// 書体の取り込みかた。hintingを切り位置を細かく取ると、Browserの字形へ近づく。
-const IMPORT = [
-	'[remap]', '', 'importer="font_data_dynamic"', 'type="FontFile"', '',
-	'[params]', '',
-	'antialiasing=1', 'generate_mipmaps=false', 'disable_embedded_bitmaps=true',
-	'multichannel_signed_distance_field=false', 'msdf_pixel_range=8', 'msdf_size=48',
-	'allow_system_fallback=true', 'force_autohinter=false', 'modulate_color_glyphs=false',
-	'hinting=0', 'subpixel_positioning=3', 'keep_rounding_remainders=true', 'Fallbacks/fallbacks=[]', '',
-].join('\n');
-
 // 見本と書き出しを、同じ書体と同じ大きさで用意する。
 function build(scene) {
 	const work = path.join(repo, 'tmp', scene.work);
@@ -50,7 +41,7 @@ function build(scene) {
 	// GodotのTTFとBrowserのWOFF2を同じ書体で揃える。ここが揃わないと字形が別物になる。
 	const font = install(path.join(project, 'fonts'));
 	// 字の描きかたをBrowser側へ寄せる。格子への寄せを切り、位置を細かく取る。
-	fs.writeFileSync(`${font.ttf}.import`, IMPORT);
+	matchBrowser(font.ttf);
 	child.execFileSync(godot, ['--headless', '--path', project, '--import'], { stdio: 'pipe', timeout: 600000 });
 	return { work, project, site: path.join(work, 'site') };
 }

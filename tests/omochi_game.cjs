@@ -64,10 +64,10 @@ async function item(page, text) {
 		assert.equal(godouStart.kind, 'LinkButton');
 		assert.equal(omochiStart.tag, 'BUTTON');
 		assert.equal(omochiStart.kind, 'Button');
-		assert.match(godouStart.id, /^yweb-text-\d+$/);
-		assert.match(omochiStart.id, /^yweb-text-\d+$/);
+		assert.match(godouStart.id, /^yweb-\d+$/);
+		assert.match(omochiStart.id, /^yweb-\d+$/);
 		assert.equal(await page.locator('[data-yweb-kind="LinkButton"]').getAttribute('href'), 'https://godotengine.org/');
-		assert.equal(await page.locator('[data-yweb-kind="LinkButton"]').evaluate((node) => getComputedStyle(node).pointerEvents), 'none', 'LinkButtonがCanvas mouseを遮断');
+		assert.equal(await page.locator('[data-yweb-kind="LinkButton"]').evaluate((node) => getComputedStyle(node).pointerEvents), 'auto', 'LinkButtonをBrowserから操作できない');
 
 		// 100物理frameでThemeと日本語を同じDOM IDへ反映する。
 		await page.getByText('ゴドウさん', { exact: true }).waitFor();

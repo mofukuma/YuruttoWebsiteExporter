@@ -12,7 +12,7 @@ const repo = path.resolve(__dirname, '..'); // 書き出しscriptを持つprojec
 const { godot } = require('./godot.cjs'); // 対応版のGodot。
 const template = process.env.YWEB_TEMPLATE
 	? path.resolve(process.env.YWEB_TEMPLATE)
-	: path.join(repo, 'addons/yurutto_website_exporter/templates/yweb-2d.zip'); // 成果物へ入る指定済みまたは既定template。
+	: path.join(repo, 'addons/yurutto_website_exporter/templates/yweb-3d.zip'); // Canvas試験へ入る指定済みまたは既定template。
 const generated = new Set(['.godot', 'addons', 'export_presets.cfg']); // 書き出し手順が生成するproject内領域。
 const standardPreset = `[preset.0]
 
@@ -31,8 +31,8 @@ html/focus_canvas_on_start=true
 
 // Templateと導入手順を合わせたcache識別値を返す。
 function templateDigest() {
-	const digest = crypto.createHash('sha256').update(process.env.YWEB_LEVEL || '2d');
-	for (const file of [template, path.join(repo, 'build/install_site_addon.cjs'), path.join(repo, 'build/prepare_yweb_preset.cjs'), path.join(repo, 'build/export_minimum.sh')]) {
+	const digest = crypto.createHash('sha256').update('3d');
+	for (const file of [__filename, template, path.join(repo, 'build/install_site_addon.cjs'), path.join(repo, 'build/prepare_yweb_preset.cjs'), path.join(repo, 'build/export_minimum.sh')]) {
 		digest.update(fs.readFileSync(file));
 	}
 	return digest.digest('hex');
@@ -66,7 +66,8 @@ function ensure(project, site) {
 		const skip = new Set(['.godot', 'addons']);
 		fs.rmSync(work, { recursive: true, force: true });
 		fs.cpSync(project, work, { recursive: true, filter: (from) => !skip.has(path.basename(from)) });
-		child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), work, path.join(site, 'index.html')], { stdio: 'pipe' });
+		const env = { ...process.env, YWEB_LEVEL: '3d', YWEB_TEMPLATE: template }; // Canvas検査を3D構成へ固定する環境。
+		child.execFileSync('sh', [path.join(repo, 'build/export_minimum.sh'), work, path.join(site, 'index.html')], { env, stdio: 'pipe' });
 		fs.writeFileSync(path.join(site, '.yweb-template-sha256'), templateDigest());
 	}
 	return site;

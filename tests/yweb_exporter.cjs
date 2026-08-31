@@ -13,13 +13,13 @@ const zlib = require('node:zlib');
 const root = path.resolve(__dirname, '..'); // yweb project root。
 const addon = path.join(root, 'addons/yurutto_website_exporter'); // 配布単位のaddon。
 const distribution = JSON.parse(fs.readFileSync(path.join(addon, 'templates/manifest.json'))); // 対応版とテンプレートの由来。
-const template = path.join(addon, 'templates', distribution.templates['2d'].file); // 既定levelの内蔵テンプレート。
+const template = path.join(addon, 'templates', distribution.templates.dom.file); // 既定levelの内蔵テンプレート。
 const work = path.join(root, 'tmp/yweb-exporter'); // 検査専用directory。
 const site = path.join(work, 'site'); // 実書き出し確認先。
 const project = path.join(work, 'project'); // addonを導入するproject copy。
 const fixture = path.join(root, 'tests/fixtures/site_runtime'); // 最小projectの正本。
 const { godot } = require('./godot.cjs'); // 対応版のGodot。
-const expectedHash = distribution.templates['2d'].sha256; // buildとplatformが共有する識別値。
+const expectedHash = distribution.templates.dom.sha256; // buildとplatformが共有する識別値。
 
 const plugin = fs.readFileSync(path.join(addon, 'plugin.gd'), 'utf8');
 const platform = fs.readFileSync(path.join(addon, 'platform.gd'), 'utf8');
@@ -66,7 +66,7 @@ for (const name of ['index.html', `${base}.js`, `${base}.wasm`, `${base}.js.br`,
 // 配布物の由来と、addonが読む正本が噛み合っているかを見る。
 const manifest = JSON.parse(fs.readFileSync(path.join(site, 'yweb-compression.json')));
 assert.equal(manifest.entries.length, 4, '固定テンプレートのBrotli対応数不一致');
-assert.equal(manifest.templateQuality, distribution.templates['2d'].brotli.quality, '内蔵Brotli品質不一致');
+assert.equal(manifest.templateQuality, distribution.templates.dom.brotli.quality, '内蔵Brotli品質不一致');
 assert.ok(manifest.entries.every((entry) => entry.quality === manifest.templateQuality), '内蔵runtime以外へ品質を流用した');
 for (const entry of manifest.entries) assert.ok(entry.brotliBytes < entry.originalBytes, `圧縮率不正: ${entry.file}`);
 const notice = ['GODOT-MIT.txt', 'GODOT-COPYRIGHT.txt'].map((file) => fs.readFileSync(path.join(root, 'LICENSES', file), 'utf8').replace(/\n*$/, '\n')).join('\n');

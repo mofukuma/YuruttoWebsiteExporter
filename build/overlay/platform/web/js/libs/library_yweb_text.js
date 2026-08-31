@@ -483,6 +483,50 @@ const YWebText = {
 			}
 			return '';
 		},
+		// RichTextLabelの安全な文字装飾を入れ子のDOMへ変換する。
+		rich: function (element, text, source) {
+			if (element.dataset.ywebRich === source && element.textContent === text) return false;
+			const root = document.createDocumentFragment();
+			const stack = [{ tag: '', node: root }];
+			const pattern = /\[([^\]\r\n]+)\]/gu;
+			const visible = [];
+			let from = 0;
+			for (const match of source.matchAll(pattern)) {
+				const token = match[1].match(/^\s*(\/)?([a-z][\w-]*)(?:\s*=\s*([^\]]+)|\s+([^\]]+))?\s*$/iu);
+				if (!token) continue;
+				const plain = source.slice(from, match.index);
+				stack.at(-1).node.append(document.createTextNode(plain));
+				visible.push(plain);
+				from = match.index + match[0].length;
+				const tag = token[2].toLowerCase();
+				if (token[1]) {
+					const found = stack.findLastIndex((entry) => entry.tag === tag);
+					if (found > 0) stack.length = found;
+					continue;
+				}
+				const span = document.createElement('span');
+				if (tag === 'b') span.style.fontWeight = 'bold';
+				else if (tag === 'i') span.style.fontStyle = 'italic';
+				else if (tag === 'u') span.style.textDecoration = 'underline';
+				else if (tag === 's') span.style.textDecoration = 'line-through';
+				else if (tag === 'color' && token[3] && CSS.supports('color', token[3])) span.style.color = token[3];
+				const styled = span.style.length > 0;
+				if (styled) stack.at(-1).node.append(span);
+				stack.push({ tag, node: styled ? span : stack.at(-1).node });
+			}
+			const tail = source.slice(from);
+			stack.at(-1).node.append(document.createTextNode(tail));
+			visible.push(tail);
+			// Godotと解釈が異なる記法は解析済み本文へ戻し、誤表示と毎frameの再生成を防ぐ。
+			if (visible.join('') !== text) {
+				element.textContent = text;
+				element.dataset.ywebRich = source;
+				return true;
+			}
+			element.replaceChildren(root);
+			element.dataset.ywebRich = source;
+			return true;
+		},
 		// GodotとBrowserの実字形範囲を対応させ、外側の配置と操作領域は動かさない。
 		glyphNode: function (glyph, text, top, bottom, ascent, blocked = false, baseline = NaN, edge = false) {
 			if (!text || blocked || !(bottom > top)) {
@@ -1576,8 +1620,11 @@ const YWebText = {
 			}
 		} else {
 			const content = element.ywebGlyph || element;
-			if (text !== null && content.textContent !== text) {
+			if (text !== null && flags & 8192) {
+				textChanged = YWebText.rich(content, text, aux);
+			} else if (text !== null && content.textContent !== text) {
 				content.textContent = text;
+				delete content.dataset.ywebRich;
 				textChanged = true;
 			}
 			if (tag === 'button') element.disabled = !!(flags & 256);

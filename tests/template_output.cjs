@@ -13,7 +13,7 @@ const { sha } = require('../build/manifest_hash.cjs');
 
 const root = path.resolve(__dirname, '..'); // yweb project root。
 const template = path.resolve(process.argv[2] || ''); // tmpへ作った検査対象ZIP。
-const level = process.argv[3] || ''; // dom、2d、3dのいずれか。
+const level = process.argv[3] || ''; // dom、3dのいずれか。
 const proofFile = path.join(path.dirname(template), `yweb-${level}-manifest.json`); // package時の由来記録。
 const buffer = { maxBuffer: 32 * 1024 * 1024 }; // WASM展開に必要な上限。
 

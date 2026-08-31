@@ -1,4 +1,4 @@
-# 三段のlevelが共通で使うSCons option。levelごとの差はlevels.optionsが持つ。
+# 二つのlevelが共通で使うSCons option。levelごとの差はlevels.optionsが持つ。
 platform=web
 target=template_release
 yweb_text_dom=yes

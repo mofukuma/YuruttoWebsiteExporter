@@ -13,11 +13,10 @@ const WORK_ROOT := "res://tmp/yweb-exporter" # 公開前の組立とScene採取c
 const SiteConfig := preload("site_config.gd") # Scene情報JSONの用意と補完。
 const CONFIG_PATH := "res://yweb-site.json" # Scene情報JSONの既定位置。
 const I18n := preload("i18n.gd") # 画面文言の言語選び。
-const ProjectCheck := preload("project_check.gd") # 2D以下の3D境界検査。
 const ProductionCheck := preload("production_check.gd") # 本番公開へ秘密と危険な通信を持ち込まない検査。
 const OGP_PATH := "res://web/ogp.png" # OGP画像の既定位置。
-const LEVELS := ["dom", "2d", "3d"] # 書き出しlevel。表示順とmanifestのkeyを揃える。
-const LEVEL_HINT := "DOM only,2D,3D" # Export画面へ出すlevelの選択肢。
+const LEVELS := ["dom", "3d"] # 書き出しlevel。表示順とmanifestのkeyを揃える。
+const LEVEL_HINT := "DOM only,3D" # Export画面へ出すlevelの選択肢。
 const SNAPSHOT_JOBS := 3 # Scene状態を分離しながら同時起動するGodot数。
 const SNAPSHOT_TIMEOUT_MSEC := 15000 # 一Sceneの停止を待つ上限。無期限待機を防ぐ。
 
@@ -64,7 +63,7 @@ func _get_export_options() -> Array[Dictionary]:
 	return [
 		_option("vram_texture_compression/for_desktop", TYPE_BOOL, true), # PC向けtexture圧縮を含めるか。
 		_option("html/focus_canvas_on_start", TYPE_BOOL, true), # 起動直後に操作対象をCanvasへ移すか。
-		_option("yweb/level", TYPE_INT, 1, PROPERTY_HINT_ENUM, LEVEL_HINT, true), # 書き出しの段。使うテンプレートが変わる。
+		_option("yweb/level", TYPE_INT, 0, PROPERTY_HINT_ENUM, LEVEL_HINT, true), # 書き出しの段。使うテンプレートが変わる。
 		_option("yweb/site/enabled", TYPE_BOOL, true, PROPERTY_HINT_NONE, "", true), # SEOとroute生成を行うか。
 		_option("yweb/site/production", TYPE_BOOL, true), # HTTPSと公開前安全検査を必須にするか。
 		_option("yweb/site/config", TYPE_STRING, CONFIG_PATH, PROPERTY_HINT_FILE, "*.json"), # Sceneと公開URLの対応表の位置。
@@ -158,12 +157,6 @@ func _export_project(preset: EditorExportPreset, debug: bool, path: String, flag
 func _build_project(preset: EditorExportPreset, debug: bool, path: String, flags: int) -> Error:
 	var directory := path.get_base_dir()
 	var level := _level(preset)
-	var blocked: Array[String] = []
-	# Canvas 2D版では、3D resourceを書き出す前に止める。
-	if level == "2d":
-		blocked = ProjectCheck.new().inspect(ProjectSettings.globalize_path("res://"))
-	if not blocked.is_empty():
-		return _fail(I18n.t("topic_project"), "\n".join(blocked), ERR_UNAVAILABLE)
 	var site_options := _site_options(preset)
 	var production_errors := ProductionCheck.new().inspect(site_options)
 	if not production_errors.is_empty():
@@ -551,10 +544,10 @@ func _manifest() -> Dictionary:
 	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST))
 	return value if value is Dictionary and int(value.get("schema", 0)) == 1 else {}
 
-# presetが選んだlevelを返す。範囲外は2Dへ寄せる。
+# presetが選んだlevelを返す。範囲外は不正値として空にする。
 func _level(preset: EditorExportPreset) -> String:
 	var index := int(preset.get("yweb/level"))
-	return LEVELS[index] if index >= 0 and index < LEVELS.size() else "2d"
+	return LEVELS[index] if index >= 0 and index < LEVELS.size() else ""
 
 # 指定levelのmanifest項目を返す。
 func _entry(level: String) -> Dictionary:

@@ -10,7 +10,8 @@ const path = require('node:path');
 
 const project = path.resolve(process.argv[2] || '.'); // Godot project root。
 const name = process.argv[3] || 'Web'; // 正規化するpreset名。
-const level = { dom: 0, '2d': 1, '3d': 2 }[process.env.YWEB_LEVEL || '2d']; // 開発templateと同じ書き出し段。
+const level = { dom: 0, '3d': 1 }[process.env.YWEB_LEVEL || 'dom']; // 開発templateと同じ書き出し段。
+assert.ok(Number.isInteger(level), `YWEB_LEVELが不正: ${process.env.YWEB_LEVEL}`);
 const production = process.env.YWEB_PRODUCTION === '1'; // 公開条件を明示した検査で本番安全検査を有効にする。
 const file = path.join(project, 'export_presets.cfg'); // Godot export設定。
 const prefixes = ['custom_template/', 'variant/', 'progressive_web_app/', 'threads/']; // 標準Webだけの設定群。

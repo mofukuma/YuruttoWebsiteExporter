@@ -23,9 +23,15 @@ try {
 	assert.match(once, /yweb\/font\/matching_webfont=false/, 'Web font選択を上書き');
 	assert.match(once, /yweb\/font\/avoid_canvas_theme_font=false/, 'Canvas Theme font設定を上書き');
 	assert.match(once, /yweb\/ogp\/frame=27/, 'OGP撮影frameを上書き');
+	assert.match(once, /yweb\/level=0/, '既定levelがDOMではない');
 	childProcess.execFileSync(process.execPath, [tool, work]);
 	assert.equal(fs.readFileSync(file, 'utf8'), once, '再実行でpresetが変化');
-	console.log(JSON.stringify({ ok: true, platform: 'Yurutto Website', embeddedTemplate: true, stable: true }));
+	fs.writeFileSync(file, fixture);
+	childProcess.execFileSync(process.execPath, [tool, work], { env: { ...process.env, YWEB_LEVEL: '3d' } });
+	assert.match(fs.readFileSync(file, 'utf8'), /yweb\/level=1/, '3D levelの番号が違う');
+	const bad = childProcess.spawnSync(process.execPath, [tool, work], { env: { ...process.env, YWEB_LEVEL: '2d' } });
+	assert.notEqual(bad.status, 0, '廃止した2D levelを受理した');
+	console.log(JSON.stringify({ ok: true, platform: 'Yurutto Website', levels: ['dom', '3d'], embeddedTemplate: true, stable: true }));
 } finally {
 	fs.rmSync(work, { recursive: true, force: true });
 }

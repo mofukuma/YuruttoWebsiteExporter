@@ -19,6 +19,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(templateDir, 'manifest.jso
 const requested = process.argv.slice(2); // 指定時に検査する書き出しlevel。
 for (const level of requested) levelLine(level);
 const allLevels = Object.entries(manifest.templates); // addonが持つ全level。
+assert.deepEqual(allLevels.map(([level]) => level).sort(), ['3d', 'dom'], '配布テンプレートがDOMと3Dの二構成ではない');
 const levels = allLevels.filter(([level]) => requested.length === 0 || requested.includes(level)); // 今回の検査対象ZIP。
 const work = path.join(root, 'tmp/template-distribution'); // 検査結果保存先。
 const buffer = { maxBuffer: 32 * 1024 * 1024 }; // WASM展開に必要な上限。
@@ -110,7 +111,7 @@ for (const [level, item] of levels) {
 // levelごとの機能境界が、選んだbuild optionと合っていることを見る。
 for (const [level, item] of levels) {
 	assert.equal(item.features.canvas, level !== 'dom', `canvas境界が不正: ${level}`);
-	assert.equal(item.features.threeD, level !== '2d', `3D境界が不正: ${level}`);
+	assert.equal(item.features.threeD, true, `3D機能境界が不正: ${level}`);
 	assert.equal(item.options.opengl3, level === 'dom' ? 'no' : 'yes', `描画option不一致: ${level}`);
 }
 

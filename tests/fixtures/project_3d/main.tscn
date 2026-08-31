@@ -1,5 +1,0 @@
-; 3D版が受け入れるNode3D scene。
-
-[gd_scene format=3]
-
-[node name="Root" type="Node3D"]

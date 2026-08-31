@@ -139,6 +139,7 @@ enum TextFlag {
 	TEXT_KEYBOARD_FOCUS = 1024,
 	TEXT_MOUSE = 2048, // BrowserがButton全体のpointer入力を所有する。
 	TEXT_POPUP = 4096, // PopupMenuの実項目をhoverと選択へ結ぶ。
+	TEXT_RICH = 8192, // RichTextLabelの文字装飾を意味DOMへ保つ。
 };
 
 struct TextState {
@@ -522,6 +523,10 @@ static void sync_rich_text(RichTextLabel *p_label) {
 	state.rect = input_rect(p_label, p_label->get_theme_stylebox(SNAME("normal")));
 	state.kind = TEXT_LABEL;
 	state.flags = TEXT_CLIP | TEXT_WRAP;
+	if (p_label->is_using_bbcode()) {
+		state.flags |= TEXT_RICH;
+		state.aux = p_label->get_text();
+	}
 	state.color = p_label->get_theme_color(SNAME("default_color"));
 	state.font_size = p_label->get_theme_font_size(SNAME("normal_font_size"));
 	state.line_spacing = font_spacing(p_label, state.font_size, p_label->get_theme_constant(SNAME("line_separation")));
@@ -1166,7 +1171,7 @@ static void sync_box(Control *p_control, int p_order) {
 		if (flat.is_null()) {
 			return;
 		}
-		background = flat->get_bg_color();
+		background = flat->is_draw_center_enabled() ? flat->get_bg_color() : Color(0, 0, 0, 0);
 		border = flat->get_border_color();
 		widths = Rect2(flat->get_border_width(SIDE_LEFT), flat->get_border_width(SIDE_TOP), flat->get_border_width(SIDE_RIGHT), flat->get_border_width(SIDE_BOTTOM));
 		radius = Rect2(flat->get_corner_radius(CORNER_TOP_LEFT), flat->get_corner_radius(CORNER_TOP_RIGHT), flat->get_corner_radius(CORNER_BOTTOM_RIGHT), flat->get_corner_radius(CORNER_BOTTOM_LEFT));
@@ -1648,7 +1653,7 @@ static void sync_extra_box(Control *p_control, const StringName &p_style, const 
 	transform[2] = transform.xform(p_area.position);
 	const CharString uid = (String::num_uint64((uint64_t)p_control->get_instance_id()) + "-" + p_tag).utf8();
 	const Color modulate = p_control->get_modulate_in_tree() * p_control->get_self_modulate();
-	const Color background = flat->get_bg_color() * modulate;
+	const Color background = (flat->is_draw_center_enabled() ? flat->get_bg_color() : Color(0, 0, 0, 0)) * modulate;
 	const Color border = flat->get_border_color() * modulate;
 	yweb_box_sync(uid.get_data(), transform[0].x, transform[0].y, transform[1].x, transform[1].y, transform[2].x, transform[2].y,
 			p_area.size.width, p_area.size.height, p_order,
@@ -2343,7 +2348,7 @@ void yweb_draw_texture_region(CanvasItem *p_item, const Ref<Texture2D> &p_textur
 // StyleBoxFlatの面、枠、角丸を同じDOM箱転送へまとめる。
 static void sync_flat_box(const CharString &p_uid, Transform2D p_transform, const Rect2 &p_rect, int p_order, const Ref<StyleBoxFlat> &p_flat, const Color &p_modulate = Color(1, 1, 1, 1)) {
 	p_transform[2] = p_transform.xform(p_rect.position);
-	const Color background = p_flat->get_bg_color() * p_modulate;
+	const Color background = (p_flat->is_draw_center_enabled() ? p_flat->get_bg_color() : Color(0, 0, 0, 0)) * p_modulate;
 	const Color border = p_flat->get_border_color() * p_modulate;
 	yweb_box_sync(p_uid.get_data(), p_transform[0].x, p_transform[0].y, p_transform[1].x, p_transform[1].y, p_transform[2].x, p_transform[2].y,
 			p_rect.size.x, p_rect.size.y, p_order, background.r, background.g, background.b, background.a,

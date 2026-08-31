@@ -28,6 +28,7 @@ var carousel_title: Label # 現在の事例名。
 var carousel_body: Label # 現在の事例説明。
 var carousel_count: Label # carouselの現在位置。
 var carousel_index := 0 # 表示中slide番号。
+var carousel_timer: Timer # 事例を自動で送る時計。
 var contact_status: Label # CTA操作結果を伝える文字。
 var slides: Array[Dictionary] = [] # 事例写真と説明の正本。
 
@@ -198,6 +199,13 @@ func _build_carousel() -> void:
 	controls.add_child(next)
 	copy.add_child(carousel_count)
 	_show_slide(0)
+	carousel_timer = Timer.new()
+	carousel_timer.name = "CarouselTimer"
+	carousel_timer.wait_time = 4.0
+	carousel_timer.one_shot = true
+	carousel_timer.timeout.connect(_next_slide)
+	add_child(carousel_timer)
+	carousel_timer.start()
 
 # Aboutへの導線を写真と文章の2列で示す。
 func _build_about_preview() -> void:
@@ -517,6 +525,8 @@ func _show_slide(index: int) -> void:
 	carousel_image.modulate.a = 0.25
 	var tween := create_tween()
 	tween.tween_property(carousel_image, "modulate:a", 1.0, 0.35)
+	if carousel_timer:
+		carousel_timer.start()
 
 # 一つ前の事例へ戻す。
 func _previous_slide() -> void:

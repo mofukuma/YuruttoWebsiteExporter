@@ -16,8 +16,7 @@ const helpers = new Set([
 const heavy = ['site_export.cjs', 'dom_only_match.cjs', 'wordpress_studio.cjs']; // 書き出しや多画面比較を伴う重いもの。
 const groups = {
 	dom: ['build_selective.cjs', 'node_coverage.cjs', 'dom_only_match.cjs'],
-	'2d': ['build_selective.cjs', 'rotate_label.cjs'],
-	'3d': ['build_selective.cjs', 'scene_3d.cjs'],
+	'3d': ['build_selective.cjs', 'canvas_levels.cjs', 'scene_3d.cjs'],
 }; // 書き出しlevelへ直接関係する検査。
 
 // 補助を除いた検査fileを、軽い順に並べて返す。

@@ -12,6 +12,7 @@ const { browserPath } = require('./browser.cjs');
 const { exerciseHover, exerciseUi } = require('./browser_ui.cjs');
 const { createServer } = require('../build/serve_web.cjs');
 const { install } = require('../build/fetch_webfont.cjs');
+const { matchBrowser } = require('./helpers/font_import.cjs');
 
 const repo = path.resolve(__dirname, '..'); // project root。
 const work = path.join(repo, 'tmp/dom-only-match'); // 比較用projectと画像。
@@ -68,8 +69,9 @@ child.execFileSync(process.execPath, [path.join(repo, 'build/install_site_addon.
 fs.writeFileSync(path.join(project, 'export_presets.cfg'), '[preset.0]\n\nname="Web"\nplatform="Yurutto Website"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\nexport_path=""\n\n[preset.0.options]\n\nyweb/level=0\nyweb/site/production=false\n');
 fs.writeFileSync(path.join(project, 'capture.gd'), capture);
 fs.writeFileSync(path.join(project, 'yweb-site.json'), `${JSON.stringify({ version: 1, scenes: Object.fromEntries(screens.map((name, index) => [name, { scene: `res://${name}.tscn`, uri: index === 0 ? '/' : `/${name}/` }])) }, null, 2)}\n`);
-install(path.join(project, 'fonts'), 'Match'); // Godotとブラウザで同じ字形を使う。
+const matchFont = install(path.join(project, 'fonts'), 'Match'); // Godotとブラウザで同じ字形を使う。
 if (fs.existsSync(fontCache)) fs.cpSync(fontCache, path.join(project, 'fonts'), { recursive: true });
+matchBrowser(matchFont.ttf);
 
 // 書き出し時の取込を撮影と次回へ共有し、不安定な独立import起動を省く。
 fs.mkdirSync(site, { recursive: true });
@@ -277,7 +279,19 @@ for (const name of comparedScreens) {
 				const expected = ['ColorPicker', 'ColorPickerButton', 'GraphEdit', 'GraphElement', 'GraphFrame', 'GraphNode', 'HSplitContainer', 'MenuBar', 'PanelContainer', 'ReferenceRect', 'RichTextLabel', 'ScrollContainer', 'SplitContainer', 'VSplitContainer', 'VirtualJoystick'];
 				const text = await page.locator('[data-yweb-text]').allTextContents();
 				assert.ok(expected.every((type) => text.includes(type)), '拡張Controlの型名をDOMへ置けていない');
-				assert.ok(text.includes('Rich Text'), 'RichTextLabelの整形後本文をDOMへ置けていない');
+				assert.ok(text.includes('Rich Text [ bracket'), 'RichTextLabelの整形後本文をDOMへ置けていない');
+				const richText = page.locator('[data-yweb-text]', { hasText: /^Rich Text \[ bracket$/ });
+				const rich = await richText.locator('span').evaluateAll((parts) => parts.filter((part) => part.textContent === 'Rich' || part.textContent === 'Text').map((part) => ({ text: part.textContent, color: getComputedStyle(part).color, weight: getComputedStyle(part).fontWeight })));
+				assert.deepEqual(rich.map(({ text }) => text), ['Rich', 'Text'], 'RichTextLabelの装飾範囲が本文と一致しない');
+				assert.equal(rich[1].color, 'rgb(34, 211, 238)', 'RichTextLabelの文字色をDOMへ反映できていない');
+				assert.ok(Number(rich[0].weight) >= 700, 'RichTextLabelの太字をDOMへ反映できていない');
+				const stable = await richText.evaluate(async (owner) => {
+					const content = owner.ywebGlyph || owner;
+					const first = content.firstChild;
+					await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+					return content.firstChild === first;
+				});
+				assert.ok(stable, '変化のないRichTextLabelを毎frame再生成している');
 				assert.ok(await page.locator('[data-yweb-box]').count() >= 24, '拡張Controlの面と内部部品をDOMへ置けていない');
 				assert.ok(await page.locator('[data-yweb-image]').count() >= 6, 'ColorPickerやGraph系の内部iconをDOMへ置けていない');
 				assert.equal(await page.locator('[data-yweb-gradient]').count(), 2, 'ColorPickerの色面とhue帯をDOMへ置けていない');
@@ -367,6 +381,11 @@ for (const name of comparedScreens) {
 					menu: [544, 52, 212, 182],
 					popup: [544, 284, 212, 142],
 				}, 'WindowのTheme枠がGodotの描画範囲と一致しない');
+				const fileFocus = await page.locator('[data-yweb-text]', { hasText: /^Save$/ }).evaluate((button) => {
+					const style = getComputedStyle(document.getElementById(`${button.id}-focus`));
+					return { background: style.backgroundColor, border: style.borderColor };
+				});
+				assert.deepEqual(fileFocus, { background: 'rgba(0, 0, 0, 0)', border: 'rgb(204, 204, 204)' }, 'FileDialogのfocus枠でdraw_center=falseを守れていない');
 				const popupTheme = await page.locator('[data-yweb-box]').evaluateAll((elements) => {
 					const panel = elements.find((element) => {
 						const rect = element.getBoundingClientRect();

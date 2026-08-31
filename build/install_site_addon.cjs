@@ -24,7 +24,7 @@ fs.cpSync(source, target, { recursive: true, force: true });
 
 // 開発build指定時は、配布物を変えず検査project内の対象levelを差し替える。
 if (replacement) {
-	assert.ok(['dom', '2d', '3d'].includes(level), `YWEB_LEVELが不正: ${level}`);
+	assert.ok(['dom', '3d'].includes(level), `YWEB_LEVELが不正: ${level}`);
 	assert.ok(fs.existsSync(replacement), `開発templateなし: ${replacement}`);
 	const manifestFile = path.join(target, 'templates/manifest.json');
 	const manifest = JSON.parse(fs.readFileSync(manifestFile));

@@ -96,18 +96,6 @@ const TEXTS := {
 	"ogp_need_saved_scene": ["OGP Auto needs a saved scene.", "OGP Autoには保存済みsceneが必要です。"],
 	"ogp_failed": ["OGP Auto failed: %s", "OGP Auto失敗: %s"],
 	"ogp_bad_args": ["The capture arguments are invalid.", "OGP撮影引数が不正です。"],
-	# 3DとGDExtensionの拒否理由。
-	"block_gdextension": ["GDExtension is not supported", "GDExtension非対応"],
-	"block_mesh": ["3D mesh resource", "3D mesh resource"],
-	"block_model": ["3D asset", "3D asset"],
-	"block_type_3d": ["3D type", "3D型"],
-	"block_resource_3d": ["3D resource", "3D resource"],
-	"block_script_3d": ["3D script", "3D script"],
-	"block_dynamic_3d": ["3D type created at runtime", "動的3D型"],
-	"block_server_3d": ["3D server", "3D server"],
-	"block_spatial_shader": ["spatial shader", "spatial shader"],
-	"block_binary_3d": ["3D type in a binary resource", "binary resource内の3D型"],
-	"block_binary_unreadable": ["binary resource that cannot be inspected", "検査不能binary resource"],
 }
 
 # 使う人の言語を、日本語かそれ以外かで選ぶ。

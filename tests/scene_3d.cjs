@@ -36,9 +36,9 @@ async function main() {
 		page.on('pageerror', (error) => errors.push(error.message));
 		await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
 
-		// 画面の文字がHTMLで出るまで待ち、3Dのsceneが起動したことを確かめる。
+		// 実行時DOMの文字が出るまで待ち、初期HTMLとの取り違えを防ぐ。
 		try {
-			await page.getByText('SPOT 0', { exact: true }).waitFor({ timeout: 60000 });
+			await page.locator('[data-yweb-text]', { hasText: /^SPOT 0$/ }).waitFor({ timeout: 60000 });
 		} catch {
 			const state = await page.evaluate(() => ({ text: document.body.innerText, status: document.querySelector('#status-notice')?.textContent }));
 			throw new Error(`3D sceneが起動しない: ${JSON.stringify({ state, errors })}`);

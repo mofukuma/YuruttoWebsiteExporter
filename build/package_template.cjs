@@ -16,7 +16,7 @@ const { artifactKey, compileKey, imageKey } = require('./template_key.cjs');
 const repo = path.resolve(__dirname, '..'); // 配布定義を持つproject root。
 const archive = path.resolve(process.argv[2] || ''); // Godotが生成したWeb template。
 const out = path.resolve(process.argv[3] || path.join(repo, 'tmp/minimum/template-proof')); // 展開確認先。
-const level = process.argv[4] || '2d'; // 書き出しlevel。dom、2d、3dのいずれか。
+const level = process.argv[4] || 'dom'; // 書き出しlevel。dom、3dのいずれか。
 const addon = path.join(repo, 'addons/yurutto_website_exporter/templates'); // addon配布物の配置先。
 const publish = process.env.YWEB_PUBLISH !== '0'; // 配布物へ反映するか。開発buildは再現性を持たないため反映しない。
 const template = path.join(addon, `yweb-${level}.zip`); // このlevelのエクスポートテンプレート。
@@ -26,9 +26,10 @@ const compressedEntries = rawEntries.filter((name) => name.endsWith('.js') || na
 const licenseEntries = ['GODOT_LICENSE.txt']; // Godot本体と組込依存の通知を一つへまとめた成果物。
 const licenseSources = ['LICENSES/GODOT-MIT.txt', 'LICENSES/GODOT-COPYRIGHT.txt']; // 通知の追跡元。
 
-// コメントを除いたSCons optionを順序どおり返す。
+// コメントを除いたSCons optionを名前と値へ分けて返す。
 function options(file) {
-	return fs.readFileSync(file, 'utf8').split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
+	const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
+	return Object.fromEntries(lines.map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]));
 }
 
 // 配布ZIPへ入る一fileの検査値を返す。
@@ -44,6 +45,13 @@ function levelOptions() {
 		.find((text) => text && !text.startsWith('#') && text.split(/\s+/)[0] === level);
 	assert.ok(line, `levels.optionsに定義なし: ${level}`);
 	return Object.fromEntries(line.split(/\s+/).slice(1).map((pair) => pair.split('=')));
+}
+
+// 現在のbuild定義にあるlevelへmanifestを絞る。
+function templates(previous) {
+	const levels = new Set(fs.readFileSync(path.join(repo, 'build/levels.options'), 'utf8')
+		.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#')).map((line) => line.split(/\s+/, 1)[0]));
+	return Object.fromEntries(Object.entries(previous || {}).filter(([name]) => levels.has(name)));
 }
 
 // 固定mtimeとentry順で配布templateを生成する。
@@ -72,6 +80,7 @@ function pack() {
 		for (const name of [...packed, 'yweb-compression.json']) fs.copyFileSync(path.join(stage, name), path.join(out, name));
 		if (publish) fs.copyFileSync(built, template);
 		const previous = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')) : {};
+		const kept = templates(previous.templates);
 		const environment = process.env.YWEB_COMPILE_ENV || imageKey(); // コンパイル環境の識別値。
 		const manifest = {
 			schema: 1,
@@ -101,7 +110,7 @@ function pack() {
 				buildSha256: filesHash(BUILD_FILES.map((file) => path.join(repo, file))),
 			},
 			templates: {
-				...previous.templates,
+				...kept,
 				[level]: {
 					file: path.basename(template), bytes: fs.statSync(built).size,
 					sha256: sha(built), entries: packed.map((name) => entry(stage, name)),
@@ -109,7 +118,7 @@ function pack() {
 					artifactKey: artifactKey(level, environment),
 					features: {
 						domText: true, threads: false, gdextension: false,
-						canvas: level !== 'dom', threeD: level !== '2d',
+						canvas: level === '3d', threeD: true,
 						webfont: 'external-project-asset',
 					},
 					options: profile,

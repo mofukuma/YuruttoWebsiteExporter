@@ -32,7 +32,7 @@ fi
 
 mkdir -p "$repo/tmp/distribution-$platform_name/home"
 
-# 対象指定時は検証成果物をtmpへ留め、三段を揃える実行で配布addonへ反映する。
+# 対象指定時は検証成果物をtmpへ留め、二構成を揃える実行で配布addonへ反映する。
 publish=1
 if test "$#" -gt 0; then publish=0; fi
 

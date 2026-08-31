@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 2D・3D版で文字以外をCanvasへ残せることを実画面で確かめる。
+// 3D版で2D・3Dの文字以外をCanvasへ残せることを実画面で確かめる。
 // 同じfixtureをGodotとBrowserへ描き、Canvas表示、DOMの役割、画素差を一括で検査する。
 
 'use strict';
@@ -22,15 +22,13 @@ const size = { width: 800, height: 600 }; // GodotとBrowserで揃える寸法�
 const limit = 10; // 8bit RGBのRMSE。10は不合格にする。
 const forbidden = '[data-yweb-box],[data-yweb-image],[data-yweb-image-region],[data-yweb-nine-patch],[data-yweb-polygon],[data-yweb-triangle3d],[data-yweb-plane3d],[data-yweb-gradient],[data-yweb-scroll]'; // Canvas版へ出してはいけない描画代替DOM。
 const allCases = [
-	{ level: '2d', option: 1, scene: 'nodes_2d_extended', text: 16 },
-	{ level: '2d', option: 1, scene: 'canvas_inputs', text: 12 },
-	{ level: '3d', option: 2, scene: 'nodes_2d_extended', text: 16 },
-	{ level: '3d', option: 2, scene: 'canvas_inputs', text: 12 },
-	{ level: '3d', option: 2, scene: 'mesh_3d', text: 0, assets: ['photo.png', 'white.svg'] },
-]; // 2D版と3D版の2D描画、3D版の3D描画を分けて測る。
-const selected = process.env.YWEB_LEVEL || ''; // 対象build後は同じlevelへ絞る。
-assert.ok(!selected || ['2d', '3d'].includes(selected), `Canvas検査levelが不正: ${selected}`);
-const cases = selected ? allCases.filter(({ level }) => level === selected) : allCases; // 通常は両levelを一括検査する。
+	{ level: '3d', option: 1, scene: 'nodes_2d_extended', text: 16 },
+	{ level: '3d', option: 1, scene: 'canvas_inputs', text: 12 },
+	{ level: '3d', option: 1, scene: 'mesh_3d', text: 0, assets: ['photo.png', 'white.svg'] },
+]; // 3D構成が2D描画と入力も含むことを測る。
+const selected = process.env.YWEB_LEVEL || '3d'; // 開発buildの対象level。
+assert.equal(selected, '3d', `Canvas検査levelが不正: ${selected}`);
+const cases = allCases; // 3D構成の2D・3D境界を一括検査する。
 
 // Node型ごとの除外表を作らず、Canvas有無のbuild条件で描画経路を分けていることを確かめる。
 const syncSource = fs.readFileSync(path.join(repo, 'build/overlay/platform/web/yweb_text_sync.cpp'), 'utf8');

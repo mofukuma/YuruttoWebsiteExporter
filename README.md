@@ -1,12 +1,12 @@
 # YuruttoWebsiteExporter
 
 Turn a Godot Engine project into a website, as it is.
-The visuals stay on Godot's canvas, while the text comes out as real HTML. So search engines find it, and people can select, copy, and have it read aloud.
+DOM only is the default, so supported visuals and text become HTML and CSS without starting WebGL. Choose 3D when a scene needs Godot's Canvas or WebGL; text and browser input still come out as real HTML.
 Lightweight, SEO-ready Godot web export.
 
 ## Good for
 
-- Publishing a 2D Godot work as a website, as it is
+- Publishing a Godot work as a website, as it is
 - Letting people find your work through web search
 - Keeping text copyable, translatable, and readable by a screen reader
 - Never writing HTML, JavaScript, or CSS
@@ -53,13 +53,13 @@ On export, on-screen text becomes HTML and rides on top of the picture. That is 
 - text keeps up when you change the theme, rotate it, or move it with physics
 - `LinkButton` comes out as a link, `Button` as a button
 
-Backgrounds, icons, focus rings, 2D drawing, physics, and shaders stay on Godot's canvas.
+DOM only reproduces supported backgrounds, icons, focus rings, 2D drawing, and 3D shapes with HTML and CSS. The 3D setting keeps 2D and 3D drawing, physics, and shaders on Godot's canvas.
 
 ## Using the same typeface as your work
 
 If your theme uses `res://fonts/Title.otf`, put `res://fonts/Title.woff2` beside it and the web font gets used.
 
-Some decorative typefaces can't be reproduced in HTML. When you'd rather keep the typeface, turn `YWeb > Font > Avoid Canvas Theme Font` off, and that text comes out on Godot's canvas instead.
+Some decorative typefaces can't be reproduced in HTML. With the 3D setting, turn `YWeb > Font > Avoid Canvas Theme Font` off to keep that text on Godot's canvas. DOM only still uses browser text, so add the matching WOFF2 when the exact typeface matters.
 
 ## Publishing
 
@@ -101,7 +101,7 @@ To use a moment from your work, set the frame with `OGP Frame` and press `OGP Au
 
 ## What it can and can't do
 
-Made for 2D web works. A project containing 3D can't be exported. Some of `RichTextLabel`'s BBCode can't be reproduced.
+DOM only avoids Canvas and WebGL. Choose 3D for scenes that need Canvas drawing, 2D or 3D physics, shaders, or native 3D rendering. Some animated and custom `RichTextLabel` effects can't be reproduced as HTML.
 
 ## For people working on the addon
 
@@ -123,7 +123,7 @@ While working on the template itself, build the level you are changing on your o
 sh build/check_template.sh dom
 ```
 
-Use `2d` or `3d` in place of `dom` to build and test that level. `sh build/build_distribution.sh dom` does the same targeted build in the fixed Docker environment and keeps its result under `tmp/`. Run it without a level when preparing all three release templates.
+Use `3d` in place of `dom` to build and test the Canvas/WebGL setting. `sh build/build_distribution.sh dom` does the same targeted build in the fixed Docker environment and keeps its result under `tmp/`. Run it without a level when preparing both release templates.
 
 The browser tests need Chromium. Install it with this.
 
@@ -144,11 +144,11 @@ The bundled export template comes from Godot Engine (MIT). Exported sites carry 
 # 日本語
 
 Godotで作った作品を、そのままWebサイトにするアドオン。
-絵とかはGodotのまま、文字は本物のHTMLで出すよ。だから検索にも出るし、コピーも読み上げもできる。
+初期設定のDOM onlyでは、対応している絵と文字をHTMLとCSSで表示するよ。CanvasやWebGLが必要なSceneは3Dを選べる。文字と入力欄はどちらも本物のHTMLだから、検索、コピー、読み上げに使えるよ。
 
 ## こんなときにつかおう
 
-- Godotで作った2D作品を、そのままWebサイトとして公開したい
+- Godotで作った作品を、そのままWebサイトとして公開したい
 - 作品をインターネット検索から見つけてほしい
 - 文字をコピー、翻訳、読み上げできる状態にしたい
 - HTML、JavaScript、CSSを絶対書きたくない
@@ -195,13 +195,13 @@ Godotで作った作品を、そのままWebサイトにするアドオン。
 - テーマを変えても、回しても、物理で動かしても、文字はちゃんとついてくる
 - `LinkButton`はリンク、`Button`はボタンとして出る
 
-背景、アイコン、フォーカスの枠、2Dの絵、物理、シェーダーはGodotの描画のまま。
+DOM onlyでは、対応している背景、アイコン、フォーカスの枠、2Dの絵、3D形状をHTMLとCSSで再現するよ。3Dを選ぶと、2D・3Dの描画、物理、シェーダーはGodotのCanvasへ残る。
 
 ## 作品と同じ書体で文字を出す
 
 テーマで`res://fonts/Title.otf`を使っているなら、隣に`res://fonts/Title.woff2`を置けば、Webフォントを使ってくれる。
 
-書体を優先したいときは`YWeb > Font > Avoid Canvas Theme Font`をオフに。そういう文字はGodotの絵で出る。
+3D設定で書体を優先したいときは`YWeb > Font > Avoid Canvas Theme Font`をオフにしよう。対象文字はGodotのCanvasへ残る。DOM onlyはブラウザ文字を使うため、正確な書体が必要なら対応するWOFF2も用意しよう。
 
 ## 公開のしかた
 
@@ -243,7 +243,7 @@ Brotli版が小さくても、圧縮前のWebAssemblyが配信先の一file上�
 
 ## できること・できないこと
 
-2DのWeb作品向け。3Dが入っているプロジェクトは書き出せないよ。`RichTextLabel`のBBCodeは一部再現できないよ。
+DOM onlyはCanvasとWebGLを起動しないよ。Canvas描画、2D・3D物理、シェーダー、Godot本来の3D描画が必要なら3Dを選ぼう。`RichTextLabel`の動く効果や独自効果には、HTMLで再現できないものがあるよ。
 
 ## アドオン自体をいじる人へ
 
@@ -265,7 +265,7 @@ sh build/build_distribution.sh
 sh build/check_template.sh dom
 ```
 
-2Dなら`dom`を`2d`へ、3Dなら`3d`へ変えよう。固定Docker環境でDOM用を検証するときは`sh build/build_distribution.sh dom`。結果は`tmp/`に残るよ。三段すべての配布物を揃えるときは、段を付けずに実行しよう。
+CanvasとWebGLを使う構成なら`dom`を`3d`へ変えよう。固定Docker環境でDOM用を検証するときは`sh build/build_distribution.sh dom`。結果は`tmp/`に残るよ。二構成の配布物を揃えるときは、段を付けずに実行しよう。
 
 ブラウザを見るテストにはChromiumが要る。入れるのはこれ。
 

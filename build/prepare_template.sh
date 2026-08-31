@@ -11,7 +11,7 @@ template_out=${YWEB_TEMPLATE_OUT:-$repo/tmp/minimum/template-proof} # 配布前�
 archive=$build_root/godot-$GODOT_VERSION.tar.xz # Godot公式source archive。
 source_root=$build_root/godot-minimum-source # overlay適用済みsource。
 emsdk=$build_root/emsdk # 固定Emscripten SDK。
-cache=$build_root/scons-cache # 三段のコンパイル成果物を共有する場所。
+cache=$build_root/scons-cache # 二構成のコンパイル成果物を共有する場所。
 mkdir -p "$build_root"
 work=$(mktemp -d "$build_root/template-source.XXXXXX") # source展開用一時領域。
 trap 'rm -rf "$work"' EXIT
@@ -58,7 +58,7 @@ sh "$repo/build/apply_overlay.sh" "$source_root"
 printf '%s\n' "$stamp" > "$source_root/.yweb-source-stamp"
 cmp "$repo/LICENSES/GODOT-MIT.txt" "$source_root/LICENSE.txt"
 cmp "$repo/LICENSES/GODOT-COPYRIGHT.txt" "$source_root/COPYRIGHT.txt"
-# 指定時は関係するlevelを、無指定時は配布用の三段を作る。
+# 指定時は関係するlevelを、無指定時は配布用の二構成を作る。
 if test "$#" -eq 0; then set -- $(awk '!/^#/ && NF { print $1 }' "$repo/build/levels.options"); fi
 for level in "$@"; do
 	awk -v want="$level" '!/^#/ && $1 == want { found = 1 } END { exit !found }' "$repo/build/levels.options"

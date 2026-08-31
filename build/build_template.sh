@@ -6,7 +6,7 @@ set -eu
 
 repo=$(cd "$(dirname "$0")/.." && pwd) # sourceと成果物を結ぶproject root。
 . "$repo/build/distribution.lock"
-level=${1:?level required} # dom、2d、3dのいずれか。
+level=${1:?level required} # dom、3dのいずれか。
 src=${2:-tmp/godot-minimum-source} # 公式sourceと文字同期差分。
 emsdk_root=${3:-tmp/emsdk} # 固定Emscripten SDK。
 out=${4:-$repo/tmp/minimum/template-proof} # 比較用の固定template。
